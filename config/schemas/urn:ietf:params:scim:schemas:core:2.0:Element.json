@@ -1,0 +1,34 @@
+{
+  "id": "urn:ietf:params:scim:schemas:core:2.0:Element",
+  "name": "Element",
+  "description": "Element test",
+  "attributes": [
+    {
+      "name": "name",
+      "type": "string",
+      "multiValued": false,
+      "description": "Unique identifier for the User, typically used by the user to directly authenticate to the service provider. Each User MUST include a non-empty userName value.  This identifier MUST be unique across the service provider's entire set of Users. REQUIRED.",
+      "required": true,
+      "caseExact": false,
+      "mutability": "readOnly",
+      "returned": "default",
+      "uniqueness": "server"
+    },
+    {
+      "name": "$ref",
+      "type": "string",
+      "multiValued": false,
+      "description": "Unique identifier for the User, typically used by the user to directly authenticate to the service provider. Each User MUST include a non-empty userName value.  This identifier MUST be unique across the service provider's entire set of Users. REQUIRED.",
+      "required": true,
+      "caseExact": false,
+      "mutability": "readWrite",
+      "returned": "default",
+      "uniqueness": "server"
+    }
+
+  ],
+  "meta": {
+    "resourceType": "Schema",
+    "location": "/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:User"
+  }
+}

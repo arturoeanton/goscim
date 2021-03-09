@@ -1,0 +1,147 @@
+{
+  "id": "urn:ietf:params:scim:schemas:extension:one:2.0:Element",
+  "name": "EnterpriseUser",
+  "description": "Enterprise User",
+  "attributes": [
+    {
+      "name": "numberInteger",
+      "type": "integer",
+      "multiValued": false,
+      "description": "Numeric or alphanumeric identifier assigned to a person, typically based on order of hire or association with an organization.",
+      "required": false,
+      "caseExact": false,
+      "mutability": "readWrite",
+      "returned": "default",
+      "uniqueness": "none"
+    },
+    {
+      "name": "required",
+      "type": "integer",
+      "multiValued": false,
+      "description": "Numeric or alphanumeric identifier assigned to a person, typically based on order of hire or association with an organization.",
+      "required": true,
+      "caseExact": false,
+      "mutability": "readWrite",
+      "returned": "default",
+      "uniqueness": "none"
+    },
+    {
+      "name": "numberDecimal",
+      "type": "decimal",
+      "multiValued": false,
+      "description": "Numeric or alphanumeric identifier assigned to a person, typically based on order of hire or association with an organization.",
+      "required": false,
+      "caseExact": false,
+      "mutability": "readWrite",
+      "returned": "default",
+      "uniqueness": "none"
+    },
+    {
+      "name": "boolean",
+      "type": "boolean",
+      "multiValued": false,
+      "description": "Numeric or alphanumeric identifier assigned to a person, typically based on order of hire or association with an organization.",
+      "required": false,
+      "caseExact": false,
+      "mutability": "readWrite",
+      "returned": "default",
+      "uniqueness": "none"
+    },
+    {
+      "name": "date",
+      "type": "datetime",
+      "multiValued": false,
+      "description": "Numeric or alphanumeric identifier assigned to a person, typically based on order of hire or association with an organization.",
+      "required": false,
+      "caseExact": false,
+      "mutability": "readWrite",
+      "returned": "default",
+      "uniqueness": "none"
+    },
+    {
+      "name": "multiValued",
+      "type": "complex",
+      "multiValued": true,
+      "description": "Numeric or alphanumeric identifier assigned to a person, typically based on order of hire or association with an organization.",
+      "required": false,
+      "caseExact": false,
+      "mutability": "readWrite",
+      "returned": "default",
+      "uniqueness": "none",
+      "subAttributes": [
+        {
+          "name": "data",
+          "type": "integer",
+          "multiValued": false,
+          "description": "Numeric or alphanumeric identifier assigned to a person, typically based on order of hire or association with an organization.",
+          "required": false,
+          "caseExact": false,
+          "mutability": "readWrite",
+          "returned": "default",
+          "uniqueness": "none"
+        },
+        {
+          "name": "$ref",
+          "type": "string",
+          "multiValued": false,
+          "description": "Numeric or alphanumeric identifier assigned to a person, typically based on order of hire or association with an organization.",
+          "required": true,
+          "caseExact": false,
+          "mutability": "readWrite",
+          "returned": "default",
+          "uniqueness": "none"
+        }
+      ]
+    },
+    {
+      "name": "multiValued2",
+      "type": "integer",
+      "multiValued": true,
+      "description": "Numeric or alphanumeric identifier assigned to a person, typically based on order of hire or association with an organization.",
+      "required": true,
+      "caseExact": false,
+      "mutability": "readWrite",
+      "returned": "default",
+      "uniqueness": "none"
+    },
+    {
+      "name": "complex",
+      "type": "complex",
+      "multiValued": false,
+      "description": "Numeric or alphanumeric identifier assigned to a person, typically based on order of hire or association with an organization.",
+      "required": true,
+      "caseExact": false,
+      "mutability": "readWrite",
+      "returned": "default",
+      "uniqueness": "none",
+      "subAttributes": [
+        {
+          "name": "subNumberInteger",
+          "type": "integer",
+          "multiValued": false,
+          "description": "Numeric or alphanumeric identifier assigned to a person, typically based on order of hire or association with an organization.",
+          "required": true,
+          "caseExact": false,
+          "mutability": "readWrite",
+          "returned": "default",
+          "uniqueness": "none"
+        },
+        {
+          "name": "$ref",
+          "type": "string",
+          "multiValued": false,
+          "description": "Numeric or alphanumeric identifier assigned to a person, typically based on order of hire or association with an organization.",
+          "required": true,
+          "caseExact": false,
+          "mutability": "readWrite",
+          "returned": "default",
+          "uniqueness": "none"
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "resourceType": "Schema",
+    "location": "/v2/Schemas/urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"
+  }
+}

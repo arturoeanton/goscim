@@ -1,0 +1,102 @@
+{
+  "id": "urn:ietf:params:scim:schemas:core:2.0:ResourceType",
+  "name": "ResourceType",
+  "description": "SpecifiestheschemathatdescribesaSCIMresourcetype",
+  "attributes": [
+    {
+      "name": "id",
+      "type": "string",
+      "multiValued": false,
+      "description": "Theresourcetype'sserveruniqueid.Maybethesameasthe'name'attribute.",
+      "required": false,
+      "caseExact": false,
+      "mutability": "readOnly",
+      "returned": "default",
+      "uniqueness": "none"
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "multiValued": false,
+      "description": "Theresourcetypename.Whenapplicable,serviceprovidersMUSTspecifythename,e.g.,'User'.",
+      "required": true,
+      "caseExact": false,
+      "mutability": "readOnly",
+      "returned": "default",
+      "uniqueness": "none"
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "multiValued": false,
+      "description": "Theresourcetype'shuman-readabledescription.Whenapplicable,serviceprovidersMUSTspecifythedescription.",
+      "required": false,
+      "caseExact": false,
+      "mutability": "readOnly",
+      "returned": "default",
+      "uniqueness": "none"
+    },
+    {
+      "name": "endpoint",
+      "type": "reference",
+      "referenceTypes": [
+        "uri"
+      ],
+      "multiValued": false,
+      "description": "Theresourcetype'sHTTP-addressableendpointrelativetotheBaseURL,e.g.,'/Users'.",
+      "required": true,
+      "caseExact": false,
+      "mutability": "readOnly",
+      "returned": "default",
+      "uniqueness": "none"
+    },
+    {
+      "name": "schema",
+      "type": "reference",
+      "referenceTypes": [
+        "uri"
+      ],
+      "multiValued": false,
+      "description": "Theresourcetype'sprimary/baseschemaURI.",
+      "required": true,
+      "caseExact": true,
+      "mutability": "readOnly",
+      "returned": "default",
+      "uniqueness": "none"
+    },
+    {
+      "name": "schemaExtensions",
+      "type": "complex",
+      "multiValued": false,
+      "description": "AlistofURIsoftheresourcetype'sschema extensions.",
+      "required": true,
+      "mutability": "readOnly",
+      "returned": "default",
+      "subAttributes": [
+        {
+          "name": "schema",
+          "type": "reference",
+          "referenceTypes": [
+            "uri"
+          ],
+          "multiValued": false,
+          "description": "TheURIofaschemaextension.",
+          "required": true,
+          "caseExact": true,
+          "mutability": "readOnly",
+          "returned": "default",
+          "uniqueness": "none"
+        },
+        {
+          "name": "required",
+          "type": "boolean",
+          "multiValued": false,
+          "description": "ABooleanvaluethatspecifieswhetherornottheschemaextensionisrequiredfortheresourcetype.Iftrue,aresourceofthistypeMUSTincludethisschemaextensionandalsoincludeanyattributesdeclaredasrequiredinthisschemaextension.Iffalse,aresourceofthistypeMAYomitthisschemaextension.",
+          "required": true,
+          "mutability": "readOnly",
+          "returned": "default"
+        }
+      ]
+    }
+  ]
+}
