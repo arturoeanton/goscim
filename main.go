@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 
+	"github.com/arturoeanton/goscim/scim/config"
 	"github.com/arturoeanton/goscim/scim/discovery"
 	"github.com/arturoeanton/goscim/scim/operations"
 	"github.com/gin-gonic/gin"
@@ -11,6 +12,10 @@ import (
 func main() {
 	PREFIX := "/scim/v2"
 	log.Println("GoScim v0.1")
+	folderConfig := "config"
+
+	config.ReadResourceType(folderConfig)
+
 	r := gin.Default()
 	r.POST(PREFIX+"/:resource", operations.Create)       // Create:  	POST https://example.com/{v}/{resource}
 	r.GET(PREFIX+"/:resource/:id", operations.Read)      // Read: 		GET https://example.com/{v}/{resource}/{id}
