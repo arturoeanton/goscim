@@ -9,6 +9,7 @@ func Create(c *gin.Context) {
 		Bulk(c)
 		return
 	}
+
 	c.JSON(200, gin.H{
 		"message": resource,
 	})
