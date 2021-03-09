@@ -12,4 +12,14 @@
 *.out
 
 # Dependency directories (remove the comment below to include it)
-# vendor/
+vendor/
+
+
+out
+node_modules
+.vscode-test
+.DS_Store
+.bash_history
+.vscode/
+test/
+
