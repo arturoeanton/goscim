@@ -18,14 +18,14 @@ const (
 )
 
 var (
-	resources map[string]types.ResoruceType
-	schemas   map[string]types.Schema
+	Resources map[string]types.ResoruceType
+	Schemas   map[string]types.Schema
 )
 
 // ReadResourceType read all file in resourceType
 func ReadResourceType(folderConfig string) {
-	resources = make(map[string]types.ResoruceType)
-	schemas = make(map[string]types.Schema)
+	Resources = make(map[string]types.ResoruceType)
+	Schemas = make(map[string]types.Schema)
 	files, err := ioutil.ReadDir(folderConfig + FolderResoruceType)
 	if err != nil {
 		log.Fatal(err)
@@ -41,7 +41,7 @@ func ReadResourceType(folderConfig string) {
 			if err != nil {
 				log.Fatal(err.Error())
 			}
-			resources[resourceType.Endpoint] = resourceType
+			Resources[resourceType.Endpoint] = resourceType
 			addSchema(folderConfig, resourceType.Schema)
 			for _, schemaExtension := range resourceType.SchemaExtensions {
 				addSchema(folderConfig, schemaExtension.Schema)
@@ -52,7 +52,7 @@ func ReadResourceType(folderConfig string) {
 
 // add schema if no exist in schemas
 func addSchema(folderConfig string, schemaName string) {
-	if _, ok := schemas[schemaName]; ok {
+	if _, ok := Schemas[schemaName]; ok {
 		return
 	}
 	file, err := ioutil.ReadFile(folderConfig + FolderSchema + schemaName + ".json")
@@ -64,5 +64,5 @@ func addSchema(folderConfig string, schemaName string) {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	schemas[schemaName] = schema
+	Schemas[schemaName] = schema
 }

@@ -1,14 +1,12 @@
 package types
 
-import "time"
-
 // Meta is of SCIM
 type Meta struct {
-	ResourceType string    `json:"resourceType"`
-	Created      time.Time `json:"created"`
-	LastModified time.Time `json:"lastModified"`
-	Version      string    `json:"version"`
-	Location     string    `json:"location"`
+	ResourceType string `json:"resourceType"`
+	Created      string `json:"created"`
+	LastModified string `json:"lastModified"`
+	Version      string `json:"version"`
+	Location     string `json:"location"`
 }
 
 // SchemaExtension is of SCIM

@@ -1,6 +1,15 @@
 package operations
 
-import "github.com/gin-gonic/gin"
+import (
+	"bytes"
+	"encoding/json"
+
+	"github.com/arturoeanton/goscim/scim/config"
+	"github.com/arturoeanton/goscim/scim/meta"
+	"github.com/arturoeanton/goscim/scim/validates"
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+)
 
 //Create is  POST https://example.com/{v}/{resource}
 func Create(c *gin.Context) {
@@ -9,10 +18,23 @@ func Create(c *gin.Context) {
 		Bulk(c)
 		return
 	}
-
-	c.JSON(200, gin.H{
-		"message": resource,
-	})
+	resourceType := config.Resources["/"+resource]
+	var element map[string]interface{}
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(c.Request.Body)
+	json.Unmarshal(buf.Bytes(), &element)
+	ok, _ := validates.ValidateFieldSchemas(c, element, resourceType)
+	if !ok {
+		return
+	}
+	delete(element, "id")
+	ok, element = validates.ValidateSchemas(c, element, resourceType.Schema, resourceType.SchemaExtensions)
+	if !ok {
+		return
+	}
+	element["id"] = uuid.New().String()
+	element["meta"] = meta.GenerateMeta(element, resourceType)
+	c.JSON(200, element)
 }
 
 // Read is GET https://example.com/{v}/{resource}/{id}
