@@ -1,7 +1,7 @@
 package parser
 
 import (
-	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
@@ -9,12 +9,16 @@ import (
 
 type ScimFilterListenerN1QL struct {
 	*BaseScimFilterListener
-	stack         []string
 	query         string
 	prevOperation string
 }
 
+// FilterToN1QL is ...
 func FilterToN1QL(resourceName string, filter string) string {
+	query := "SELECT * FROM `" + resourceName + "`"
+	if filter == "" {
+		return query
+	}
 	is := antlr.NewInputStream(filter)
 	// Create the Lexer
 	lexer := NewScimFilterLexer(is)
@@ -22,27 +26,10 @@ func FilterToN1QL(resourceName string, filter string) string {
 	// Create the Parser
 	p := NewScimFilterParser(stream)
 	// Finally parse the expression
-	scimFilterListenerN1QL := ScimFilterListenerN1QL{query: "SELECT * FROM `" + resourceName + "` WHERE "}
+
+	scimFilterListenerN1QL := ScimFilterListenerN1QL{query: query + " WHERE "}
 	antlr.ParseTreeWalkerDefault.Walk(&scimFilterListenerN1QL, p.Start())
 	return scimFilterListenerN1QL.query
-}
-
-func (l *ScimFilterListenerN1QL) push(i string) {
-	l.stack = append(l.stack, i)
-}
-
-func (l *ScimFilterListenerN1QL) pop() string {
-	if len(l.stack) < 1 {
-		panic("stack is empty unable to pop")
-	}
-
-	// Get the last value from the stack.
-	result := l.stack[len(l.stack)-1]
-
-	// Remove the last element from the stack.
-	l.stack = l.stack[:len(l.stack)-1]
-
-	return result
 }
 
 // VisitTerminal is called when a terminal node is visited.
@@ -55,33 +42,15 @@ func (l *ScimFilterListenerN1QL) VisitTerminal(node antlr.TerminalNode) {
 			if ok {
 				_, ok := payload.BaseRuleContext.GetParent().(*ATTR_OPER_CRITERIAContext)
 				if !ok {
-					values := strings.Split(value, ".")
-					for i, v := range values {
-						fmt.Println(v)
-						values[i] = "`" + v + "`"
-
-						if i < len(values)-1 {
-							next := values[i+1]
-							if strings.Contains(next, ":") {
-								values[i] = "`" + v
-							}
-						}
-
-						if i > 0 {
-							prev := values[i-1]
-							if strings.Contains(prev, ":") {
-								values[i] = v + "`"
-							}
-						}
+					re := regexp.MustCompile(`^(urn[:\w\.\_]*)(:-*)?(:[\w]*)(\.)(.*)$`)
+					urn := ""
+					if re.MatchString(value) {
+						urn = "`" + re.ReplaceAllString(value, `${1}${2}${3}`) + "`."
 					}
-					value = strings.Join(values, ".")
+					path := re.ReplaceAllString(value, `${5}`)
 
-					if l.prevOperation == "pr" {
-						value = value + " IS NOT NULL"
-						// IS NOT NULL - returns rows which contain a value (not NULL or missing).
-						// IS NOT MISSING - returns rows which contain a value or null.
-						// IS VALUED - synonym for IS NOT NULL
-					}
+					path = urn + "`" + strings.Join(strings.Split(path, "."), "`.`") + "`"
+					value = path
 				} else {
 					if l.prevOperation == "co" {
 						value = "%" + value + "%"
@@ -144,6 +113,10 @@ func (l *ScimFilterListenerN1QL) VisitTerminal(node antlr.TerminalNode) {
 
 	case ScimFilterLexerPR:
 		{
+			value = " IS NOT NULL"
+			// IS NOT NULL - returns rows which contain a value (not NULL or missing).
+			// IS NOT MISSING - returns rows which contain a value or null.
+			// IS VALUED - synonym for IS NOT NULL
 			l.prevOperation = "pr"
 		}
 	case ScimFilterParserEOF:

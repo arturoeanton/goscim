@@ -32,6 +32,9 @@ type ScimFilterListener interface {
 	// EnterEXPR_AND_EXPR is called when entering the EXPR_AND_EXPR production.
 	EnterEXPR_AND_EXPR(c *EXPR_AND_EXPRContext)
 
+	// EnterATTR_OPER_VALUE is called when entering the ATTR_OPER_VALUE production.
+	EnterATTR_OPER_VALUE(c *ATTR_OPER_VALUEContext)
+
 	// EnterATTR_OPER_CRITERIA is called when entering the ATTR_OPER_CRITERIA production.
 	EnterATTR_OPER_CRITERIA(c *ATTR_OPER_CRITERIAContext)
 
@@ -40,6 +43,9 @@ type ScimFilterListener interface {
 
 	// EnterCriteria is called when entering the criteria production.
 	EnterCriteria(c *CriteriaContext)
+
+	// EnterCriteriaValue is called when entering the criteriaValue production.
+	EnterCriteriaValue(c *CriteriaValueContext)
 
 	// EnterOperator is called when entering the operator production.
 	EnterOperator(c *OperatorContext)
@@ -68,6 +74,9 @@ type ScimFilterListener interface {
 	// ExitEXPR_AND_EXPR is called when exiting the EXPR_AND_EXPR production.
 	ExitEXPR_AND_EXPR(c *EXPR_AND_EXPRContext)
 
+	// ExitATTR_OPER_VALUE is called when exiting the ATTR_OPER_VALUE production.
+	ExitATTR_OPER_VALUE(c *ATTR_OPER_VALUEContext)
+
 	// ExitATTR_OPER_CRITERIA is called when exiting the ATTR_OPER_CRITERIA production.
 	ExitATTR_OPER_CRITERIA(c *ATTR_OPER_CRITERIAContext)
 
@@ -76,6 +85,9 @@ type ScimFilterListener interface {
 
 	// ExitCriteria is called when exiting the criteria production.
 	ExitCriteria(c *CriteriaContext)
+
+	// ExitCriteriaValue is called when exiting the criteriaValue production.
+	ExitCriteriaValue(c *CriteriaValueContext)
 
 	// ExitOperator is called when exiting the operator production.
 	ExitOperator(c *OperatorContext)

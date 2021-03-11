@@ -69,6 +69,12 @@ func (s *BaseScimFilterListener) EnterEXPR_AND_EXPR(ctx *EXPR_AND_EXPRContext) {
 // ExitEXPR_AND_EXPR is called when production EXPR_AND_EXPR is exited.
 func (s *BaseScimFilterListener) ExitEXPR_AND_EXPR(ctx *EXPR_AND_EXPRContext) {}
 
+// EnterATTR_OPER_VALUE is called when production ATTR_OPER_VALUE is entered.
+func (s *BaseScimFilterListener) EnterATTR_OPER_VALUE(ctx *ATTR_OPER_VALUEContext) {}
+
+// ExitATTR_OPER_VALUE is called when production ATTR_OPER_VALUE is exited.
+func (s *BaseScimFilterListener) ExitATTR_OPER_VALUE(ctx *ATTR_OPER_VALUEContext) {}
+
 // EnterATTR_OPER_CRITERIA is called when production ATTR_OPER_CRITERIA is entered.
 func (s *BaseScimFilterListener) EnterATTR_OPER_CRITERIA(ctx *ATTR_OPER_CRITERIAContext) {}
 
@@ -86,6 +92,12 @@ func (s *BaseScimFilterListener) EnterCriteria(ctx *CriteriaContext) {}
 
 // ExitCriteria is called when production criteria is exited.
 func (s *BaseScimFilterListener) ExitCriteria(ctx *CriteriaContext) {}
+
+// EnterCriteriaValue is called when production criteriaValue is entered.
+func (s *BaseScimFilterListener) EnterCriteriaValue(ctx *CriteriaValueContext) {}
+
+// ExitCriteriaValue is called when production criteriaValue is exited.
+func (s *BaseScimFilterListener) ExitCriteriaValue(ctx *CriteriaValueContext) {}
 
 // EnterOperator is called when production operator is entered.
 func (s *BaseScimFilterListener) EnterOperator(ctx *OperatorContext) {}

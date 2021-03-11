@@ -16,76 +16,84 @@ var _ = reflect.Copy
 var _ = strconv.Itoa
 
 var parserATN = []uint16{
-	3, 24715, 42794, 33075, 47597, 16764, 15335, 30598, 22884, 3, 24, 152,
-	4, 2, 9, 2, 4, 3, 9, 3, 4, 4, 9, 4, 4, 5, 9, 5, 3, 2, 7, 2, 12, 10, 2,
-	12, 2, 14, 2, 15, 11, 2, 3, 2, 3, 2, 3, 3, 3, 3, 3, 3, 6, 3, 22, 10, 3,
-	13, 3, 14, 3, 23, 3, 3, 3, 3, 3, 3, 6, 3, 29, 10, 3, 13, 3, 14, 3, 30,
-	3, 3, 3, 3, 3, 3, 6, 3, 36, 10, 3, 13, 3, 14, 3, 37, 3, 3, 3, 3, 6, 3,
-	42, 10, 3, 13, 3, 14, 3, 43, 3, 3, 3, 3, 3, 3, 3, 3, 6, 3, 50, 10, 3, 13,
-	3, 14, 3, 51, 3, 3, 3, 3, 6, 3, 56, 10, 3, 13, 3, 14, 3, 57, 3, 3, 3, 3,
-	3, 3, 3, 3, 7, 3, 64, 10, 3, 12, 3, 14, 3, 67, 11, 3, 3, 3, 3, 3, 7, 3,
-	71, 10, 3, 12, 3, 14, 3, 74, 11, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 7, 3,
-	81, 10, 3, 12, 3, 14, 3, 84, 11, 3, 3, 3, 3, 3, 7, 3, 88, 10, 3, 12, 3,
-	14, 3, 91, 11, 3, 3, 3, 3, 3, 5, 3, 95, 10, 3, 3, 3, 3, 3, 6, 3, 99, 10,
-	3, 13, 3, 14, 3, 100, 3, 3, 3, 3, 6, 3, 105, 10, 3, 13, 3, 14, 3, 106,
-	3, 3, 3, 3, 3, 3, 6, 3, 112, 10, 3, 13, 3, 14, 3, 113, 3, 3, 3, 3, 6, 3,
-	118, 10, 3, 13, 3, 14, 3, 119, 3, 3, 3, 3, 3, 3, 6, 3, 125, 10, 3, 13,
-	3, 14, 3, 126, 3, 3, 3, 3, 6, 3, 131, 10, 3, 13, 3, 14, 3, 132, 3, 3, 3,
-	3, 7, 3, 137, 10, 3, 12, 3, 14, 3, 140, 11, 3, 3, 4, 3, 4, 6, 4, 144, 10,
-	4, 13, 4, 14, 4, 145, 3, 4, 3, 4, 3, 5, 3, 5, 3, 5, 18, 23, 30, 37, 43,
-	51, 57, 65, 72, 82, 89, 100, 106, 113, 126, 132, 145, 3, 4, 6, 2, 4, 6,
-	8, 2, 3, 3, 2, 4, 12, 2, 173, 2, 13, 3, 2, 2, 2, 4, 94, 3, 2, 2, 2, 6,
-	141, 3, 2, 2, 2, 8, 149, 3, 2, 2, 2, 10, 12, 5, 4, 3, 2, 11, 10, 3, 2,
-	2, 2, 12, 15, 3, 2, 2, 2, 13, 11, 3, 2, 2, 2, 13, 14, 3, 2, 2, 2, 14, 16,
-	3, 2, 2, 2, 15, 13, 3, 2, 2, 2, 16, 17, 7, 2, 2, 3, 17, 3, 3, 2, 2, 2,
-	18, 19, 8, 3, 1, 2, 19, 21, 7, 13, 2, 2, 20, 22, 7, 21, 2, 2, 21, 20, 3,
-	2, 2, 2, 22, 23, 3, 2, 2, 2, 23, 24, 3, 2, 2, 2, 23, 21, 3, 2, 2, 2, 24,
-	25, 3, 2, 2, 2, 25, 95, 5, 4, 3, 11, 26, 28, 7, 22, 2, 2, 27, 29, 7, 21,
-	2, 2, 28, 27, 3, 2, 2, 2, 29, 30, 3, 2, 2, 2, 30, 31, 3, 2, 2, 2, 30, 28,
-	3, 2, 2, 2, 31, 32, 3, 2, 2, 2, 32, 95, 7, 16, 2, 2, 33, 35, 7, 22, 2,
-	2, 34, 36, 7, 21, 2, 2, 35, 34, 3, 2, 2, 2, 36, 37, 3, 2, 2, 2, 37, 38,
-	3, 2, 2, 2, 37, 35, 3, 2, 2, 2, 38, 39, 3, 2, 2, 2, 39, 41, 5, 8, 5, 2,
-	40, 42, 7, 21, 2, 2, 41, 40, 3, 2, 2, 2, 42, 43, 3, 2, 2, 2, 43, 44, 3,
-	2, 2, 2, 43, 41, 3, 2, 2, 2, 44, 45, 3, 2, 2, 2, 45, 46, 5, 4, 3, 6, 46,
-	95, 3, 2, 2, 2, 47, 49, 7, 22, 2, 2, 48, 50, 7, 21, 2, 2, 49, 48, 3, 2,
-	2, 2, 50, 51, 3, 2, 2, 2, 51, 52, 3, 2, 2, 2, 51, 49, 3, 2, 2, 2, 52, 53,
-	3, 2, 2, 2, 53, 55, 5, 8, 5, 2, 54, 56, 7, 21, 2, 2, 55, 54, 3, 2, 2, 2,
-	56, 57, 3, 2, 2, 2, 57, 58, 3, 2, 2, 2, 57, 55, 3, 2, 2, 2, 58, 59, 3,
-	2, 2, 2, 59, 60, 5, 6, 4, 2, 60, 95, 3, 2, 2, 2, 61, 65, 7, 17, 2, 2, 62,
-	64, 7, 21, 2, 2, 63, 62, 3, 2, 2, 2, 64, 67, 3, 2, 2, 2, 65, 66, 3, 2,
-	2, 2, 65, 63, 3, 2, 2, 2, 66, 68, 3, 2, 2, 2, 67, 65, 3, 2, 2, 2, 68, 72,
-	5, 4, 3, 2, 69, 71, 7, 21, 2, 2, 70, 69, 3, 2, 2, 2, 71, 74, 3, 2, 2, 2,
-	72, 73, 3, 2, 2, 2, 72, 70, 3, 2, 2, 2, 73, 75, 3, 2, 2, 2, 74, 72, 3,
-	2, 2, 2, 75, 76, 7, 18, 2, 2, 76, 95, 3, 2, 2, 2, 77, 78, 7, 22, 2, 2,
-	78, 82, 7, 19, 2, 2, 79, 81, 7, 21, 2, 2, 80, 79, 3, 2, 2, 2, 81, 84, 3,
-	2, 2, 2, 82, 83, 3, 2, 2, 2, 82, 80, 3, 2, 2, 2, 83, 85, 3, 2, 2, 2, 84,
-	82, 3, 2, 2, 2, 85, 89, 5, 4, 3, 2, 86, 88, 7, 21, 2, 2, 87, 86, 3, 2,
-	2, 2, 88, 91, 3, 2, 2, 2, 89, 90, 3, 2, 2, 2, 89, 87, 3, 2, 2, 2, 90, 92,
-	3, 2, 2, 2, 91, 89, 3, 2, 2, 2, 92, 93, 7, 20, 2, 2, 93, 95, 3, 2, 2, 2,
-	94, 18, 3, 2, 2, 2, 94, 26, 3, 2, 2, 2, 94, 33, 3, 2, 2, 2, 94, 47, 3,
-	2, 2, 2, 94, 61, 3, 2, 2, 2, 94, 77, 3, 2, 2, 2, 95, 138, 3, 2, 2, 2, 96,
-	98, 12, 10, 2, 2, 97, 99, 7, 21, 2, 2, 98, 97, 3, 2, 2, 2, 99, 100, 3,
-	2, 2, 2, 100, 101, 3, 2, 2, 2, 100, 98, 3, 2, 2, 2, 101, 102, 3, 2, 2,
-	2, 102, 104, 7, 14, 2, 2, 103, 105, 7, 21, 2, 2, 104, 103, 3, 2, 2, 2,
-	105, 106, 3, 2, 2, 2, 106, 107, 3, 2, 2, 2, 106, 104, 3, 2, 2, 2, 107,
-	108, 3, 2, 2, 2, 108, 137, 5, 4, 3, 11, 109, 111, 12, 9, 2, 2, 110, 112,
-	7, 21, 2, 2, 111, 110, 3, 2, 2, 2, 112, 113, 3, 2, 2, 2, 113, 114, 3, 2,
-	2, 2, 113, 111, 3, 2, 2, 2, 114, 115, 3, 2, 2, 2, 115, 117, 7, 15, 2, 2,
-	116, 118, 7, 21, 2, 2, 117, 116, 3, 2, 2, 2, 118, 119, 3, 2, 2, 2, 119,
-	117, 3, 2, 2, 2, 119, 120, 3, 2, 2, 2, 120, 121, 3, 2, 2, 2, 121, 137,
-	5, 4, 3, 10, 122, 124, 12, 8, 2, 2, 123, 125, 7, 21, 2, 2, 124, 123, 3,
-	2, 2, 2, 125, 126, 3, 2, 2, 2, 126, 127, 3, 2, 2, 2, 126, 124, 3, 2, 2,
-	2, 127, 128, 3, 2, 2, 2, 128, 130, 5, 8, 5, 2, 129, 131, 7, 21, 2, 2, 130,
-	129, 3, 2, 2, 2, 131, 132, 3, 2, 2, 2, 132, 133, 3, 2, 2, 2, 132, 130,
-	3, 2, 2, 2, 133, 134, 3, 2, 2, 2, 134, 135, 5, 4, 3, 9, 135, 137, 3, 2,
-	2, 2, 136, 96, 3, 2, 2, 2, 136, 109, 3, 2, 2, 2, 136, 122, 3, 2, 2, 2,
-	137, 140, 3, 2, 2, 2, 138, 136, 3, 2, 2, 2, 138, 139, 3, 2, 2, 2, 139,
-	5, 3, 2, 2, 2, 140, 138, 3, 2, 2, 2, 141, 143, 7, 3, 2, 2, 142, 144, 11,
-	2, 2, 2, 143, 142, 3, 2, 2, 2, 144, 145, 3, 2, 2, 2, 145, 146, 3, 2, 2,
-	2, 145, 143, 3, 2, 2, 2, 146, 147, 3, 2, 2, 2, 147, 148, 7, 3, 2, 2, 148,
-	7, 3, 2, 2, 2, 149, 150, 9, 2, 2, 2, 150, 9, 3, 2, 2, 2, 23, 13, 23, 30,
-	37, 43, 51, 57, 65, 72, 82, 89, 94, 100, 106, 113, 119, 126, 132, 136,
-	138, 145,
+	3, 24715, 42794, 33075, 47597, 16764, 15335, 30598, 22884, 3, 26, 170,
+	4, 2, 9, 2, 4, 3, 9, 3, 4, 4, 9, 4, 4, 5, 9, 5, 4, 6, 9, 6, 3, 2, 7, 2,
+	14, 10, 2, 12, 2, 14, 2, 17, 11, 2, 3, 2, 3, 2, 3, 3, 3, 3, 3, 3, 6, 3,
+	24, 10, 3, 13, 3, 14, 3, 25, 3, 3, 3, 3, 3, 3, 6, 3, 31, 10, 3, 13, 3,
+	14, 3, 32, 3, 3, 3, 3, 3, 3, 6, 3, 38, 10, 3, 13, 3, 14, 3, 39, 3, 3, 3,
+	3, 6, 3, 44, 10, 3, 13, 3, 14, 3, 45, 3, 3, 3, 3, 3, 3, 3, 3, 6, 3, 52,
+	10, 3, 13, 3, 14, 3, 53, 3, 3, 3, 3, 6, 3, 58, 10, 3, 13, 3, 14, 3, 59,
+	3, 3, 3, 3, 3, 3, 3, 3, 6, 3, 66, 10, 3, 13, 3, 14, 3, 67, 3, 3, 3, 3,
+	6, 3, 72, 10, 3, 13, 3, 14, 3, 73, 3, 3, 3, 3, 3, 3, 3, 3, 7, 3, 80, 10,
+	3, 12, 3, 14, 3, 83, 11, 3, 3, 3, 3, 3, 7, 3, 87, 10, 3, 12, 3, 14, 3,
+	90, 11, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 7, 3, 97, 10, 3, 12, 3, 14, 3,
+	100, 11, 3, 3, 3, 3, 3, 7, 3, 104, 10, 3, 12, 3, 14, 3, 107, 11, 3, 3,
+	3, 3, 3, 5, 3, 111, 10, 3, 3, 3, 3, 3, 6, 3, 115, 10, 3, 13, 3, 14, 3,
+	116, 3, 3, 3, 3, 6, 3, 121, 10, 3, 13, 3, 14, 3, 122, 3, 3, 3, 3, 3, 3,
+	6, 3, 128, 10, 3, 13, 3, 14, 3, 129, 3, 3, 3, 3, 6, 3, 134, 10, 3, 13,
+	3, 14, 3, 135, 3, 3, 3, 3, 3, 3, 6, 3, 141, 10, 3, 13, 3, 14, 3, 142, 3,
+	3, 3, 3, 6, 3, 147, 10, 3, 13, 3, 14, 3, 148, 3, 3, 3, 3, 7, 3, 153, 10,
+	3, 12, 3, 14, 3, 156, 11, 3, 3, 4, 3, 4, 6, 4, 160, 10, 4, 13, 4, 14, 4,
+	161, 3, 4, 3, 4, 3, 5, 3, 5, 3, 6, 3, 6, 3, 6, 20, 25, 32, 39, 45, 53,
+	59, 67, 73, 81, 88, 98, 105, 116, 122, 129, 142, 148, 161, 3, 4, 7, 2,
+	4, 6, 8, 10, 2, 4, 3, 2, 22, 23, 3, 2, 4, 12, 2, 193, 2, 15, 3, 2, 2, 2,
+	4, 110, 3, 2, 2, 2, 6, 157, 3, 2, 2, 2, 8, 165, 3, 2, 2, 2, 10, 167, 3,
+	2, 2, 2, 12, 14, 5, 4, 3, 2, 13, 12, 3, 2, 2, 2, 14, 17, 3, 2, 2, 2, 15,
+	13, 3, 2, 2, 2, 15, 16, 3, 2, 2, 2, 16, 18, 3, 2, 2, 2, 17, 15, 3, 2, 2,
+	2, 18, 19, 7, 2, 2, 3, 19, 3, 3, 2, 2, 2, 20, 21, 8, 3, 1, 2, 21, 23, 7,
+	13, 2, 2, 22, 24, 7, 21, 2, 2, 23, 22, 3, 2, 2, 2, 24, 25, 3, 2, 2, 2,
+	25, 26, 3, 2, 2, 2, 25, 23, 3, 2, 2, 2, 26, 27, 3, 2, 2, 2, 27, 111, 5,
+	4, 3, 12, 28, 30, 7, 24, 2, 2, 29, 31, 7, 21, 2, 2, 30, 29, 3, 2, 2, 2,
+	31, 32, 3, 2, 2, 2, 32, 33, 3, 2, 2, 2, 32, 30, 3, 2, 2, 2, 33, 34, 3,
+	2, 2, 2, 34, 111, 7, 16, 2, 2, 35, 37, 7, 24, 2, 2, 36, 38, 7, 21, 2, 2,
+	37, 36, 3, 2, 2, 2, 38, 39, 3, 2, 2, 2, 39, 40, 3, 2, 2, 2, 39, 37, 3,
+	2, 2, 2, 40, 41, 3, 2, 2, 2, 41, 43, 5, 10, 6, 2, 42, 44, 7, 21, 2, 2,
+	43, 42, 3, 2, 2, 2, 44, 45, 3, 2, 2, 2, 45, 46, 3, 2, 2, 2, 45, 43, 3,
+	2, 2, 2, 46, 47, 3, 2, 2, 2, 47, 48, 5, 4, 3, 7, 48, 111, 3, 2, 2, 2, 49,
+	51, 7, 24, 2, 2, 50, 52, 7, 21, 2, 2, 51, 50, 3, 2, 2, 2, 52, 53, 3, 2,
+	2, 2, 53, 54, 3, 2, 2, 2, 53, 51, 3, 2, 2, 2, 54, 55, 3, 2, 2, 2, 55, 57,
+	5, 10, 6, 2, 56, 58, 7, 21, 2, 2, 57, 56, 3, 2, 2, 2, 58, 59, 3, 2, 2,
+	2, 59, 60, 3, 2, 2, 2, 59, 57, 3, 2, 2, 2, 60, 61, 3, 2, 2, 2, 61, 62,
+	5, 6, 4, 2, 62, 111, 3, 2, 2, 2, 63, 65, 7, 24, 2, 2, 64, 66, 7, 21, 2,
+	2, 65, 64, 3, 2, 2, 2, 66, 67, 3, 2, 2, 2, 67, 68, 3, 2, 2, 2, 67, 65,
+	3, 2, 2, 2, 68, 69, 3, 2, 2, 2, 69, 71, 5, 10, 6, 2, 70, 72, 7, 21, 2,
+	2, 71, 70, 3, 2, 2, 2, 72, 73, 3, 2, 2, 2, 73, 74, 3, 2, 2, 2, 73, 71,
+	3, 2, 2, 2, 74, 75, 3, 2, 2, 2, 75, 76, 5, 8, 5, 2, 76, 111, 3, 2, 2, 2,
+	77, 81, 7, 17, 2, 2, 78, 80, 7, 21, 2, 2, 79, 78, 3, 2, 2, 2, 80, 83, 3,
+	2, 2, 2, 81, 82, 3, 2, 2, 2, 81, 79, 3, 2, 2, 2, 82, 84, 3, 2, 2, 2, 83,
+	81, 3, 2, 2, 2, 84, 88, 5, 4, 3, 2, 85, 87, 7, 21, 2, 2, 86, 85, 3, 2,
+	2, 2, 87, 90, 3, 2, 2, 2, 88, 89, 3, 2, 2, 2, 88, 86, 3, 2, 2, 2, 89, 91,
+	3, 2, 2, 2, 90, 88, 3, 2, 2, 2, 91, 92, 7, 18, 2, 2, 92, 111, 3, 2, 2,
+	2, 93, 94, 7, 24, 2, 2, 94, 98, 7, 19, 2, 2, 95, 97, 7, 21, 2, 2, 96, 95,
+	3, 2, 2, 2, 97, 100, 3, 2, 2, 2, 98, 99, 3, 2, 2, 2, 98, 96, 3, 2, 2, 2,
+	99, 101, 3, 2, 2, 2, 100, 98, 3, 2, 2, 2, 101, 105, 5, 4, 3, 2, 102, 104,
+	7, 21, 2, 2, 103, 102, 3, 2, 2, 2, 104, 107, 3, 2, 2, 2, 105, 106, 3, 2,
+	2, 2, 105, 103, 3, 2, 2, 2, 106, 108, 3, 2, 2, 2, 107, 105, 3, 2, 2, 2,
+	108, 109, 7, 20, 2, 2, 109, 111, 3, 2, 2, 2, 110, 20, 3, 2, 2, 2, 110,
+	28, 3, 2, 2, 2, 110, 35, 3, 2, 2, 2, 110, 49, 3, 2, 2, 2, 110, 63, 3, 2,
+	2, 2, 110, 77, 3, 2, 2, 2, 110, 93, 3, 2, 2, 2, 111, 154, 3, 2, 2, 2, 112,
+	114, 12, 11, 2, 2, 113, 115, 7, 21, 2, 2, 114, 113, 3, 2, 2, 2, 115, 116,
+	3, 2, 2, 2, 116, 117, 3, 2, 2, 2, 116, 114, 3, 2, 2, 2, 117, 118, 3, 2,
+	2, 2, 118, 120, 7, 14, 2, 2, 119, 121, 7, 21, 2, 2, 120, 119, 3, 2, 2,
+	2, 121, 122, 3, 2, 2, 2, 122, 123, 3, 2, 2, 2, 122, 120, 3, 2, 2, 2, 123,
+	124, 3, 2, 2, 2, 124, 153, 5, 4, 3, 12, 125, 127, 12, 10, 2, 2, 126, 128,
+	7, 21, 2, 2, 127, 126, 3, 2, 2, 2, 128, 129, 3, 2, 2, 2, 129, 130, 3, 2,
+	2, 2, 129, 127, 3, 2, 2, 2, 130, 131, 3, 2, 2, 2, 131, 133, 7, 15, 2, 2,
+	132, 134, 7, 21, 2, 2, 133, 132, 3, 2, 2, 2, 134, 135, 3, 2, 2, 2, 135,
+	133, 3, 2, 2, 2, 135, 136, 3, 2, 2, 2, 136, 137, 3, 2, 2, 2, 137, 153,
+	5, 4, 3, 11, 138, 140, 12, 9, 2, 2, 139, 141, 7, 21, 2, 2, 140, 139, 3,
+	2, 2, 2, 141, 142, 3, 2, 2, 2, 142, 143, 3, 2, 2, 2, 142, 140, 3, 2, 2,
+	2, 143, 144, 3, 2, 2, 2, 144, 146, 5, 10, 6, 2, 145, 147, 7, 21, 2, 2,
+	146, 145, 3, 2, 2, 2, 147, 148, 3, 2, 2, 2, 148, 149, 3, 2, 2, 2, 148,
+	146, 3, 2, 2, 2, 149, 150, 3, 2, 2, 2, 150, 151, 5, 4, 3, 10, 151, 153,
+	3, 2, 2, 2, 152, 112, 3, 2, 2, 2, 152, 125, 3, 2, 2, 2, 152, 138, 3, 2,
+	2, 2, 153, 156, 3, 2, 2, 2, 154, 152, 3, 2, 2, 2, 154, 155, 3, 2, 2, 2,
+	155, 5, 3, 2, 2, 2, 156, 154, 3, 2, 2, 2, 157, 159, 7, 3, 2, 2, 158, 160,
+	11, 2, 2, 2, 159, 158, 3, 2, 2, 2, 160, 161, 3, 2, 2, 2, 161, 162, 3, 2,
+	2, 2, 161, 159, 3, 2, 2, 2, 162, 163, 3, 2, 2, 2, 163, 164, 7, 3, 2, 2,
+	164, 7, 3, 2, 2, 2, 165, 166, 9, 2, 2, 2, 166, 9, 3, 2, 2, 2, 167, 168,
+	9, 3, 2, 2, 168, 11, 3, 2, 2, 2, 25, 15, 25, 32, 39, 45, 53, 59, 67, 73,
+	81, 88, 98, 105, 110, 116, 122, 129, 135, 142, 148, 152, 154, 161,
 }
 var deserializer = antlr.NewATNDeserializer(nil)
 var deserializedATN = deserializer.DeserializeFromUInt16(parserATN)
@@ -96,12 +104,12 @@ var literalNames = []string{
 }
 var symbolicNames = []string{
 	"", "", "EQ", "NE", "CO", "SW", "EW", "GT", "LT", "GE", "LE", "NOT", "AND",
-	"OR", "PR", "LPAREN", "RPAREN", "LBRAC", "RBRAC", "WS", "ATTRNAME", "ANY",
-	"EOL",
+	"OR", "PR", "LPAREN", "RPAREN", "LBRAC", "RBRAC", "WS", "NUMBERS", "BOOLEAN",
+	"ATTRNAME", "ANY", "EOL",
 }
 
 var ruleNames = []string{
-	"start", "expression", "criteria", "operator",
+	"start", "expression", "criteria", "criteriaValue", "operator",
 }
 var decisionToDFA = make([]*antlr.DFA, len(deserializedATN.DecisionToState))
 
@@ -151,17 +159,20 @@ const (
 	ScimFilterParserLBRAC    = 17
 	ScimFilterParserRBRAC    = 18
 	ScimFilterParserWS       = 19
-	ScimFilterParserATTRNAME = 20
-	ScimFilterParserANY      = 21
-	ScimFilterParserEOL      = 22
+	ScimFilterParserNUMBERS  = 20
+	ScimFilterParserBOOLEAN  = 21
+	ScimFilterParserATTRNAME = 22
+	ScimFilterParserANY      = 23
+	ScimFilterParserEOL      = 24
 )
 
 // ScimFilterParser rules.
 const (
-	ScimFilterParserRULE_start      = 0
-	ScimFilterParserRULE_expression = 1
-	ScimFilterParserRULE_criteria   = 2
-	ScimFilterParserRULE_operator   = 3
+	ScimFilterParserRULE_start         = 0
+	ScimFilterParserRULE_expression    = 1
+	ScimFilterParserRULE_criteria      = 2
+	ScimFilterParserRULE_criteriaValue = 3
+	ScimFilterParserRULE_operator      = 4
 )
 
 // IStartContext is an interface to support dynamic dispatch.
@@ -271,22 +282,22 @@ func (p *ScimFilterParser) Start() (localctx IStartContext) {
 	}()
 
 	p.EnterOuterAlt(localctx, 1)
-	p.SetState(11)
+	p.SetState(13)
 	p.GetErrorHandler().Sync(p)
 	_la = p.GetTokenStream().LA(1)
 
 	for ((_la)&-(0x1f+1)) == 0 && ((1<<uint(_la))&((1<<ScimFilterParserNOT)|(1<<ScimFilterParserLPAREN)|(1<<ScimFilterParserATTRNAME))) != 0 {
 		{
-			p.SetState(8)
+			p.SetState(10)
 			p.expression(0)
 		}
 
-		p.SetState(13)
+		p.SetState(15)
 		p.GetErrorHandler().Sync(p)
 		_la = p.GetTokenStream().LA(1)
 	}
 	{
-		p.SetState(14)
+		p.SetState(16)
 		p.Match(ScimFilterParserEOF)
 	}
 
@@ -764,6 +775,68 @@ func (s *EXPR_AND_EXPRContext) ExitRule(listener antlr.ParseTreeListener) {
 	}
 }
 
+type ATTR_OPER_VALUEContext struct {
+	*ExpressionContext
+}
+
+func NewATTR_OPER_VALUEContext(parser antlr.Parser, ctx antlr.ParserRuleContext) *ATTR_OPER_VALUEContext {
+	var p = new(ATTR_OPER_VALUEContext)
+
+	p.ExpressionContext = NewEmptyExpressionContext()
+	p.parser = parser
+	p.CopyFrom(ctx.(*ExpressionContext))
+
+	return p
+}
+
+func (s *ATTR_OPER_VALUEContext) GetRuleContext() antlr.RuleContext {
+	return s
+}
+
+func (s *ATTR_OPER_VALUEContext) ATTRNAME() antlr.TerminalNode {
+	return s.GetToken(ScimFilterParserATTRNAME, 0)
+}
+
+func (s *ATTR_OPER_VALUEContext) Operator() IOperatorContext {
+	var t = s.GetTypedRuleContext(reflect.TypeOf((*IOperatorContext)(nil)).Elem(), 0)
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IOperatorContext)
+}
+
+func (s *ATTR_OPER_VALUEContext) CriteriaValue() ICriteriaValueContext {
+	var t = s.GetTypedRuleContext(reflect.TypeOf((*ICriteriaValueContext)(nil)).Elem(), 0)
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(ICriteriaValueContext)
+}
+
+func (s *ATTR_OPER_VALUEContext) AllWS() []antlr.TerminalNode {
+	return s.GetTokens(ScimFilterParserWS)
+}
+
+func (s *ATTR_OPER_VALUEContext) WS(i int) antlr.TerminalNode {
+	return s.GetToken(ScimFilterParserWS, i)
+}
+
+func (s *ATTR_OPER_VALUEContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(ScimFilterListener); ok {
+		listenerT.EnterATTR_OPER_VALUE(s)
+	}
+}
+
+func (s *ATTR_OPER_VALUEContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(ScimFilterListener); ok {
+		listenerT.ExitATTR_OPER_VALUE(s)
+	}
+}
+
 type ATTR_OPER_CRITERIAContext struct {
 	*ExpressionContext
 }
@@ -915,26 +988,26 @@ func (p *ScimFilterParser) expression(_p int) (localctx IExpressionContext) {
 	var _alt int
 
 	p.EnterOuterAlt(localctx, 1)
-	p.SetState(92)
+	p.SetState(108)
 	p.GetErrorHandler().Sync(p)
-	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 11, p.GetParserRuleContext()) {
+	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 13, p.GetParserRuleContext()) {
 	case 1:
 		localctx = NewNOT_EXPRContext(p, localctx)
 		p.SetParserRuleContext(localctx)
 		_prevctx = localctx
 
 		{
-			p.SetState(17)
+			p.SetState(19)
 			p.Match(ScimFilterParserNOT)
 		}
-		p.SetState(19)
+		p.SetState(21)
 		p.GetErrorHandler().Sync(p)
 		_alt = 1 + 1
 		for ok := true; ok; ok = _alt != 1 && _alt != antlr.ATNInvalidAltNumber {
 			switch _alt {
 			case 1 + 1:
 				{
-					p.SetState(18)
+					p.SetState(20)
 					p.Match(ScimFilterParserWS)
 				}
 
@@ -942,13 +1015,13 @@ func (p *ScimFilterParser) expression(_p int) (localctx IExpressionContext) {
 				panic(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
 			}
 
-			p.SetState(21)
+			p.SetState(23)
 			p.GetErrorHandler().Sync(p)
 			_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 1, p.GetParserRuleContext())
 		}
 		{
-			p.SetState(23)
-			p.expression(9)
+			p.SetState(25)
+			p.expression(10)
 		}
 
 	case 2:
@@ -956,17 +1029,17 @@ func (p *ScimFilterParser) expression(_p int) (localctx IExpressionContext) {
 		p.SetParserRuleContext(localctx)
 		_prevctx = localctx
 		{
-			p.SetState(24)
+			p.SetState(26)
 			p.Match(ScimFilterParserATTRNAME)
 		}
-		p.SetState(26)
+		p.SetState(28)
 		p.GetErrorHandler().Sync(p)
 		_alt = 1 + 1
 		for ok := true; ok; ok = _alt != 1 && _alt != antlr.ATNInvalidAltNumber {
 			switch _alt {
 			case 1 + 1:
 				{
-					p.SetState(25)
+					p.SetState(27)
 					p.Match(ScimFilterParserWS)
 				}
 
@@ -974,12 +1047,12 @@ func (p *ScimFilterParser) expression(_p int) (localctx IExpressionContext) {
 				panic(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
 			}
 
-			p.SetState(28)
+			p.SetState(30)
 			p.GetErrorHandler().Sync(p)
 			_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 2, p.GetParserRuleContext())
 		}
 		{
-			p.SetState(30)
+			p.SetState(32)
 			p.Match(ScimFilterParserPR)
 		}
 
@@ -988,17 +1061,17 @@ func (p *ScimFilterParser) expression(_p int) (localctx IExpressionContext) {
 		p.SetParserRuleContext(localctx)
 		_prevctx = localctx
 		{
-			p.SetState(31)
+			p.SetState(33)
 			p.Match(ScimFilterParserATTRNAME)
 		}
-		p.SetState(33)
+		p.SetState(35)
 		p.GetErrorHandler().Sync(p)
 		_alt = 1 + 1
 		for ok := true; ok; ok = _alt != 1 && _alt != antlr.ATNInvalidAltNumber {
 			switch _alt {
 			case 1 + 1:
 				{
-					p.SetState(32)
+					p.SetState(34)
 					p.Match(ScimFilterParserWS)
 				}
 
@@ -1006,22 +1079,22 @@ func (p *ScimFilterParser) expression(_p int) (localctx IExpressionContext) {
 				panic(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
 			}
 
-			p.SetState(35)
+			p.SetState(37)
 			p.GetErrorHandler().Sync(p)
 			_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 3, p.GetParserRuleContext())
 		}
 		{
-			p.SetState(37)
+			p.SetState(39)
 			p.Operator()
 		}
-		p.SetState(39)
+		p.SetState(41)
 		p.GetErrorHandler().Sync(p)
 		_alt = 1 + 1
 		for ok := true; ok; ok = _alt != 1 && _alt != antlr.ATNInvalidAltNumber {
 			switch _alt {
 			case 1 + 1:
 				{
-					p.SetState(38)
+					p.SetState(40)
 					p.Match(ScimFilterParserWS)
 				}
 
@@ -1029,13 +1102,13 @@ func (p *ScimFilterParser) expression(_p int) (localctx IExpressionContext) {
 				panic(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
 			}
 
-			p.SetState(41)
+			p.SetState(43)
 			p.GetErrorHandler().Sync(p)
 			_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 4, p.GetParserRuleContext())
 		}
 		{
-			p.SetState(43)
-			p.expression(4)
+			p.SetState(45)
+			p.expression(5)
 		}
 
 	case 4:
@@ -1043,17 +1116,17 @@ func (p *ScimFilterParser) expression(_p int) (localctx IExpressionContext) {
 		p.SetParserRuleContext(localctx)
 		_prevctx = localctx
 		{
-			p.SetState(45)
+			p.SetState(47)
 			p.Match(ScimFilterParserATTRNAME)
 		}
-		p.SetState(47)
+		p.SetState(49)
 		p.GetErrorHandler().Sync(p)
 		_alt = 1 + 1
 		for ok := true; ok; ok = _alt != 1 && _alt != antlr.ATNInvalidAltNumber {
 			switch _alt {
 			case 1 + 1:
 				{
-					p.SetState(46)
+					p.SetState(48)
 					p.Match(ScimFilterParserWS)
 				}
 
@@ -1061,22 +1134,22 @@ func (p *ScimFilterParser) expression(_p int) (localctx IExpressionContext) {
 				panic(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
 			}
 
-			p.SetState(49)
+			p.SetState(51)
 			p.GetErrorHandler().Sync(p)
 			_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 5, p.GetParserRuleContext())
 		}
 		{
-			p.SetState(51)
+			p.SetState(53)
 			p.Operator()
 		}
-		p.SetState(53)
+		p.SetState(55)
 		p.GetErrorHandler().Sync(p)
 		_alt = 1 + 1
 		for ok := true; ok; ok = _alt != 1 && _alt != antlr.ATNInvalidAltNumber {
 			switch _alt {
 			case 1 + 1:
 				{
-					p.SetState(52)
+					p.SetState(54)
 					p.Match(ScimFilterParserWS)
 				}
 
@@ -1084,122 +1157,177 @@ func (p *ScimFilterParser) expression(_p int) (localctx IExpressionContext) {
 				panic(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
 			}
 
-			p.SetState(55)
+			p.SetState(57)
 			p.GetErrorHandler().Sync(p)
 			_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 6, p.GetParserRuleContext())
 		}
 		{
-			p.SetState(57)
+			p.SetState(59)
 			p.Criteria()
 		}
 
 	case 5:
-		localctx = NewLPAREN_EXPR_RPARENContext(p, localctx)
+		localctx = NewATTR_OPER_VALUEContext(p, localctx)
 		p.SetParserRuleContext(localctx)
 		_prevctx = localctx
 		{
-			p.SetState(59)
-			p.Match(ScimFilterParserLPAREN)
+			p.SetState(61)
+			p.Match(ScimFilterParserATTRNAME)
 		}
 		p.SetState(63)
 		p.GetErrorHandler().Sync(p)
-		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 7, p.GetParserRuleContext())
-
-		for _alt != 1 && _alt != antlr.ATNInvalidAltNumber {
-			if _alt == 1+1 {
+		_alt = 1 + 1
+		for ok := true; ok; ok = _alt != 1 && _alt != antlr.ATNInvalidAltNumber {
+			switch _alt {
+			case 1 + 1:
 				{
-					p.SetState(60)
+					p.SetState(62)
 					p.Match(ScimFilterParserWS)
 				}
 
+			default:
+				panic(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
 			}
+
 			p.SetState(65)
 			p.GetErrorHandler().Sync(p)
 			_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 7, p.GetParserRuleContext())
 		}
 		{
-			p.SetState(66)
-			p.expression(0)
+			p.SetState(67)
+			p.Operator()
 		}
-		p.SetState(70)
+		p.SetState(69)
 		p.GetErrorHandler().Sync(p)
-		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 8, p.GetParserRuleContext())
-
-		for _alt != 1 && _alt != antlr.ATNInvalidAltNumber {
-			if _alt == 1+1 {
+		_alt = 1 + 1
+		for ok := true; ok; ok = _alt != 1 && _alt != antlr.ATNInvalidAltNumber {
+			switch _alt {
+			case 1 + 1:
 				{
-					p.SetState(67)
+					p.SetState(68)
 					p.Match(ScimFilterParserWS)
 				}
 
+			default:
+				panic(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
 			}
-			p.SetState(72)
+
+			p.SetState(71)
 			p.GetErrorHandler().Sync(p)
 			_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 8, p.GetParserRuleContext())
 		}
 		{
 			p.SetState(73)
-			p.Match(ScimFilterParserRPAREN)
+			p.CriteriaValue()
 		}
 
 	case 6:
-		localctx = NewLBRAC_EXPR_RBRACContext(p, localctx)
+		localctx = NewLPAREN_EXPR_RPARENContext(p, localctx)
 		p.SetParserRuleContext(localctx)
 		_prevctx = localctx
 		{
 			p.SetState(75)
-			p.Match(ScimFilterParserATTRNAME)
+			p.Match(ScimFilterParserLPAREN)
 		}
-		{
-			p.SetState(76)
-			p.Match(ScimFilterParserLBRAC)
-		}
-		p.SetState(80)
+		p.SetState(79)
 		p.GetErrorHandler().Sync(p)
 		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 9, p.GetParserRuleContext())
 
 		for _alt != 1 && _alt != antlr.ATNInvalidAltNumber {
 			if _alt == 1+1 {
 				{
-					p.SetState(77)
+					p.SetState(76)
 					p.Match(ScimFilterParserWS)
 				}
 
 			}
-			p.SetState(82)
+			p.SetState(81)
 			p.GetErrorHandler().Sync(p)
 			_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 9, p.GetParserRuleContext())
 		}
 		{
-			p.SetState(83)
+			p.SetState(82)
 			p.expression(0)
 		}
-		p.SetState(87)
+		p.SetState(86)
 		p.GetErrorHandler().Sync(p)
 		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 10, p.GetParserRuleContext())
 
 		for _alt != 1 && _alt != antlr.ATNInvalidAltNumber {
 			if _alt == 1+1 {
 				{
-					p.SetState(84)
+					p.SetState(83)
 					p.Match(ScimFilterParserWS)
 				}
 
 			}
-			p.SetState(89)
+			p.SetState(88)
 			p.GetErrorHandler().Sync(p)
 			_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 10, p.GetParserRuleContext())
 		}
 		{
-			p.SetState(90)
+			p.SetState(89)
+			p.Match(ScimFilterParserRPAREN)
+		}
+
+	case 7:
+		localctx = NewLBRAC_EXPR_RBRACContext(p, localctx)
+		p.SetParserRuleContext(localctx)
+		_prevctx = localctx
+		{
+			p.SetState(91)
+			p.Match(ScimFilterParserATTRNAME)
+		}
+		{
+			p.SetState(92)
+			p.Match(ScimFilterParserLBRAC)
+		}
+		p.SetState(96)
+		p.GetErrorHandler().Sync(p)
+		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 11, p.GetParserRuleContext())
+
+		for _alt != 1 && _alt != antlr.ATNInvalidAltNumber {
+			if _alt == 1+1 {
+				{
+					p.SetState(93)
+					p.Match(ScimFilterParserWS)
+				}
+
+			}
+			p.SetState(98)
+			p.GetErrorHandler().Sync(p)
+			_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 11, p.GetParserRuleContext())
+		}
+		{
+			p.SetState(99)
+			p.expression(0)
+		}
+		p.SetState(103)
+		p.GetErrorHandler().Sync(p)
+		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 12, p.GetParserRuleContext())
+
+		for _alt != 1 && _alt != antlr.ATNInvalidAltNumber {
+			if _alt == 1+1 {
+				{
+					p.SetState(100)
+					p.Match(ScimFilterParserWS)
+				}
+
+			}
+			p.SetState(105)
+			p.GetErrorHandler().Sync(p)
+			_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 12, p.GetParserRuleContext())
+		}
+		{
+			p.SetState(106)
 			p.Match(ScimFilterParserRBRAC)
 		}
 
 	}
 	p.GetParserRuleContext().SetStop(p.GetTokenStream().LT(-1))
-	p.SetState(136)
+	p.SetState(152)
 	p.GetErrorHandler().Sync(p)
-	_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 19, p.GetParserRuleContext())
+	_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 21, p.GetParserRuleContext())
 
 	for _alt != 2 && _alt != antlr.ATNInvalidAltNumber {
 		if _alt == 1 {
@@ -1207,25 +1335,25 @@ func (p *ScimFilterParser) expression(_p int) (localctx IExpressionContext) {
 				p.TriggerExitRuleEvent()
 			}
 			_prevctx = localctx
-			p.SetState(134)
+			p.SetState(150)
 			p.GetErrorHandler().Sync(p)
-			switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 18, p.GetParserRuleContext()) {
+			switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 20, p.GetParserRuleContext()) {
 			case 1:
 				localctx = NewEXPR_AND_EXPRContext(p, NewExpressionContext(p, _parentctx, _parentState))
 				p.PushNewRecursionContext(localctx, _startState, ScimFilterParserRULE_expression)
-				p.SetState(94)
+				p.SetState(110)
 
-				if !(p.Precpred(p.GetParserRuleContext(), 8)) {
-					panic(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 8)", ""))
+				if !(p.Precpred(p.GetParserRuleContext(), 9)) {
+					panic(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 9)", ""))
 				}
-				p.SetState(96)
+				p.SetState(112)
 				p.GetErrorHandler().Sync(p)
 				_alt = 1 + 1
 				for ok := true; ok; ok = _alt != 1 && _alt != antlr.ATNInvalidAltNumber {
 					switch _alt {
 					case 1 + 1:
 						{
-							p.SetState(95)
+							p.SetState(111)
 							p.Match(ScimFilterParserWS)
 						}
 
@@ -1233,22 +1361,22 @@ func (p *ScimFilterParser) expression(_p int) (localctx IExpressionContext) {
 						panic(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
 					}
 
-					p.SetState(98)
+					p.SetState(114)
 					p.GetErrorHandler().Sync(p)
-					_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 12, p.GetParserRuleContext())
+					_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 14, p.GetParserRuleContext())
 				}
 				{
-					p.SetState(100)
+					p.SetState(116)
 					p.Match(ScimFilterParserAND)
 				}
-				p.SetState(102)
+				p.SetState(118)
 				p.GetErrorHandler().Sync(p)
 				_alt = 1 + 1
 				for ok := true; ok; ok = _alt != 1 && _alt != antlr.ATNInvalidAltNumber {
 					switch _alt {
 					case 1 + 1:
 						{
-							p.SetState(101)
+							p.SetState(117)
 							p.Match(ScimFilterParserWS)
 						}
 
@@ -1256,31 +1384,31 @@ func (p *ScimFilterParser) expression(_p int) (localctx IExpressionContext) {
 						panic(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
 					}
 
-					p.SetState(104)
+					p.SetState(120)
 					p.GetErrorHandler().Sync(p)
-					_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 13, p.GetParserRuleContext())
+					_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 15, p.GetParserRuleContext())
 				}
 				{
-					p.SetState(106)
-					p.expression(9)
+					p.SetState(122)
+					p.expression(10)
 				}
 
 			case 2:
 				localctx = NewEXPR_OR_EXPRContext(p, NewExpressionContext(p, _parentctx, _parentState))
 				p.PushNewRecursionContext(localctx, _startState, ScimFilterParserRULE_expression)
-				p.SetState(107)
+				p.SetState(123)
 
-				if !(p.Precpred(p.GetParserRuleContext(), 7)) {
-					panic(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 7)", ""))
+				if !(p.Precpred(p.GetParserRuleContext(), 8)) {
+					panic(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 8)", ""))
 				}
-				p.SetState(109)
+				p.SetState(125)
 				p.GetErrorHandler().Sync(p)
 				_alt = 1 + 1
 				for ok := true; ok; ok = _alt != 1 && _alt != antlr.ATNInvalidAltNumber {
 					switch _alt {
 					case 1 + 1:
 						{
-							p.SetState(108)
+							p.SetState(124)
 							p.Match(ScimFilterParserWS)
 						}
 
@@ -1288,49 +1416,49 @@ func (p *ScimFilterParser) expression(_p int) (localctx IExpressionContext) {
 						panic(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
 					}
 
-					p.SetState(111)
+					p.SetState(127)
 					p.GetErrorHandler().Sync(p)
-					_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 14, p.GetParserRuleContext())
+					_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 16, p.GetParserRuleContext())
 				}
 				{
-					p.SetState(113)
+					p.SetState(129)
 					p.Match(ScimFilterParserOR)
 				}
-				p.SetState(115)
+				p.SetState(131)
 				p.GetErrorHandler().Sync(p)
 				_la = p.GetTokenStream().LA(1)
 
 				for ok := true; ok; ok = _la == ScimFilterParserWS {
 					{
-						p.SetState(114)
+						p.SetState(130)
 						p.Match(ScimFilterParserWS)
 					}
 
-					p.SetState(117)
+					p.SetState(133)
 					p.GetErrorHandler().Sync(p)
 					_la = p.GetTokenStream().LA(1)
 				}
 				{
-					p.SetState(119)
-					p.expression(8)
+					p.SetState(135)
+					p.expression(9)
 				}
 
 			case 3:
 				localctx = NewEXPR_OPER_EXPRContext(p, NewExpressionContext(p, _parentctx, _parentState))
 				p.PushNewRecursionContext(localctx, _startState, ScimFilterParserRULE_expression)
-				p.SetState(120)
+				p.SetState(136)
 
-				if !(p.Precpred(p.GetParserRuleContext(), 6)) {
-					panic(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 6)", ""))
+				if !(p.Precpred(p.GetParserRuleContext(), 7)) {
+					panic(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 7)", ""))
 				}
-				p.SetState(122)
+				p.SetState(138)
 				p.GetErrorHandler().Sync(p)
 				_alt = 1 + 1
 				for ok := true; ok; ok = _alt != 1 && _alt != antlr.ATNInvalidAltNumber {
 					switch _alt {
 					case 1 + 1:
 						{
-							p.SetState(121)
+							p.SetState(137)
 							p.Match(ScimFilterParserWS)
 						}
 
@@ -1338,22 +1466,22 @@ func (p *ScimFilterParser) expression(_p int) (localctx IExpressionContext) {
 						panic(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
 					}
 
-					p.SetState(124)
+					p.SetState(140)
 					p.GetErrorHandler().Sync(p)
-					_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 16, p.GetParserRuleContext())
+					_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 18, p.GetParserRuleContext())
 				}
 				{
-					p.SetState(126)
+					p.SetState(142)
 					p.Operator()
 				}
-				p.SetState(128)
+				p.SetState(144)
 				p.GetErrorHandler().Sync(p)
 				_alt = 1 + 1
 				for ok := true; ok; ok = _alt != 1 && _alt != antlr.ATNInvalidAltNumber {
 					switch _alt {
 					case 1 + 1:
 						{
-							p.SetState(127)
+							p.SetState(143)
 							p.Match(ScimFilterParserWS)
 						}
 
@@ -1361,21 +1489,21 @@ func (p *ScimFilterParser) expression(_p int) (localctx IExpressionContext) {
 						panic(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
 					}
 
-					p.SetState(130)
+					p.SetState(146)
 					p.GetErrorHandler().Sync(p)
-					_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 17, p.GetParserRuleContext())
+					_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 19, p.GetParserRuleContext())
 				}
 				{
-					p.SetState(132)
-					p.expression(7)
+					p.SetState(148)
+					p.expression(8)
 				}
 
 			}
 
 		}
-		p.SetState(138)
+		p.SetState(154)
 		p.GetErrorHandler().Sync(p)
-		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 19, p.GetParserRuleContext())
+		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 21, p.GetParserRuleContext())
 	}
 
 	return localctx
@@ -1462,29 +1590,130 @@ func (p *ScimFilterParser) Criteria() (localctx ICriteriaContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(139)
+		p.SetState(155)
 		p.Match(ScimFilterParserT__0)
 	}
-	p.SetState(141)
+	p.SetState(157)
 	p.GetErrorHandler().Sync(p)
 	_alt = 1 + 1
 	for ok := true; ok; ok = _alt != 1 && _alt != antlr.ATNInvalidAltNumber {
 		switch _alt {
 		case 1 + 1:
-			p.SetState(140)
+			p.SetState(156)
 			p.MatchWildcard()
 
 		default:
 			panic(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
 		}
 
-		p.SetState(143)
+		p.SetState(159)
 		p.GetErrorHandler().Sync(p)
-		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 20, p.GetParserRuleContext())
+		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 22, p.GetParserRuleContext())
 	}
 	{
-		p.SetState(145)
+		p.SetState(161)
 		p.Match(ScimFilterParserT__0)
+	}
+
+	return localctx
+}
+
+// ICriteriaValueContext is an interface to support dynamic dispatch.
+type ICriteriaValueContext interface {
+	antlr.ParserRuleContext
+
+	// GetParser returns the parser.
+	GetParser() antlr.Parser
+
+	// IsCriteriaValueContext differentiates from other interfaces.
+	IsCriteriaValueContext()
+}
+
+type CriteriaValueContext struct {
+	*antlr.BaseParserRuleContext
+	parser antlr.Parser
+}
+
+func NewEmptyCriteriaValueContext() *CriteriaValueContext {
+	var p = new(CriteriaValueContext)
+	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(nil, -1)
+	p.RuleIndex = ScimFilterParserRULE_criteriaValue
+	return p
+}
+
+func (*CriteriaValueContext) IsCriteriaValueContext() {}
+
+func NewCriteriaValueContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *CriteriaValueContext {
+	var p = new(CriteriaValueContext)
+
+	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(parent, invokingState)
+
+	p.parser = parser
+	p.RuleIndex = ScimFilterParserRULE_criteriaValue
+
+	return p
+}
+
+func (s *CriteriaValueContext) GetParser() antlr.Parser { return s.parser }
+
+func (s *CriteriaValueContext) NUMBERS() antlr.TerminalNode {
+	return s.GetToken(ScimFilterParserNUMBERS, 0)
+}
+
+func (s *CriteriaValueContext) BOOLEAN() antlr.TerminalNode {
+	return s.GetToken(ScimFilterParserBOOLEAN, 0)
+}
+
+func (s *CriteriaValueContext) GetRuleContext() antlr.RuleContext {
+	return s
+}
+
+func (s *CriteriaValueContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *CriteriaValueContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(ScimFilterListener); ok {
+		listenerT.EnterCriteriaValue(s)
+	}
+}
+
+func (s *CriteriaValueContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(ScimFilterListener); ok {
+		listenerT.ExitCriteriaValue(s)
+	}
+}
+
+func (p *ScimFilterParser) CriteriaValue() (localctx ICriteriaValueContext) {
+	localctx = NewCriteriaValueContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 6, ScimFilterParserRULE_criteriaValue)
+	var _la int
+
+	defer func() {
+		p.ExitRule()
+	}()
+
+	defer func() {
+		if err := recover(); err != nil {
+			if v, ok := err.(antlr.RecognitionException); ok {
+				localctx.SetException(v)
+				p.GetErrorHandler().ReportError(p, v)
+				p.GetErrorHandler().Recover(p, v)
+			} else {
+				panic(err)
+			}
+		}
+	}()
+
+	p.EnterOuterAlt(localctx, 1)
+	p.SetState(163)
+	_la = p.GetTokenStream().LA(1)
+
+	if !(_la == ScimFilterParserNUMBERS || _la == ScimFilterParserBOOLEAN) {
+		p.GetErrorHandler().RecoverInline(p)
+	} else {
+		p.GetErrorHandler().ReportMatch(p)
+		p.Consume()
 	}
 
 	return localctx
@@ -1586,7 +1815,7 @@ func (s *OperatorContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *ScimFilterParser) Operator() (localctx IOperatorContext) {
 	localctx = NewOperatorContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 6, ScimFilterParserRULE_operator)
+	p.EnterRule(localctx, 8, ScimFilterParserRULE_operator)
 	var _la int
 
 	defer func() {
@@ -1606,7 +1835,7 @@ func (p *ScimFilterParser) Operator() (localctx IOperatorContext) {
 	}()
 
 	p.EnterOuterAlt(localctx, 1)
-	p.SetState(147)
+	p.SetState(165)
 	_la = p.GetTokenStream().LA(1)
 
 	if !(((_la)&-(0x1f+1)) == 0 && ((1<<uint(_la))&((1<<ScimFilterParserEQ)|(1<<ScimFilterParserNE)|(1<<ScimFilterParserCO)|(1<<ScimFilterParserSW)|(1<<ScimFilterParserEW)|(1<<ScimFilterParserGT)|(1<<ScimFilterParserLT)|(1<<ScimFilterParserGE)|(1<<ScimFilterParserLE))) != 0) {
@@ -1636,13 +1865,13 @@ func (p *ScimFilterParser) Sempred(localctx antlr.RuleContext, ruleIndex, predIn
 func (p *ScimFilterParser) Expression_Sempred(localctx antlr.RuleContext, predIndex int) bool {
 	switch predIndex {
 	case 0:
-		return p.Precpred(p.GetParserRuleContext(), 8)
+		return p.Precpred(p.GetParserRuleContext(), 9)
 
 	case 1:
-		return p.Precpred(p.GetParserRuleContext(), 7)
+		return p.Precpred(p.GetParserRuleContext(), 8)
 
 	case 2:
-		return p.Precpred(p.GetParserRuleContext(), 6)
+		return p.Precpred(p.GetParserRuleContext(), 7)
 
 	default:
 		panic("No predicate with index: " + fmt.Sprint(predIndex))
