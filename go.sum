@@ -1,3 +1,5 @@
+github.com/antlr/antlr4 v0.0.0-20210310170303-d889ba86681c h1:BsUQQBHWwWXB0jg/qDnKjlJfalWYpjTDDyBSus5AJnQ=
+github.com/antlr/antlr4 v0.0.0-20210310170303-d889ba86681c/go.mod h1:T7PbCXFs94rrTttyxjbyT5+/1V8T2TYDejxUfHJjw1Y=
 github.com/couchbase/gocb/v2 v2.2.1 h1:mtLdB5vROpale3uZ3sGkN+iO0V19qAEnQR/B9NFCS7Q=
 github.com/couchbase/gocb/v2 v2.2.1/go.mod h1:w51QTZ42SltdTAQd48f6TT/NVyN3bdOODYaFuKTJ404=
 github.com/couchbase/gocbcore/v9 v9.1.2 h1:EOG4D862VLPguoAY8IKbvhd98aroaaKxvaxGfr+v9Rc=

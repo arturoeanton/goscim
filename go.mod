@@ -3,6 +3,7 @@ module github.com/arturoeanton/goscim
 go 1.16
 
 require (
+	github.com/antlr/antlr4 v0.0.0-20210310170303-d889ba86681c
 	github.com/couchbase/gocb/v2 v2.2.1
 	github.com/couchbase/gocbcore/v9 v9.1.2
 	github.com/gin-gonic/gin v1.6.3

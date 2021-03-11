@@ -29,3 +29,6 @@ func main() {
 	r.GET("/Schemas", scim.DiscoverySchemas)                             // GET /Schemas 				-> Introspect resources and attribute extensions.
 	r.Run(":8080")
 }
+
+// wget http://www.antlr.org/download/antlr-4.7-complete.jar
+// alias antlr='java -jar $PWD/antlr-4.7-complete.jar'
