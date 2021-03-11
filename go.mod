@@ -4,6 +4,7 @@ go 1.16
 
 require (
 	github.com/couchbase/gocb/v2 v2.2.1
+	github.com/couchbase/gocbcore/v9 v9.1.2
 	github.com/gin-gonic/gin v1.6.3
 	github.com/golang/snappy v0.0.3 // indirect
 	github.com/google/uuid v1.2.0

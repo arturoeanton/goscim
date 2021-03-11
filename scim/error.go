@@ -6,17 +6,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ErrorCouchbase ...
-type ErrorCouchbase interface {
-	KeyNotFound() bool
-	KeyExists() bool
-	Temporary() bool
-	AuthError() bool
-	ValueTooBig() bool
-	NotStored() bool
-	BadDelta() bool
-}
-
 // MakeError ...
 func MakeError(c *gin.Context, status int, message string) Error {
 	scimError := Error{
