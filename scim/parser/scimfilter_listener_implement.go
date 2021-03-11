@@ -46,7 +46,7 @@ func (l *ScimFilterListenerN1QL) pop() string {
 }
 
 // VisitTerminal is called when a terminal node is visited.
-func (s *ScimFilterListenerN1QL) VisitTerminal(node antlr.TerminalNode) {
+func (l *ScimFilterListenerN1QL) VisitTerminal(node antlr.TerminalNode) {
 	value := node.GetText()
 	switch node.GetSymbol().GetTokenType() {
 	case ScimFilterParserATTRNAME:
@@ -76,75 +76,75 @@ func (s *ScimFilterListenerN1QL) VisitTerminal(node antlr.TerminalNode) {
 					}
 					value = strings.Join(values, ".")
 
-					if s.prevOperation == "pr" {
+					if l.prevOperation == "pr" {
 						value = value + " IS NOT NULL"
 						// IS NOT NULL - returns rows which contain a value (not NULL or missing).
 						// IS NOT MISSING - returns rows which contain a value or null.
 						// IS VALUED - synonym for IS NOT NULL
 					}
 				} else {
-					if s.prevOperation == "co" {
+					if l.prevOperation == "co" {
 						value = "%" + value + "%"
 					}
-					if s.prevOperation == "sw" {
+					if l.prevOperation == "sw" {
 						value = value + "%"
 					}
-					if s.prevOperation == "ew" {
+					if l.prevOperation == "ew" {
 						value = "%" + value
 					}
 				}
 			}
-			s.prevOperation = ""
+			l.prevOperation = ""
 		}
 	case ScimFilterLexerEQ:
 		{
 			value = "="
-			s.prevOperation = "eq"
+			l.prevOperation = "eq"
 		}
 	case ScimFilterLexerNE:
 		{
 			value = "<>"
-			s.prevOperation = "ne"
+			l.prevOperation = "ne"
 		}
 	case ScimFilterLexerCO:
 		{
 			value = "LIKE"
-			s.prevOperation = "co"
+			l.prevOperation = "co"
 		}
 	case ScimFilterLexerSW:
 		{
 			value = "LIKE"
-			s.prevOperation = "sw"
+			l.prevOperation = "sw"
 		}
 	case ScimFilterLexerEW:
 		{
 			value = "LIKE"
-			s.prevOperation = "ew"
+			l.prevOperation = "ew"
 		}
 	case ScimFilterLexerGE:
 		{
 			value = ">"
-			s.prevOperation = "ge"
+			l.prevOperation = "ge"
 		}
 	case ScimFilterLexerGT:
 		{
 			value = ">="
-			s.prevOperation = "gt"
+			l.prevOperation = "gt"
 		}
 	case ScimFilterLexerLE:
 		{
 			value = "<"
-			s.prevOperation = "le"
+			l.prevOperation = "le"
 		}
 	case ScimFilterLexerLT:
 		{
 			value = "<="
-			s.prevOperation = "lt"
+			l.prevOperation = "lt"
 		}
 
 	case ScimFilterLexerPR:
 		{
-			s.prevOperation = "pr"
+			l.prevOperation = "pr"
 		}
 	case ScimFilterParserEOF:
 		{
@@ -152,5 +152,5 @@ func (s *ScimFilterListenerN1QL) VisitTerminal(node antlr.TerminalNode) {
 		}
 	}
 
-	s.query = s.query + value
+	l.query = l.query + value
 }
