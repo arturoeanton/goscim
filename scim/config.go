@@ -1,12 +1,10 @@
-package config
+package scim
 
 import (
 	"encoding/json"
 	"io/ioutil"
 	"log"
 	"strings"
-
-	"github.com/arturoeanton/goscim/scim/types"
 )
 
 const (
@@ -18,14 +16,16 @@ const (
 )
 
 var (
-	Resources map[string]types.ResoruceType
-	Schemas   map[string]types.Schema
+	// Resources ...
+	Resources map[string]ResoruceType
+	// Schemas ...
+	Schemas map[string]Schema
 )
 
 // ReadResourceType read all file in resourceType
 func ReadResourceType(folderConfig string) {
-	Resources = make(map[string]types.ResoruceType)
-	Schemas = make(map[string]types.Schema)
+	Resources = make(map[string]ResoruceType)
+	Schemas = make(map[string]Schema)
 	files, err := ioutil.ReadDir(folderConfig + FolderResoruceType)
 	if err != nil {
 		log.Fatal(err)
@@ -36,13 +36,14 @@ func ReadResourceType(folderConfig string) {
 			if err != nil {
 				log.Fatal(err.Error())
 			}
-			resourceType := types.ResoruceType{}
+			resourceType := ResoruceType{}
 			err = json.Unmarshal([]byte(file), &resourceType)
 			if err != nil {
 				log.Fatal(err.Error())
 			}
 			Resources[resourceType.Endpoint] = resourceType
 			addSchema(folderConfig, resourceType.Schema)
+			CreateBucket(resourceType.Name)
 			for _, schemaExtension := range resourceType.SchemaExtensions {
 				addSchema(folderConfig, schemaExtension.Schema)
 			}
@@ -59,7 +60,7 @@ func addSchema(folderConfig string, schemaName string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	schema := types.Schema{}
+	schema := Schema{}
 	err = json.Unmarshal([]byte(file), &schema)
 	if err != nil {
 		log.Fatal(err.Error())

@@ -1,4 +1,4 @@
-package types
+package scim
 
 // Meta is of SCIM
 type Meta struct {
@@ -58,4 +58,30 @@ type ListResponse struct {
 	Schemas      []string   `json:"schemas"`
 	TotalResults int        `json:"totalResults"`
 	Resources    []Resource `json:"Resources"`
+}
+
+// Error is ..
+type Error struct {
+	Schemas []string `json:"schemas"`
+	Detail  string   `json:"detail"`
+	Status  string   `json:"status"`
+}
+
+// Operation ...
+type Operation struct {
+	Op    string      `json:"op"` // "add", "remove", or "replace"
+	Path  string      `json:"path"`
+	Value interface{} `json:"value"`
+}
+
+// Patch is
+// 3.5.2.  Modifying with PATCH
+// HTTP PATCH is an OPTIONAL server function that enables clients to
+// update one or more attributes of a SCIM resource using a sequence of
+// operations to "add", "remove", or "replace" values.  Clients may
+// discover service provider support for PATCH by querying the service
+// provider configuration (see Section 4).
+type Patch struct {
+	Schemas    []string    `json:"schemas"`
+	Operations []Operation `json:"Operations"`
 }

@@ -1,16 +1,15 @@
-package meta
+package scim
 
 import (
 	"time"
 
-	"github.com/arturoeanton/goscim/scim/types"
 	"github.com/google/uuid"
 )
 
 // GenerateMeta ...
-func GenerateMeta(element map[string]interface{}, resourceType types.ResoruceType) types.Meta {
+func GenerateMeta(element map[string]interface{}, resourceType ResoruceType) Meta {
 	now := time.Now()
-	meta := types.Meta{}
+	meta := Meta{}
 	meta.ResourceType = resourceType.Name
 	meta.Created = now.Format(time.RFC3339)
 	meta.LastModified = meta.Created

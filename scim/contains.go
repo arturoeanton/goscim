@@ -1,6 +1,4 @@
-package utils
-
-import "github.com/arturoeanton/goscim/scim/types"
+package scim
 
 //ContainsString is
 func ContainsString(slice []string, item string) bool {
@@ -14,7 +12,7 @@ func ContainsString(slice []string, item string) bool {
 }
 
 //ContainsSchemaExtension is
-func ContainsSchemaExtension(slice []types.SchemaExtension, item string) bool {
+func ContainsSchemaExtension(slice []SchemaExtension, item string) bool {
 	set := make(map[string]struct{}, len(slice))
 	for _, s := range slice {
 		set[s.Schema] = struct{}{}
@@ -23,7 +21,7 @@ func ContainsSchemaExtension(slice []types.SchemaExtension, item string) bool {
 	return ok
 }
 
-// ContainsStringInArrayInterfase
+// ContainsStringInArrayInterfase is
 func ContainsStringInArrayInterfase(slice []interface{}, item string) bool {
 	set := make(map[string]struct{}, len(slice))
 	for _, s := range slice {

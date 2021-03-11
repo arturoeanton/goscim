@@ -1,25 +1,22 @@
-package validates
+package scim
 
 import (
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/arturoeanton/goscim/scim/config"
-	"github.com/arturoeanton/goscim/scim/types"
-	"github.com/arturoeanton/goscim/utils"
 	"github.com/gin-gonic/gin"
 )
 
 //ValidateFieldSchemas is ..
-func ValidateFieldSchemas(c *gin.Context, element map[string]interface{}, resourceType types.ResoruceType) (bool, []string) {
+func ValidateFieldSchemas(c *gin.Context, element map[string]interface{}, resourceType ResoruceType) (bool, []string) {
 	schemas, ok := element["schemas"]
 	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "schemas no exist "})
+		MakeError(c, http.StatusBadRequest, "schemas no exist")
 		return false, nil
 	}
 	if _, ok := schemas.([]interface{}); !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "schemas  is not array string  "})
+		MakeError(c, http.StatusBadRequest, "schemas  is not array string")
 		return false, nil
 	}
 
@@ -31,8 +28,8 @@ func ValidateFieldSchemas(c *gin.Context, element map[string]interface{}, resour
 			flagPrincipalSchema = true
 			continue
 		}
-		if !utils.ContainsSchemaExtension(resourceType.SchemaExtensions, s.(string)) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "schema is not contained in schemaExtensions"})
+		if !ContainsSchemaExtension(resourceType.SchemaExtensions, s.(string)) {
+			MakeError(c, http.StatusBadRequest, "schema is not contained in schemaExtensions")
 			return false, nil
 		}
 	}
@@ -40,33 +37,33 @@ func ValidateFieldSchemas(c *gin.Context, element map[string]interface{}, resour
 		if !se.Required {
 			continue
 		}
-		if !utils.ContainsString(elementSchemas, se.Schema) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": se.Schema + " is required true"})
+		if !ContainsString(elementSchemas, se.Schema) {
+			MakeError(c, http.StatusBadRequest, se.Schema+" is required true")
 			return false, nil
 		}
 	}
 
 	if !flagPrincipalSchema {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "there is not principal schema "})
+		MakeError(c, http.StatusBadRequest, "there is not principal schema ")
 		return false, nil
 	}
 	return true, elementSchemas
 }
 
 //ValidateSchemas is
-func ValidateSchemas(c *gin.Context, element map[string]interface{}, schemaNameCore string, schemas []types.SchemaExtension) (bool, map[string]interface{}) {
+func ValidateSchemas(c *gin.Context, element map[string]interface{}, schemaNameCore string, schemas []SchemaExtension) (bool, map[string]interface{}) {
 	var flag bool
-	schema := config.Schemas[schemaNameCore]
+	schema := Schemas[schemaNameCore]
 	flag, element = validateSchema(c, element, schema, false)
 	if !flag {
 		return flag, nil
 	}
 	for _, schemaExtension := range schemas {
 		var flag bool
-		schema := config.Schemas[schemaExtension.Schema]
+		schema := Schemas[schemaExtension.Schema]
 		elementExtension, ok := element[schemaExtension.Schema].(map[string]interface{})
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": schemaExtension.Schema + " the extension should be object"})
+			MakeError(c, http.StatusBadRequest, schemaExtension.Schema+" the extension should be object")
 			return false, nil
 		}
 		flag, elementExtension = validateSchema(c, elementExtension, schema, true)
@@ -78,7 +75,7 @@ func ValidateSchemas(c *gin.Context, element map[string]interface{}, schemaNameC
 	return true, element
 }
 
-func validateSchema(c *gin.Context, element map[string]interface{}, schema types.Schema, isExtension bool) (bool, map[string]interface{}) {
+func validateSchema(c *gin.Context, element map[string]interface{}, schema Schema, isExtension bool) (bool, map[string]interface{}) {
 	fields := make([]string, 0)
 	for _, attribute := range schema.Attributes {
 		fields = append(fields, attribute.Name)
@@ -88,31 +85,31 @@ func validateSchema(c *gin.Context, element map[string]interface{}, schema types
 			return flag, nil
 		}
 	}
-	for key, _ := range element {
+	for key := range element {
 		if !isExtension {
 			if key == "schemas" {
 				continue
 			}
-			if utils.ContainsStringInArrayInterfase(element["schemas"].([]interface{}), key) {
+			if ContainsStringInArrayInterfase(element["schemas"].([]interface{}), key) {
 				continue
 			}
 		}
-		if utils.ContainsString(fields, key) {
+		if ContainsString(fields, key) {
 			continue
 		}
 
-		c.JSON(http.StatusBadRequest, gin.H{"error": key + " no exist in schema " + schema.ID})
+		MakeError(c, http.StatusBadRequest, key+" no exist in schema "+schema.ID)
 		return false, nil
 	}
 
 	return true, element
 }
 
-func validateAttribute(c *gin.Context, element map[string]interface{}, attribute types.Attribute) (bool, map[string]interface{}) {
+func validateAttribute(c *gin.Context, element map[string]interface{}, attribute Attribute) (bool, map[string]interface{}) {
 
 	_, ok := element[attribute.Name]
 	if !ok && attribute.Required {
-		c.JSON(http.StatusBadRequest, gin.H{"error": attribute.Name + " is required"})
+		MakeError(c, http.StatusBadRequest, attribute.Name+" is required")
 		return false, nil
 	}
 	if !ok && !attribute.Required {
@@ -182,21 +179,21 @@ func validateAttribute(c *gin.Context, element map[string]interface{}, attribute
    | Complex   | "complex"   | Object per Section 4 of [RFC7159]       |
    +-----------+-------------+-----------------------------------------+
 */
-func validateAttributeString(c *gin.Context, element map[string]interface{}, attribute types.Attribute) (bool, map[string]interface{}) {
+func validateAttributeString(c *gin.Context, element map[string]interface{}, attribute Attribute) (bool, map[string]interface{}) {
 	if attribute.Type == "string" {
 		if _, ok := element[attribute.Name].(string); !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": attribute.Name + " should be string"})
+			MakeError(c, http.StatusBadRequest, attribute.Name+" should be string")
 			return false, nil
 		}
 	}
 	return true, element
 }
 
-func validateAttributeBoolean(c *gin.Context, element map[string]interface{}, attribute types.Attribute) (bool, map[string]interface{}) {
+func validateAttributeBoolean(c *gin.Context, element map[string]interface{}, attribute Attribute) (bool, map[string]interface{}) {
 	if attribute.Type == "boolean" {
 		v, ok := element[attribute.Name].(bool)
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": attribute.Name + " should be boolean"})
+			MakeError(c, http.StatusBadRequest, attribute.Name+" should be boolean")
 			return false, nil
 		}
 		element[attribute.Name] = bool(v)
@@ -204,27 +201,27 @@ func validateAttributeBoolean(c *gin.Context, element map[string]interface{}, at
 	return true, element
 }
 
-func validateAttributeDecimal(c *gin.Context, element map[string]interface{}, attribute types.Attribute) (bool, map[string]interface{}) {
+func validateAttributeDecimal(c *gin.Context, element map[string]interface{}, attribute Attribute) (bool, map[string]interface{}) {
 	if attribute.Type == "decimal" {
 		if _, ok := element[attribute.Name].(float64); !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": attribute.Name + " should be decimal"})
+			MakeError(c, http.StatusBadRequest, attribute.Name+" should be decimal")
 			return false, nil
 		}
 	}
 	return true, element
 }
 
-func validateAttributeInteger(c *gin.Context, element map[string]interface{}, attribute types.Attribute) (bool, map[string]interface{}) {
+func validateAttributeInteger(c *gin.Context, element map[string]interface{}, attribute Attribute) (bool, map[string]interface{}) {
 	if attribute.Type == "integer" {
 		v, ok := element[attribute.Name].(float64)
 		if ok {
 			intValue := int64(v)
 			if (float64(intValue) - v) != 0 {
-				c.JSON(http.StatusBadRequest, gin.H{"error": attribute.Name + " should be integer"})
+				MakeError(c, http.StatusBadRequest, attribute.Name+" should be integer")
 				return false, nil
 			}
 		} else {
-			c.JSON(http.StatusBadRequest, gin.H{"error": attribute.Name + " should be integer"})
+			MakeError(c, http.StatusBadRequest, attribute.Name+" should be integer")
 			return false, nil
 		}
 		element[attribute.Name] = int64(v)
@@ -232,16 +229,16 @@ func validateAttributeInteger(c *gin.Context, element map[string]interface{}, at
 	return true, element
 }
 
-func validateAttributeDateTime(c *gin.Context, element map[string]interface{}, attribute types.Attribute) (bool, map[string]interface{}) {
+func validateAttributeDateTime(c *gin.Context, element map[string]interface{}, attribute Attribute) (bool, map[string]interface{}) {
 	if strings.ToLower(attribute.Type) == "datetime" {
 		v, ok := element[attribute.Name].(string)
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": attribute.Name + " should be datetime"})
+			MakeError(c, http.StatusBadRequest, attribute.Name+" should be datetime")
 			return false, nil
 		}
 		t, err := time.Parse(time.RFC3339, string(v))
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": attribute.Name + " should be datetime. " + err.Error()})
+			MakeError(c, http.StatusBadRequest, attribute.Name+" should be datetime. "+err.Error())
 			return false, nil
 		}
 		element[attribute.Name] = t.Unix()
@@ -249,26 +246,26 @@ func validateAttributeDateTime(c *gin.Context, element map[string]interface{}, a
 	return true, element
 }
 
-func validateAttributeBinary(c *gin.Context, element map[string]interface{}, attribute types.Attribute) (bool, map[string]interface{}) {
+func validateAttributeBinary(c *gin.Context, element map[string]interface{}, attribute Attribute) (bool, map[string]interface{}) {
 	if attribute.Type == "binary" {
 
 	}
 	return true, element
 }
 
-func validateAttributeReference(c *gin.Context, element map[string]interface{}, attribute types.Attribute) (bool, map[string]interface{}) {
+func validateAttributeReference(c *gin.Context, element map[string]interface{}, attribute Attribute) (bool, map[string]interface{}) {
 	if attribute.Type == "reference" {
 
 	}
 	return true, element
 }
 
-func validateAttributeComplex(c *gin.Context, element map[string]interface{}, attribute types.Attribute) (bool, map[string]interface{}) {
+func validateAttributeComplex(c *gin.Context, element map[string]interface{}, attribute Attribute) (bool, map[string]interface{}) {
 
 	if attribute.Type == "complex" {
 		subElement, ok := element[attribute.Name].(map[string]interface{})
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": attribute.Name + " should be complex"})
+			MakeError(c, http.StatusBadRequest, attribute.Name+" should be complex")
 			return false, nil
 		}
 		fields := make([]string, 0)
@@ -281,11 +278,11 @@ func validateAttributeComplex(c *gin.Context, element map[string]interface{}, at
 			}
 		}
 
-		for key, _ := range subElement {
-			if utils.ContainsString(fields, key) {
+		for key := range subElement {
+			if ContainsString(fields, key) {
 				continue
 			}
-			c.JSON(http.StatusBadRequest, gin.H{"error": key + " no exist in attribute " + attribute.Name})
+			MakeError(c, http.StatusBadRequest, key+" no exist in attribute "+attribute.Name)
 			return false, nil
 		}
 
