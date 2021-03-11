@@ -7,6 +7,7 @@ import (
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 )
 
+// ScimFilterListenerN1QL is
 type ScimFilterListenerN1QL struct {
 	*BaseScimFilterListener
 	query         string
@@ -48,7 +49,6 @@ func (l *ScimFilterListenerN1QL) VisitTerminal(node antlr.TerminalNode) {
 						urn = "`" + re.ReplaceAllString(value, `${1}${2}${3}`) + "`."
 					}
 					path := re.ReplaceAllString(value, `${5}`)
-
 					path = urn + "`" + strings.Join(strings.Split(path, "."), "`.`") + "`"
 					value = path
 				} else {
@@ -124,6 +124,5 @@ func (l *ScimFilterListenerN1QL) VisitTerminal(node antlr.TerminalNode) {
 			value = ""
 		}
 	}
-
 	l.query = l.query + value
 }
