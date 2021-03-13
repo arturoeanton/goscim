@@ -24,6 +24,10 @@ func Replace(c *gin.Context) {
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(c.Request.Body)
 	json.Unmarshal(buf.Bytes(), &element)
+	replace(c, resourceType, id, element)
+}
+
+func replace(c *gin.Context, resourceType ResoruceType, id string, element map[string]interface{}) {
 	ok, _ := ValidateFieldSchemas(c, element, resourceType)
 	if !ok {
 		return

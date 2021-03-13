@@ -21,13 +21,9 @@ func FilterToN1QL(resourceName string, filter string) string {
 		return query
 	}
 	is := antlr.NewInputStream(filter)
-	// Create the Lexer
 	lexer := NewScimFilterLexer(is)
 	stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
-	// Create the Parser
 	p := NewScimFilterParser(stream)
-	// Finally parse the expression
-
 	scimFilterListenerN1QL := ScimFilterListenerN1QL{query: query + " WHERE "}
 	antlr.ParseTreeWalkerDefault.Walk(&scimFilterListenerN1QL, p.Start())
 	return scimFilterListenerN1QL.query
