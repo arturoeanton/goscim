@@ -49,7 +49,7 @@ func opPathTopathArray(value string) []string {
 	re := regexp.MustCompile(`^(urn[:\w\.\_]*)(:-*)?(:[\w]*)(\.)(.*)$`)
 	urn := ""
 	if re.MatchString(value) {
-		urn = "`" + re.ReplaceAllString(value, `${1}${2}${3}`) + "`."
+		urn = re.ReplaceAllString(value, `${1}${2}${3}`)
 	}
 	path := re.ReplaceAllString(value, `${5}`)
 	pathArray := make([]string, 0)
