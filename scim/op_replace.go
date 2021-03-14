@@ -32,13 +32,15 @@ func replace(c *gin.Context, resourceType ResoruceType, id string, element map[s
 	if !ok {
 		return
 	}
+	meta := element["meta"].(map[string]interface{})
 	delete(element, "id")
+	delete(element, "meta")
 	ok, element = ValidateSchemas(c, element, resourceType.Schema, resourceType.SchemaExtensions)
 	if !ok {
 		return
 	}
 	element["id"] = id
-	element["meta"] = GenerateMeta(element, resourceType)
+	element["meta"] = updateMeta(meta, element, resourceType)
 
 	bucket := Cluster.Bucket(resourceType.Name)
 	collection := bucket.DefaultCollection()

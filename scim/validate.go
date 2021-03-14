@@ -236,12 +236,12 @@ func validateAttributeDateTime(c *gin.Context, element map[string]interface{}, a
 			MakeError(c, http.StatusBadRequest, attribute.Name+" should be datetime")
 			return false, nil
 		}
-		t, err := time.Parse(time.RFC3339, string(v))
+		_, err := time.Parse(time.RFC3339, string(v))
 		if err != nil {
 			MakeError(c, http.StatusBadRequest, attribute.Name+" should be datetime. "+err.Error())
 			return false, nil
 		}
-		element[attribute.Name] = t.Unix()
+		//element[attribute.Name] = t.Unix()
 	}
 	return true, element
 }

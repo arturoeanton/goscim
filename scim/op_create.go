@@ -33,7 +33,7 @@ func Create(c *gin.Context) {
 		return
 	}
 	element["id"] = uuid.New().String()
-	element["meta"] = GenerateMeta(element, resourceType)
+	element["meta"] = generateMeta(element, resourceType)
 
 	bucket := Cluster.Bucket(resourceType.Name)
 	collection := bucket.DefaultCollection()
