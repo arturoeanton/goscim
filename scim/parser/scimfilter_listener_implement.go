@@ -39,14 +39,7 @@ func (l *ScimFilterListenerN1QL) VisitTerminal(node antlr.TerminalNode) {
 			if ok {
 				_, ok := payload.BaseRuleContext.GetParent().(*ATTR_OPER_CRITERIAContext)
 				if !ok {
-					re := regexp.MustCompile(`^(urn[:\w\.\_]*)(:-*)?(:[\w]*)(\.)(.*)$`)
-					urn := ""
-					if re.MatchString(value) {
-						urn = "`" + re.ReplaceAllString(value, `${1}${2}${3}`) + "`."
-					}
-					path := re.ReplaceAllString(value, `${5}`)
-					path = urn + "`" + strings.Join(strings.Split(path, "."), "`.`") + "`"
-					value = path
+					value = AddQuote(value)
 				} else {
 					if l.prevOperation == "co" {
 						value = "%" + value + "%"
@@ -121,4 +114,15 @@ func (l *ScimFilterListenerN1QL) VisitTerminal(node antlr.TerminalNode) {
 		}
 	}
 	l.query = l.query + value
+}
+
+func AddQuote(value string) string {
+	re := regexp.MustCompile(`^(urn[:\w\.\_]*)(:-*)?(:[\w]*)(\.)(.*)$`)
+	urn := ""
+	if re.MatchString(value) {
+		urn = "`" + re.ReplaceAllString(value, `${1}${2}${3}`) + "`."
+	}
+	path := re.ReplaceAllString(value, `${5}`)
+	path = urn + "`" + strings.Join(strings.Split(path, "."), "`.`") + "`"
+	return path
 }

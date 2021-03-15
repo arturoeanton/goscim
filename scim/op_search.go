@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/arturoeanton/goscim/scim/parser"
 	"github.com/gin-gonic/gin"
@@ -16,11 +17,30 @@ func Search(c *gin.Context) {
 	filter := c.Query("filter")
 	startIndex := c.Query("startIndex")
 	count := c.Query("count")
+	sortBy := c.Query("sortBy")
+	sortOrder := c.Query("sortOrder")
 	resourceType := Resources["/"+resource]
 	queryPage, queryCount := parser.FilterToN1QL(resourceType.Name, filter)
 
-	log.Println(queryPage)
-	log.Println(queryCount)
+	if sortBy == "" {
+		sortBy = "id"
+	} else {
+		sortByArray := strings.Split(sortBy, ",")
+		cache := make([]string, 0)
+		for _, s := range sortByArray {
+			cache = append(cache, parser.AddQuote(s))
+		}
+		sortBy = strings.Join(cache, ",")
+	}
+
+	sortBy = strings.Trim(sortBy, " ")
+	sortBy = strings.ReplaceAll(sortBy, ";", "")
+
+	if sortOrder == "descending" {
+		sortOrder = "DESC"
+	} else {
+		sortOrder = "ASC"
+	}
 
 	//pagination
 	if startIndex == "" {
@@ -45,9 +65,11 @@ func Search(c *gin.Context) {
 		log.Println(err.Error())
 		return
 	}
+	queryPage += "\nORDER BY " + sortBy + " " + sortOrder
 	queryPage += "\nOFFSET " + strconv.Itoa(result.StartIndex-1)
 	queryPage += "\nLIMIT " + count
 
+	//log.Println(queryCount)
 	rowsCount, err := Cluster.Query(queryCount, nil)
 	if err != nil {
 		MakeError(c, http.StatusInternalServerError, err.Error())
@@ -60,6 +82,7 @@ func Search(c *gin.Context) {
 		Count int
 	}
 	rowsCount.One(&countResult)
+	//log.Println(queryPage)
 	rows, err := Cluster.Query(queryPage, nil)
 	if err != nil {
 		MakeError(c, http.StatusInternalServerError, err.Error())
