@@ -1,0 +1,13 @@
+@host=http://127.0.0.1:8080/scim/v2
+
+###
+
+GET {{host}}/Elements HTTP/1.1
+content-type: application/json
+
+###
+
+GET {{host}}/Elements
+    ?filter=urn:ietf:params:scim:schemas:extension:one:2.0:Element.required ge 0
+    &startIndex=1
+    &count=2

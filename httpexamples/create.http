@@ -1,0 +1,56 @@
+@host=http://127.0.0.1:8080/scim/v2
+
+
+###
+
+POST {{host}}/Elements/ HTTP/1.1
+content-type: application/json
+
+{
+    "schemas":[
+        "urn:ietf:params:scim:schemas:core:2.0:Element",
+        "urn:ietf:params:scim:schemas:extension:one:2.0:Element"
+    ],
+    "name": "Element1",
+    "description":"This is Element 1",
+    "$ref": "/Element2",
+    "urn:ietf:params:scim:schemas:extension:one:2.0:Element":{
+        "required": 1
+    }
+}
+
+###
+
+POST {{host}}/Elements/ HTTP/1.1
+content-type: application/json
+
+{
+    "schemas":[
+        "urn:ietf:params:scim:schemas:core:2.0:Element",
+        "urn:ietf:params:scim:schemas:extension:one:2.0:Element"
+    ],
+    "name": "Element2",
+    "description":"This is Element 2",
+    "$ref": "/Element3",
+    "urn:ietf:params:scim:schemas:extension:one:2.0:Element":{
+        "required": 2
+    }
+}
+
+###
+
+POST {{host}}/Elements/ HTTP/1.1
+content-type: application/json
+
+{
+    "schemas":[
+        "urn:ietf:params:scim:schemas:core:2.0:Element",
+        "urn:ietf:params:scim:schemas:extension:one:2.0:Element"
+    ],
+    "name": "Element3",
+    "description":"This is Element 3",
+    "$ref": "/Element4",
+    "urn:ietf:params:scim:schemas:extension:one:2.0:Element":{
+        "required": 3
+    }
+}

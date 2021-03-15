@@ -56,8 +56,10 @@ type Resource map[string]interface{}
 // ListResponse is of SCIM
 type ListResponse struct {
 	Schemas      []string      `json:"schemas"`
-	TotalResults int           `json:"totalResults"`
-	Resources    []interface{} `json:"Resources"`
+	TotalResults int           `json:"totalResults,omitempty"`
+	ItemsPerPage int           `json:"itemsPerPage,omitempty"`
+	StartIndex   int           `json:"startIndex,omitempty"`
+	Resources    []interface{} `json:"Resources,omitempty"`
 }
 
 // Error is ..

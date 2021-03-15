@@ -15,10 +15,10 @@ type ScimFilterListenerN1QL struct {
 }
 
 // FilterToN1QL is ...
-func FilterToN1QL(resourceName string, filter string) string {
-	query := "SELECT * FROM `" + resourceName + "`"
+func FilterToN1QL(resourceName string, filter string) (string, string) {
+	query := resourceName + "`"
 	if filter == "" {
-		return query
+		return "SELECT * FROM `" + resourceName + "`", "SELECT count(*)  as count FROM `" + resourceName + "`"
 	}
 	is := antlr.NewInputStream(filter)
 	lexer := NewScimFilterLexer(is)
@@ -26,7 +26,7 @@ func FilterToN1QL(resourceName string, filter string) string {
 	p := NewScimFilterParser(stream)
 	scimFilterListenerN1QL := ScimFilterListenerN1QL{query: query + " WHERE "}
 	antlr.ParseTreeWalkerDefault.Walk(&scimFilterListenerN1QL, p.Start())
-	return scimFilterListenerN1QL.query
+	return "SELECT * FROM `" + scimFilterListenerN1QL.query, "SELECT count(*) as count FROM `" + scimFilterListenerN1QL.query
 }
 
 // VisitTerminal is called when a terminal node is visited.
