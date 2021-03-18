@@ -33,3 +33,4 @@ func main() {
 // wget http://www.antlr.org/download/antlr-4.7-complete.jar
 // alias antlr='java -jar $PWD/antlr-4.7-complete.jar'
 // antlr -Dlanguage=Go -o scim/parser ScimFilter.g4
+// docker run -d --name db -p 8091-8094:8091-8094 -p 11210:11210 couchbase

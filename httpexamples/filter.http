@@ -11,5 +11,5 @@ GET {{host}}/Elements
     ?filter=urn:ietf:params:scim:schemas:extension:one:2.0:Element.required ge 0
     &startIndex=1
     &count=2
-    &sortBy=`urn:ietf:params:scim:schemas:extension:one:2.0:Element`.required
+    &sortBy=urn:ietf:params:scim:schemas:extension:one:2.0:Element.required
     &sortOrder=descending
