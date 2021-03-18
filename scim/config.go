@@ -26,7 +26,18 @@ var (
 func ReadResourceType(folderConfig string) {
 	Resources = make(map[string]ResoruceType)
 	Schemas = make(map[string]Schema)
-	files, err := ioutil.ReadDir(folderConfig + FolderResoruceType)
+
+	files, err := ioutil.ReadDir(folderConfig + FolderSchema)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, f := range files {
+		if strings.HasSuffix(f.Name(), ".json") {
+			addSchema(folderConfig, f.Name())
+		}
+	}
+
+	files, err = ioutil.ReadDir(folderConfig + FolderResoruceType)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -42,21 +53,14 @@ func ReadResourceType(folderConfig string) {
 				log.Fatal(err.Error())
 			}
 			Resources[resourceType.Endpoint] = resourceType
-			addSchema(folderConfig, resourceType.Schema)
 			CreateBucket(resourceType.Name)
-			for _, schemaExtension := range resourceType.SchemaExtensions {
-				addSchema(folderConfig, schemaExtension.Schema)
-			}
 		}
 	}
 }
 
 // add schema if no exist in schemas
 func addSchema(folderConfig string, schemaName string) {
-	if _, ok := Schemas[schemaName]; ok {
-		return
-	}
-	file, err := ioutil.ReadFile(folderConfig + FolderSchema + schemaName + ".json")
+	file, err := ioutil.ReadFile(folderConfig + FolderSchema + schemaName)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -65,5 +69,6 @@ func addSchema(folderConfig string, schemaName string) {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	Schemas[schemaName] = schema
+	Schemas[schema.ID] = schema
+	log.Println(schema.ID)
 }
