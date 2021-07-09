@@ -68,30 +68,3 @@ func CreateBucket(name string) {
 	log.Println("Ready Bucket -> " + name)
 	Cluster.QueryIndexes().CreatePrimaryIndex(name, &gocb.CreatePrimaryQueryIndexOptions{IgnoreIfExists: true})
 }
-
-/*
-
-couchbase-cli enable-developer-preview -c localhost:8091 -u Administrator -p 'admin!!'  --enable
-
-couchbase-cli collection-manage \
---cluster http://localhost:8091 \
---username Administrator \
---password 'admin!!' \
---bucket bucket_scim \
---create-scope SCIM
-
-cbstats -u Administrator -p 'admin!!'  localhost:11210 -b bucket_scim all | grep collections
-
-couchbase-cli collection-manage \
--c localhost \
---username Administrator \
---password 'admin!!' \
---bucket bucket_scim \
---list-scopes
-
-/opt/couchbase/bin/couchbase-cli collection-manage -c localhost \
---username Administrator \
---password 'admin!!' \
---bucket bucket_scim \
---create-collection SCIM.Element
-*/
