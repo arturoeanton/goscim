@@ -2,6 +2,7 @@ package scim
 
 import (
 	"log"
+	"os"
 	"time"
 
 	"github.com/couchbase/gocb/v2"
@@ -15,11 +16,22 @@ var (
 // InitDB ..
 func InitDB() {
 	var err error
+
+	username := os.Getenv("SCIM_ADMIN_USER")
+	password := os.Getenv("SCIM_ADMIN_PASSWORD")
+
+	if username == "" {
+		username = "Administrator"
+	}
+	if password == "" {
+		password = "admin!!"
+	}
+
 	Cluster, err = gocb.Connect(
 		"localhost",
 		gocb.ClusterOptions{
-			Username: "Administrator",
-			Password: "admin!!",
+			Username: username,
+			Password: password,
 		})
 	if err != nil {
 		log.Fatalln(err.Error())
