@@ -19,16 +19,16 @@ func InitDB() {
 
 	username := os.Getenv("SCIM_ADMIN_USER")
 	password := os.Getenv("SCIM_ADMIN_PASSWORD")
-
+	urlCouchbase := os.Getenv("SCIM_COUCHBASE_URL")
 	if username == "" {
 		username = "Administrator"
 	}
-	if password == "" {
-		password = "admin!!"
+	if urlCouchbase == "" {
+		urlCouchbase = "localhost"
 	}
 
 	Cluster, err = gocb.Connect(
-		"localhost",
+		urlCouchbase,
 		gocb.ClusterOptions{
 			Username: username,
 			Password: password,
