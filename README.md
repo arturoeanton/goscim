@@ -127,7 +127,7 @@ Remember that one new schema need one resourceType. The ResourceType is location
 
 ### Example User (urn:ietf:params:scim:schemas:extension:enterprise:2.0:User)
 
-####Resource Type User.json
+#### Resource Type User.json
 ```json
 {
   "schemas": ["urn:ietf:params:scim:schemas:core:2.0:ResourceType"],
@@ -149,7 +149,7 @@ Remember that one new schema need one resourceType. The ResourceType is location
 }
 ```
 
-####Schema urn+ietf+params+scim+schemas+core+2.0+User.json
+#### Schema urn+ietf+params+scim+schemas+core+2.0+User.json
 ```json
 {
   "id" : "urn:ietf:params:scim:schemas:core:2.0:User",
