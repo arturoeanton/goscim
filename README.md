@@ -34,6 +34,7 @@ export SCIM_ADMIN_PASSWORD=admin!
 ```
 
 You can set SCIM_COUCHBASE_URL but the default value is localhost.
+You can set SCIM_PORT but the default value is :8080.
 
 
 ### Run Scim Server
