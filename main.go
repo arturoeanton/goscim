@@ -19,9 +19,18 @@ func main() {
 		port = ":8080"
 	}
 
+	trustedProxies := os.Getenv("SCIM_TRUSTED_PROXIES")
+	if trustedProxies == "" {
+		trustedProxies = "127.0.0.1"
+	}
+	log.Println("Trusted Proxies:", trustedProxies)
+	gin.SetMode(gin.ReleaseMode)
+
 	scim.ReadResourceType(folderConfig)
 
 	r := gin.Default()
+
+	r.SetTrustedProxies([]string{trustedProxies})
 	r.POST(PREFIX+"/:resource", scim.Create)       // Create:  	POST https://example.com/{v}/{resource}
 	r.GET(PREFIX+"/:resource/:id", scim.Read)      // Read: 		GET https://example.com/{v}/{resource}/{id}
 	r.PUT(PREFIX+"/:resource/:id", scim.Replace)   // Replace: 	PUT https://example.com/{v}/{resource}/{id}
