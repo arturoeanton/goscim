@@ -247,16 +247,16 @@ func validateAttributeDateTime(c *gin.Context, element map[string]interface{}, a
 }
 
 func validateAttributeBinary(c *gin.Context, element map[string]interface{}, attribute Attribute) (bool, map[string]interface{}) {
-	if attribute.Type == "binary" {
+	/*if attribute.Type == "binary" {
 
-	}
+	}*/
 	return true, element
 }
 
 func validateAttributeReference(c *gin.Context, element map[string]interface{}, attribute Attribute) (bool, map[string]interface{}) {
-	if attribute.Type == "reference" {
+	/*if attribute.Type == "reference" {
 
-	}
+	}*/
 	return true, element
 }
 

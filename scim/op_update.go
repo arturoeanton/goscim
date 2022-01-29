@@ -56,9 +56,9 @@ func opPathTopathArray(value string) []string {
 	if urn != "" {
 		pathArray = append(pathArray, urn)
 	}
-	for _, p := range strings.Split(path, ".") {
-		pathArray = append(pathArray, p)
-	}
+
+	pathArray = append(pathArray, strings.Split(path, ".")...)
+
 	return pathArray
 }
 func pointValue(opPath string, elemOld interface{}) (string, interface{}) {
@@ -83,12 +83,11 @@ func patchAdd(opPath string, opValue interface{}, elemOld map[string]interface{}
 			if ok {
 				arrayValue, ok := opValue.([]interface{})
 				if ok {
-					for _, r := range arrayValue {
-						arrayElemPoint = append(arrayElemPoint, r)
-					}
+					arrayElemPoint = append(arrayElemPoint, arrayValue...)
 				} else {
 					arrayElemPoint = append(arrayElemPoint, opValue)
 				}
+				elemPointPrev.(map[string]interface{})[lastField] = arrayElemPoint
 			} else {
 				elemPointPrev.(map[string]interface{})[lastField] = opValue
 			}
