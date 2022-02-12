@@ -1,0 +1,6 @@
+projectKey=goscim
+serverUrl=http://127.0.0.1:9000
+serverVersion=9.3.0.51899
+dashboardUrl=http://127.0.0.1:9000/dashboard?id=goscim
+ceTaskId=AX7kXe02wfH8oq0Jz6md
+ceTaskUrl=http://127.0.0.1:9000/api/ce/task?id=AX7kXe02wfH8oq0Jz6md

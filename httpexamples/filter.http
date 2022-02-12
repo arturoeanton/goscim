@@ -6,6 +6,10 @@ GET {{host}}/Elements HTTP/1.1
 content-type: application/json
 
 ###
+GET {{host}}/Elements/3290812f-2caf-4f13-9479-d0f620130eda  HTTP/1.1
+content-type: application/json
+
+###
 
 GET {{host}}/Elements
     ?filter=urn:ietf:params:scim:schemas:extension:one:2.0:Element.required ge 0

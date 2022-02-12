@@ -1,0 +1,11 @@
+{
+  "flush_enabled": true,
+  "replica_index_disabled": true,
+  "ram_quota_mb": 200,
+  "num_replicas": 0,
+  "bucket_type": "membase",
+  "compression_mode":"off",
+  "MaxExpiry": "0s",
+  "EvictionPolicy":"",
+  "conflict_resolution_type":"seqno"
+}

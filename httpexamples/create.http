@@ -11,8 +11,8 @@ content-type: application/json
         "urn:ietf:params:scim:schemas:core:2.0:Element",
         "urn:ietf:params:scim:schemas:extension:one:2.0:Element"
     ],
-    "name": "Element1",
-    "description":"This is Element 1",
+    "name": "Element4",
+    "description":"This is Element 4",
     "$ref": "/Element2",
     "urn:ietf:params:scim:schemas:extension:one:2.0:Element":{
         "required": 1

@@ -11,39 +11,43 @@ import (
 )
 
 // Update is	PATCH https://example.com/{v}/{resource}/{id}
-func Update(c *gin.Context) {
-	resource := c.Param("resource")
-	id := c.Param("id")
-	resourceType := Resources["/"+resource]
-	var patchRequest Patch
-	buf := new(bytes.Buffer)
-	buf.ReadFrom(c.Request.Body)
-	err := json.Unmarshal(buf.Bytes(), &patchRequest)
-	if err != nil {
-		MakeError(c, http.StatusBadRequest, err.Error())
-	}
-	element, err := getElementByID(c, id, resourceType)
-	if err != nil {
-		return
-	}
-	for _, op := range patchRequest.Operations {
-		switch op.Op {
-		case "add":
-			{
-				element = patchAdd(op.Path, op.Value, element)
+func Update(resource string) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+		resourceType := Resources[resource]
+		var patchRequest Patch
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(c.Request.Body)
+		err := json.Unmarshal(buf.Bytes(), &patchRequest)
+		if err != nil {
+			MakeError(c, http.StatusBadRequest, err.Error())
+		}
+		element, err := getElementByID(c, id, resourceType)
+		if err != nil {
+			return
+		}
+		for _, op := range patchRequest.Operations {
+			switch op.Op {
+			case "add":
+				{
+					element = patchAdd(op.Path, op.Value, element)
+				}
+			case "replace":
+				{
+					element = patchReplace(op.Path, op.Value, element)
+				}
+			case "remove":
+				{
+					element = patchRemove(op.Path, op.Value, element)
+				}
 			}
-		case "replace":
-			{
-				element = patchReplace(op.Path, op.Value, element)
-			}
-		case "remove":
-			{
-				element = patchRemove(op.Path, op.Value, element)
-			}
+
 		}
 
+		//TODO: Validate _write of all fields of element
+
+		replace(c, resourceType, id, element)
 	}
-	replace(c, resourceType, id, element)
 }
 func opPathTopathArray(value string) []string {
 	re := regexp.MustCompile(`^(urn[:\w\.\_]*)(:-*)?(:[\w]*)(\.)(.*)$`)
@@ -56,9 +60,7 @@ func opPathTopathArray(value string) []string {
 	if urn != "" {
 		pathArray = append(pathArray, urn)
 	}
-	for _, p := range strings.Split(path, ".") {
-		pathArray = append(pathArray, p)
-	}
+	pathArray = append(pathArray, strings.Split(path, ".")...)
 	return pathArray
 }
 func pointValue(opPath string, elemOld interface{}) (string, interface{}) {
@@ -83,12 +85,12 @@ func patchAdd(opPath string, opValue interface{}, elemOld map[string]interface{}
 			if ok {
 				arrayValue, ok := opValue.([]interface{})
 				if ok {
-					for _, r := range arrayValue {
-						arrayElemPoint = append(arrayElemPoint, r)
-					}
+					arrayElemPoint = append(arrayElemPoint, arrayValue...)
 				} else {
 					arrayElemPoint = append(arrayElemPoint, opValue)
 				}
+				//TODO: check if arrayElemPoint is []interface{}
+				elemPointPrev.(map[string]interface{})[lastField] = arrayElemPoint
 			} else {
 				elemPointPrev.(map[string]interface{})[lastField] = opValue
 			}

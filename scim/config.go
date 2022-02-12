@@ -5,6 +5,8 @@ import (
 	"io/ioutil"
 	"log"
 	"strings"
+
+	"github.com/gin-gonic/gin"
 )
 
 const (
@@ -13,6 +15,7 @@ const (
 	FolderSchema = "/schemas/"
 	// FolderResoruceType is ..
 	FolderResoruceType = "/resourceType/"
+	PREFIX             = "/scim/v2"
 )
 
 var (
@@ -23,7 +26,7 @@ var (
 )
 
 // ReadResourceType read all file in resourceType
-func ReadResourceType(folderConfig string) {
+func ReadResourceType(folderConfig string, r *gin.Engine) {
 	Resources = make(map[string]ResoruceType)
 	Schemas = make(map[string]Schema)
 
@@ -54,7 +57,15 @@ func ReadResourceType(folderConfig string) {
 			}
 			Resources[resourceType.Endpoint] = resourceType
 			CreateBucket(resourceType.Name)
+
+			r.POST(PREFIX+resourceType.Endpoint, Create(resourceType.Endpoint))          // Create:  	POST https://example.com/{v}/{resource}
+			r.GET(PREFIX+resourceType.Endpoint+"/:id", Read(resourceType.Endpoint))      // Read: 	GET https://example.com/{v}/{resource}/{id}
+			r.PUT(PREFIX+resourceType.Endpoint+"/:id", Replace(resourceType.Endpoint))   // Replace: 	PUT https://example.com/{v}/{resource}/{id}
+			r.DELETE(PREFIX+resourceType.Endpoint+"/:id", Delete(resourceType.Endpoint)) // Delete: 	DELETE https://example.com/{v}/{resource}/{id}
+			r.PATCH(PREFIX+resourceType.Endpoint+"/:id", Update(resourceType.Endpoint))  // Update: 	PATCH https://example.com/{v}/{resource}/{id}
+			r.GET(PREFIX+resourceType.Endpoint, Search(resourceType.Endpoint))           // Search: 	GET https://example.com/{v}/{resource}?ﬁlter={attribute}{op}{value}&sortBy={attributeName}&sortOrder={ascending|descending}
 		}
+
 	}
 }
 

@@ -10,15 +10,16 @@ import (
 )
 
 // Read is GET https://example.com/{v}/{resource}/{id}
-func Read(c *gin.Context) {
-	resource := c.Param("resource")
-	resourceType := Resources["/"+resource]
-	id := c.Param("id")
-	element, err := getElementByID(c, id, resourceType)
-	if err != nil {
-		return
+func Read(resource string) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		resourceType := Resources[resource]
+		id := c.Param("id")
+		element, err := getElementByID(c, id, resourceType)
+		if err != nil {
+			return
+		}
+		c.JSON(http.StatusOK, element)
 	}
-	c.JSON(http.StatusOK, element)
 }
 func getElementByID(c *gin.Context, id string, resourceType ResoruceType) (map[string]interface{}, error) {
 	bucket := Cluster.Bucket(resourceType.Name)
@@ -36,5 +37,8 @@ func getElementByID(c *gin.Context, id string, resourceType ResoruceType) (map[s
 	}
 	var result interface{}
 	data.Content(&result)
+
+	//TODO: Validate _read of all fields of element
+
 	return result.(map[string]interface{}), nil
 }
