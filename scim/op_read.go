@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/couchbase/gocb/v2"
-	"github.com/couchbase/gocbcore/v9/memd"
+	"github.com/couchbase/gocbcore/v10/memd"
 	"github.com/gin-gonic/gin"
 )
 
