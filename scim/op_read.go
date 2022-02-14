@@ -18,9 +18,12 @@ func Read(resource string) func(c *gin.Context) {
 		if err != nil {
 			return
 		}
+		roles := []string{"user", "admin", "superadmin", "role1"} // TODO: get the user roles from the token
+		element = ValidateReadRole(roles, resourceType, element)
 		c.JSON(http.StatusOK, element)
 	}
 }
+
 func getElementByID(c *gin.Context, id string, resourceType ResoruceType) (map[string]interface{}, error) {
 	bucket := Cluster.Bucket(resourceType.Name)
 	data, err := bucket.DefaultCollection().Get(id, &gocb.GetOptions{})
@@ -35,10 +38,7 @@ func getElementByID(c *gin.Context, id string, resourceType ResoruceType) (map[s
 		log.Println(err.Error())
 		return nil, err
 	}
-	var result interface{}
-	data.Content(&result)
-
-	//TODO: Validate _read of all fields of element
-
-	return result.(map[string]interface{}), nil
+	var resultCouchbase interface{}
+	data.Content(&resultCouchbase)
+	return resultCouchbase.(map[string]interface{}), nil
 }

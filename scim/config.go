@@ -25,6 +25,26 @@ var (
 	Schemas map[string]Schema
 )
 
+func GetAttribute(attributes []Attribute, path string) Attribute {
+	fields := strings.Split(path, ".")
+	finalName := fields[len(fields)-1]
+	for i := 0; i < len(fields)-1; i++ {
+		name := fields[i]
+		for _, attribute := range attributes {
+			if attribute.Name == name {
+				attributes = attribute.SubAttributes
+				break
+			}
+		}
+	}
+	for _, attribute := range attributes {
+		if attribute.Name == finalName {
+			return attribute
+		}
+	}
+	return Attribute{}
+}
+
 // ReadResourceType read all file in resourceType
 func ReadResourceType(folderConfig string, r *gin.Engine) {
 	Resources = make(map[string]ResoruceType)

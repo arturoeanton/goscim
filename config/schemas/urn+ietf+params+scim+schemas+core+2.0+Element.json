@@ -2,9 +2,6 @@
   "id": "urn:ietf:params:scim:schemas:core:2.0:Element",
   "name": "Element",
   "description": "Element test",
-  "_remove": ["*"],
-  "_writer": ["*"],
-  "_reader": ["*"],
   "attributes": [
     {
       "name": "name",
@@ -16,8 +13,8 @@
       "mutability": "readOnly",
       "returned": "default",
       "uniqueness": "server",
-      "_writer": ["*"],
-      "_reader": ["*"]
+      "$writer": ["*"],
+      "$reader": ["role2","role1"]
     },
     {
       "name": "description",
@@ -28,7 +25,9 @@
       "caseExact": false,
       "mutability": "readOnly",
       "returned": "default",
-      "uniqueness": "server"
+      "uniqueness": "server",
+      "$writer": ["*"],
+      "$reader": ["role2","role3"]
     },
     {
       "name": "$ref",

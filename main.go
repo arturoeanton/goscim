@@ -4,16 +4,11 @@ import (
 	"log"
 	"os"
 
-	"github.com/arturoeanton/goscim/commons"
 	"github.com/arturoeanton/goscim/scim"
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
-
-	commons.ExampleWalkMap()
-
-	//panic("fin ok")
 
 	scim.InitDB()
 

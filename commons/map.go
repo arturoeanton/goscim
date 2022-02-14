@@ -4,17 +4,16 @@ import "log"
 
 func WalkMap(path string, m map[string]interface{}, fx func(path, currentKey string, v interface{}) interface{}) map[string]interface{} {
 	for k, v := range m {
+		newPath := path + "." + k
+		if path == "" {
+			newPath = k
+		}
 		if vv, ok := v.(map[string]interface{}); ok {
-			if path == "" {
-				path = k
-			}
-			path = path + "." + k
-
-			m1 := WalkMap(path, vv, fx)
+			m1 := WalkMap(newPath, vv, fx)
 			m[k] = m1
 			continue
 		}
-		v1 := fx(path+"."+k, k, v)
+		v1 := fx(newPath, k, v)
 		m[k] = v1
 	}
 	return m

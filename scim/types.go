@@ -38,6 +38,8 @@ type Attribute struct {
 	Mutability    string      `json:"mutability"`
 	Returned      string      `json:"returned"`
 	Uniqueness    string      `json:"uniqueness"`
+	Writer        *[]string   `json:"$writer"`
+	Read          *[]string   `json:"$reader"`
 	SubAttributes []Attribute `json:"subAttributes"`
 }
 
