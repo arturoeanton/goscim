@@ -104,8 +104,9 @@ func Search(resource string) func(c *gin.Context) {
 			}
 
 			//TODO: Validate _read of all fields of element
-
-			result.Resources = append(result.Resources, item[resourceType.Name])
+			roles := []string{"user", "admin", "superadmin", "role1"} // TODO: get the user roles from the token
+			element := ValidateReadRole(roles, resourceType, item[resourceType.Name].(map[string]interface{}))
+			result.Resources = append(result.Resources, element)
 		}
 		c.JSON(http.StatusOK, result)
 	}
