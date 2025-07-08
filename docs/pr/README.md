@@ -361,6 +361,165 @@ jq . config/schemas/schema.json
 go run main.go --validate-config
 ```
 
+### Implantação em Produção
+
+#### Docker Compose
+```yaml
+version: '3.8'
+services:
+  couchbase:
+    image: couchbase:latest
+    ports:
+      - "8091-8094:8091-8094"
+      - "11210:11210"
+    environment:
+      - CLUSTER_NAME=scim-cluster
+    volumes:
+      - couchbase-data:/opt/couchbase/var
+
+  goscim:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - SCIM_ADMIN_USER=Administrator
+      - SCIM_ADMIN_PASSWORD=admin123
+      - SCIM_COUCHBASE_URL=couchbase
+    depends_on:
+      - couchbase
+    restart: unless-stopped
+
+volumes:
+  couchbase-data:
+```
+
+#### Kubernetes
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: goscim
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: goscim
+  template:
+    metadata:
+      labels:
+        app: goscim
+    spec:
+      containers:
+      - name: goscim
+        image: goscim:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SCIM_COUCHBASE_URL
+          value: "couchbase-service"
+        - name: SCIM_ADMIN_USER
+          valueFrom:
+            secretKeyRef:
+              name: couchbase-secret
+              key: username
+        - name: SCIM_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: couchbase-secret
+              key: password
+```
+
+## Testes e Desenvolvimento
+
+### Executar Testes
+```bash
+# Testes unitários
+go test ./...
+
+# Testes específicos
+go test ./scim/parser -v
+
+# Testes com cobertura
+go test -cover ./...
+```
+
+### Exemplos de Uso
+```bash
+# Criar usuário
+curl -X POST http://localhost:8080/scim/v2/Users \
+  -H "Content-Type: application/json" \
+  -d '{
+    "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+    "userName": "testuser",
+    "name": {
+      "familyName": "Sobrenome",
+      "givenName": "Nome"
+    }
+  }'
+
+# Buscar usuários
+curl "http://localhost:8080/scim/v2/Users?filter=userName sw \"test\""
+
+# Obter configuração do provedor
+curl http://localhost:8080/ServiceProviderConfig
+```
+
+#### Problemas de Performance
+```bash
+# Verificar índices
+curl -u admin:pass http://localhost:8091/query/service \
+  -d 'statement=SELECT * FROM system:indexes WHERE keyspace_id="User"'
+```
+
+## Roteiro de Desenvolvimento
+
+### Fase 1: Estabilização
+- Implementar autenticação robusta
+- Suíte completa de testes
+- Melhorar logging e monitoramento
+
+### Fase 2: Escalabilidade
+- Suporte a cluster
+- Cache distribuído
+- Otimizações de performance
+
+### Fase 3: Funcionalidades Avançadas
+- Operações em lote completas
+- Webhooks e notificações
+- Dashboard de administração
+
+## Integração de Sistemas Externos
+
+### Provedores de Identidade
+- Active Directory
+- LDAP
+- Provedores OAuth 2.0
+- SAML 2.0
+
+### Sistemas de Destino
+- Aplicações SaaS
+- Bancos de dados de usuários
+- Sistemas de diretório
+- APIs de terceiros
+
+## Contribuições
+
+### Adicionar Novos Recursos
+1. Criar esquema JSON em `config/schemas/`
+2. Definir tipo de recurso em `config/resourceType/`
+3. Configurar bucket em `config/bucketSettings/`
+4. Reiniciar servidor para carregar mudanças
+
+### Regeneração do Parser
+```bash
+# Instalar ANTLR
+wget http://www.antlr.org/download/antlr-4.7-complete.jar
+alias antlr='java -jar $PWD/antlr-4.7-complete.jar'
+
+# Regenerar parser
+antlr -Dlanguage=Go -o scim/parser ScimFilter.g4
+```
+
 ## Comunidade e Suporte
 
 Para suporte técnico, relatórios de bugs ou solicitações de funcionalidades:

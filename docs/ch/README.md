@@ -361,6 +361,165 @@ jq . config/schemas/schema.json
 go run main.go --validate-config
 ```
 
+### 生产部署
+
+#### Docker Compose
+```yaml
+version: '3.8'
+services:
+  couchbase:
+    image: couchbase:latest
+    ports:
+      - "8091-8094:8091-8094"
+      - "11210:11210"
+    environment:
+      - CLUSTER_NAME=scim-cluster
+    volumes:
+      - couchbase-data:/opt/couchbase/var
+
+  goscim:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - SCIM_ADMIN_USER=Administrator
+      - SCIM_ADMIN_PASSWORD=admin123
+      - SCIM_COUCHBASE_URL=couchbase
+    depends_on:
+      - couchbase
+    restart: unless-stopped
+
+volumes:
+  couchbase-data:
+```
+
+#### Kubernetes
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: goscim
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: goscim
+  template:
+    metadata:
+      labels:
+        app: goscim
+    spec:
+      containers:
+      - name: goscim
+        image: goscim:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SCIM_COUCHBASE_URL
+          value: "couchbase-service"
+        - name: SCIM_ADMIN_USER
+          valueFrom:
+            secretKeyRef:
+              name: couchbase-secret
+              key: username
+        - name: SCIM_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: couchbase-secret
+              key: password
+```
+
+## 测试和开发
+
+### 运行测试
+```bash
+# 单元测试
+go test ./...
+
+# 特定测试
+go test ./scim/parser -v
+
+# 带覆盖率的测试
+go test -cover ./...
+```
+
+### 使用示例
+```bash
+# 创建用户
+curl -X POST http://localhost:8080/scim/v2/Users \
+  -H "Content-Type: application/json" \
+  -d '{
+    "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+    "userName": "testuser",
+    "name": {
+      "familyName": "姓",
+      "givenName": "名"
+    }
+  }'
+
+# 搜索用户
+curl "http://localhost:8080/scim/v2/Users?filter=userName sw \"test\""
+
+# 获取提供者配置
+curl http://localhost:8080/ServiceProviderConfig
+```
+
+#### 验证问题
+```bash
+# 验证索引
+curl -u admin:pass http://localhost:8091/query/service \
+  -d 'statement=SELECT * FROM system:indexes WHERE keyspace_id="User"'
+```
+
+## 开发路线图
+
+### 第一阶段：稳定化
+- 实现强大的身份验证
+- 完整的测试套件
+- 改进日志和监控
+
+### 第二阶段：可扩展性
+- 集群支持
+- 分布式缓存
+- 性能优化
+
+### 第三阶段：高级功能
+- 完整的批量操作
+- Webhooks和通知
+- 管理仪表板
+
+## 外部系统集成
+
+### 身份提供者
+- Active Directory
+- LDAP
+- OAuth 2.0提供者
+- SAML 2.0
+
+### 目标系统
+- SaaS应用程序
+- 用户数据库
+- 目录系统
+- 第三方API
+
+## 贡献
+
+### 添加新资源
+1. 在`config/schemas/`中创建JSON模式
+2. 在`config/resourceType/`中定义资源类型
+3. 在`config/bucketSettings/`中配置存储桶
+4. 重启服务器以加载更改
+
+### 解析器重新生成
+```bash
+# 安装ANTLR
+wget http://www.antlr.org/download/antlr-4.7-complete.jar
+alias antlr='java -jar $PWD/antlr-4.7-complete.jar'
+
+# 重新生成解析器
+antlr -Dlanguage=Go -o scim/parser ScimFilter.g4
+```
+
 ## 社区和支持
 
 技术支持、错误报告或功能请求：

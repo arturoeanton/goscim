@@ -361,6 +361,165 @@ jq . config/schemas/schema.json
 go run main.go --validate-config
 ```
 
+### 本番デプロイ
+
+#### Docker Compose
+```yaml
+version: '3.8'
+services:
+  couchbase:
+    image: couchbase:latest
+    ports:
+      - "8091-8094:8091-8094"
+      - "11210:11210"
+    environment:
+      - CLUSTER_NAME=scim-cluster
+    volumes:
+      - couchbase-data:/opt/couchbase/var
+
+  goscim:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - SCIM_ADMIN_USER=Administrator
+      - SCIM_ADMIN_PASSWORD=admin123
+      - SCIM_COUCHBASE_URL=couchbase
+    depends_on:
+      - couchbase
+    restart: unless-stopped
+
+volumes:
+  couchbase-data:
+```
+
+#### Kubernetes
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: goscim
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: goscim
+  template:
+    metadata:
+      labels:
+        app: goscim
+    spec:
+      containers:
+      - name: goscim
+        image: goscim:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SCIM_COUCHBASE_URL
+          value: "couchbase-service"
+        - name: SCIM_ADMIN_USER
+          valueFrom:
+            secretKeyRef:
+              name: couchbase-secret
+              key: username
+        - name: SCIM_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: couchbase-secret
+              key: password
+```
+
+## テストと開発
+
+### テスト実行
+```bash
+# ユニットテスト
+go test ./...
+
+# 特定のテスト
+go test ./scim/parser -v
+
+# カバレッジ付きテスト
+go test -cover ./...
+```
+
+### 使用例
+```bash
+# ユーザー作成
+curl -X POST http://localhost:8080/scim/v2/Users \
+  -H "Content-Type: application/json" \
+  -d '{
+    "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+    "userName": "testuser",
+    "name": {
+      "familyName": "姓",
+      "givenName": "名"
+    }
+  }'
+
+# ユーザー検索
+curl "http://localhost:8080/scim/v2/Users?filter=userName sw \"test\""
+
+# プロバイダー設定取得
+curl http://localhost:8080/ServiceProviderConfig
+```
+
+#### パフォーマンス問題
+```bash
+# インデックスの確認
+curl -u admin:pass http://localhost:8091/query/service \
+  -d 'statement=SELECT * FROM system:indexes WHERE keyspace_id="User"'
+```
+
+## 開発ロードマップ
+
+### フェーズ1: 安定化
+- 堅牢な認証の実装
+- 完全なテストスイート
+- ログとモニタリングの改善
+
+### フェーズ2: スケーラビリティ
+- クラスターサポート
+- 分散キャッシュ
+- パフォーマンス最適化
+
+### フェーズ3: 高度な機能
+- 完全なバルク操作
+- WebhookとNotification
+- 管理ダッシュボード
+
+## 外部システム統合
+
+### アイデンティティプロバイダー
+- Active Directory
+- LDAP
+- OAuth 2.0プロバイダー
+- SAML 2.0
+
+### ターゲットシステム
+- SaaSアプリケーション
+- ユーザーデータベース
+- ディレクトリシステム
+- サードパーティAPI
+
+## コントリビューション
+
+### 新しいリソースの追加
+1. `config/schemas/`にJSONスキーマを作成
+2. `config/resourceType/`にリソースタイプを定義
+3. `config/bucketSettings/`にバケットを設定
+4. サーバーを再起動して変更を読み込み
+
+### パーサーの再生成
+```bash
+# ANTLRのインストール
+wget http://www.antlr.org/download/antlr-4.7-complete.jar
+alias antlr='java -jar $PWD/antlr-4.7-complete.jar'
+
+# パーサーの再生成
+antlr -Dlanguage=Go -o scim/parser ScimFilter.g4
+```
+
 ## コミュニティとサポート
 
 技術サポート、バグレポート、機能リクエストについて：
