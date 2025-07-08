@@ -133,7 +133,7 @@ curl -X PATCH https://your-scim-server.com/scim/v2/Users/123 \
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Your Apps    │    │   Identity      │    │   External      │
+│   Your Apps     │    │   Identity      │    │   External      │
 │   (Consumers)   │◄──►│   Hub (GoSCIM)  │◄──►│   Systems       │
 │                 │    │                 │    │   (Providers)   │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
