@@ -1,10 +1,16 @@
 # 🚀 GoSCIM - Lightning Fast Identity Management
 
+
+
 [![Go Report Card](https://goreportcard.com/badge/github.com/arturoeanton/goscim)](https://goreportcard.com/report/github.com/arturoeanton/goscim)
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://choosealicense.com/licenses/mit/)
 [![GitHub contributors](https://img.shields.io/github/contributors/arturoeanton/goscim.svg)](https://GitHub.com/arturoeanton/goscim/graphs/contributors/)
 [![GitHub issues](https://img.shields.io/github/issues/arturoeanton/goscim.svg)](https://GitHub.com/arturoeanton/goscim/issues/)
 [![GitHub stars](https://img.shields.io/github/stars/arturoeanton/goscim.svg?style=social&label=Star&maxAge=2592000)](https://GitHub.com/arturoeanton/goscim/stargazers/)
+
+> 💡 **Note:** If you need to use PostgreSQL backend instead of Couchbase, please check out our sister project: **[go-vorpal-scim](https://github.com/arturoeanton/go-vorpal-scim)**.
+
+---
 
 > **A blazingly fast, lightweight SCIM 2.0 server built in Go that makes identity management simple and scalable** 🔥
 
