@@ -6,10 +6,10 @@ import (
 	"testing"
 )
 
-// Estos tests recorren el router SCIM real de punta a punta contra el store en
-// memoria. Fijan el comportamiento vigente para que el resto del plan de
-// release pueda cambiarlo de forma deliberada y visible: donde el
-// comportamiento actual incumple el RFC se marca con TODO(Bn).
+// These tests drive the real SCIM router end to end against the in-memory
+// store. They pin current behaviour so the rest of the release plan changes it
+// deliberately and visibly: assertions covering known RFC violations are marked
+// TODO(Bn) after the corresponding entry in RELEASE-1.0.md.
 
 func TestCreateElement(t *testing.T) {
 	r, store := newTestServer(t)
@@ -18,86 +18,81 @@ func TestCreateElement(t *testing.T) {
 
 	id, ok := body["id"].(string)
 	if !ok || id == "" {
-		t.Fatalf("la respuesta no trae id: %v", body)
+		t.Fatalf("response carries no id: %v", body)
 	}
 	if body["name"] != "Element1" {
 		t.Errorf("name = %v", body["name"])
 	}
-	// Create no aplica el filtrado por rol, a diferencia de Read/Search.
-	if body["description"] != "descripción de Element1" {
+	// Create does not apply role filtering, unlike Read and Search.
+	if body["description"] != "description of Element1" {
 		t.Errorf("description = %v", body["description"])
 	}
 
 	meta, ok := body["meta"].(map[string]interface{})
 	if !ok {
-		t.Fatalf("meta ausente o con forma inesperada: %v", body["meta"])
+		t.Fatalf("meta missing or malformed: %v", body["meta"])
 	}
 	if meta["resourceType"] != "Element" {
 		t.Errorf("meta.resourceType = %v", meta["resourceType"])
 	}
 	if meta["created"] == "" || meta["created"] != meta["lastModified"] {
-		t.Errorf("created/lastModified inconsistentes: %v", meta)
+		t.Errorf("created/lastModified inconsistent: %v", meta)
 	}
 	if meta["version"] == "" {
-		t.Error("meta.version vacío")
+		t.Error("meta.version is empty")
 	}
-	// TODO(B9): location debe ser absoluta e incluir el prefijo /scim/v2.
+	// TODO(B9): location must be absolute and carry the /scim/v2 prefix.
 	if meta["location"] != "/Elements/"+id {
 		t.Errorf("meta.location = %v", meta["location"])
 	}
 
-	// El documento quedó persistido en el bucket con el nombre del resource
-	// type ("Element"), no con el del endpoint ("/Elements").
+	// The document is stored in the bucket named after the resource type
+	// ("Element"), not after the endpoint ("/Elements").
 	stored, err := store.Get("Element", id)
 	if err != nil {
-		t.Fatalf("no se persistió en el bucket Element: %v", err)
+		t.Fatalf("not persisted in the Element bucket: %v", err)
 	}
 	if stored["name"] != "Element1" {
-		t.Errorf("documento almacenado = %v", stored)
+		t.Errorf("stored document = %v", stored)
 	}
 }
 
-func TestCreateElementRechazaPayloadsInvalidos(t *testing.T) {
+func TestCreateElementRejectsInvalidPayloads(t *testing.T) {
 	cases := []struct {
-		nombre string
-		body   string
+		name string
+		body string
 	}{
 		{
-			"sin schemas",
+			"no schemas",
 			`{"name":"x","$ref":"/x"}`,
 		},
 		{
-			"falta un atributo requerido del core",
+			"missing a required core attribute",
 			`{"schemas":["` + schemaCore + `","` + schemaExt + `"],"name":"x","` + schemaExt + `":{"required":1}}`,
 		},
 		{
-			"atributo no declarado en el schema",
-			`{"schemas":["` + schemaCore + `","` + schemaExt + `"],"name":"x","$ref":"/x","noExiste":1,"` + schemaExt + `":{"required":1}}`,
+			"attribute not declared in the schema",
+			`{"schemas":["` + schemaCore + `","` + schemaExt + `"],"name":"x","$ref":"/x","doesNotExist":1,"` + schemaExt + `":{"required":1}}`,
 		},
 		{
-			"tipo equivocado en el core",
+			"wrong type in the core schema",
 			`{"schemas":["` + schemaCore + `","` + schemaExt + `"],"name":123,"$ref":"/x","` + schemaExt + `":{"required":1}}`,
 		},
 		{
-			"tipo equivocado en la extensión",
-			`{"schemas":["` + schemaCore + `","` + schemaExt + `"],"name":"x","$ref":"/x","` + schemaExt + `":{"required":"no-es-entero"}}`,
+			"wrong type in the extension",
+			`{"schemas":["` + schemaCore + `","` + schemaExt + `"],"name":"x","$ref":"/x","` + schemaExt + `":{"required":"not-an-integer"}}`,
 		},
 		{
-			"schema no declarado en el resource type",
-			`{"schemas":["` + schemaCore + `","urn:ietf:params:scim:schemas:extension:inventado:2.0:X"],"name":"x","$ref":"/x"}`,
+			"schema not declared by the resource type",
+			`{"schemas":["` + schemaCore + `","urn:ietf:params:scim:schemas:extension:made-up:2.0:X"],"name":"x","$ref":"/x"}`,
 		},
 	}
 
 	for _, tc := range cases {
-		t.Run(tc.nombre, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			r, _ := newTestServer(t)
 			w := do(t, r, http.MethodPost, elementsPath, tc.body)
-			requireStatus(t, w, http.StatusBadRequest)
-			out := decode(t, w)
-			schemas, _ := out["schemas"].([]interface{})
-			if len(schemas) != 1 || schemas[0] != "urn:ietf:params:scim:api:messages:2.0:Error" {
-				t.Errorf("no devolvió un error SCIM: %v", out)
-			}
+			requireSCIMError(t, w, http.StatusBadRequest)
 		})
 	}
 }
@@ -114,26 +109,26 @@ func TestReadElement(t *testing.T) {
 	if body["id"] != id {
 		t.Errorf("id = %v", body["id"])
 	}
-	// name declara $reader ["role2","role1"] y los roles hardcodeados incluyen
-	// role1, así que se devuelve.
+	// name declares $reader ["role2","role1"] and the hardcoded roles include
+	// role1, so the value is returned.
 	if body["name"] != "Element1" {
 		t.Errorf("name = %v", body["name"])
 	}
-	// description declara $reader ["role2","role3"]: ningún rol coincide, así
-	// que el valor se censura.
-	// TODO(B8): debería omitirse la clave, no devolverla vacía.
+	// description declares $reader ["role2","role3"]: no role matches, so the
+	// value is masked.
+	// TODO(B8): the key should be omitted, not returned empty.
 	if body["description"] != "" {
-		t.Errorf("description debía venir censurada, vino %v", body["description"])
+		t.Errorf("description should be masked, got %v", body["description"])
 	}
-	// $ref no declara $reader, así que no se filtra.
+	// $ref declares no $reader, so it is not filtered.
 	if body["$ref"] != "/Element1" {
 		t.Errorf("$ref = %v", body["$ref"])
 	}
 }
 
-func TestReadElementInexistente(t *testing.T) {
+func TestReadElementNotFound(t *testing.T) {
 	r, _ := newTestServer(t)
-	w := do(t, r, http.MethodGet, elementsPath+"/no-existe", "")
+	w := do(t, r, http.MethodGet, elementsPath+"/does-not-exist", "")
 	requireStatus(t, w, http.StatusNotFound)
 }
 
@@ -141,13 +136,13 @@ func TestReplaceElement(t *testing.T) {
 	r, _ := newTestServer(t)
 	created := createElement(t, r, "Element1", 1)
 	id := created["id"].(string)
-	metaOriginal := created["meta"].(map[string]interface{})
+	originalMeta := created["meta"].(map[string]interface{})
 
 	var payload map[string]interface{}
-	if err := json.Unmarshal([]byte(validElement("Element1-modificado", 7)), &payload); err != nil {
+	if err := json.Unmarshal([]byte(validElement("Element1-modified", 7)), &payload); err != nil {
 		t.Fatal(err)
 	}
-	payload["meta"] = metaOriginal
+	payload["meta"] = originalMeta
 	raw, _ := json.Marshal(payload)
 
 	w := do(t, r, http.MethodPut, elementsPath+"/"+id, string(raw))
@@ -155,21 +150,21 @@ func TestReplaceElement(t *testing.T) {
 	body := decode(t, w)
 
 	if body["id"] != id {
-		t.Errorf("el PUT cambió el id: %v", body["id"])
+		t.Errorf("PUT changed the id: %v", body["id"])
 	}
-	if body["name"] != "Element1-modificado" {
+	if body["name"] != "Element1-modified" {
 		t.Errorf("name = %v", body["name"])
 	}
 	meta := body["meta"].(map[string]interface{})
-	if meta["created"] != metaOriginal["created"] {
-		t.Errorf("created no se preservó: %v vs %v", meta["created"], metaOriginal["created"])
+	if meta["created"] != originalMeta["created"] {
+		t.Errorf("created not preserved: %v vs %v", meta["created"], originalMeta["created"])
 	}
-	if meta["version"] == metaOriginal["version"] {
-		t.Error("version no cambió tras el PUT")
+	if meta["version"] == originalMeta["version"] {
+		t.Error("version did not change after the PUT")
 	}
 }
 
-func TestReplaceElementInexistente(t *testing.T) {
+func TestReplaceElementNotFound(t *testing.T) {
 	r, _ := newTestServer(t)
 	created := createElement(t, r, "Element1", 1)
 
@@ -180,7 +175,7 @@ func TestReplaceElementInexistente(t *testing.T) {
 	payload["meta"] = created["meta"]
 	raw, _ := json.Marshal(payload)
 
-	w := do(t, r, http.MethodPut, elementsPath+"/no-existe", string(raw))
+	w := do(t, r, http.MethodPut, elementsPath+"/does-not-exist", string(raw))
 	requireStatus(t, w, http.StatusNotFound)
 }
 
@@ -190,7 +185,7 @@ func TestPatchElement(t *testing.T) {
 	id := created["id"].(string)
 
 	patch := `{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
-	           "Operations":[{"op":"replace","path":"description","value":"nueva descripción"}]}`
+	           "Operations":[{"op":"replace","path":"description","value":"new description"}]}`
 	w := do(t, r, http.MethodPatch, elementsPath+"/"+id, patch)
 	requireStatus(t, w, http.StatusOK)
 
@@ -198,15 +193,15 @@ func TestPatchElement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored["description"] != "nueva descripción" {
-		t.Errorf("description almacenada = %v", stored["description"])
+	if stored["description"] != "new description" {
+		t.Errorf("stored description = %v", stored["description"])
 	}
 	if stored["name"] != "Element1" {
-		t.Errorf("el PATCH tocó un atributo que no debía: %v", stored["name"])
+		t.Errorf("the patch touched an attribute it should not have: %v", stored["name"])
 	}
 }
 
-func TestPatchElementSobreExtension(t *testing.T) {
+func TestPatchElementOnExtension(t *testing.T) {
 	r, store := newTestServer(t)
 	created := createElement(t, r, "Element1", 1)
 	id := created["id"].(string)
@@ -222,7 +217,7 @@ func TestPatchElementSobreExtension(t *testing.T) {
 	}
 	ext := stored[schemaExt].(map[string]interface{})
 	if ext["required"] != float64(42) {
-		t.Errorf("extensión tras el patch = %v", ext)
+		t.Errorf("extension after the patch = %v", ext)
 	}
 }
 
@@ -234,16 +229,16 @@ func TestDeleteElement(t *testing.T) {
 	w := do(t, r, http.MethodDelete, elementsPath+"/"+id, "")
 	requireStatus(t, w, http.StatusNoContent)
 	if w.Body.Len() != 0 {
-		t.Errorf("204 con cuerpo: %s", w.Body.String())
+		t.Errorf("204 with a body: %s", w.Body.String())
 	}
 
 	w = do(t, r, http.MethodGet, elementsPath+"/"+id, "")
 	requireStatus(t, w, http.StatusNotFound)
 }
 
-func TestDeleteElementInexistente(t *testing.T) {
+func TestDeleteElementNotFound(t *testing.T) {
 	r, _ := newTestServer(t)
-	w := do(t, r, http.MethodDelete, elementsPath+"/no-existe", "")
+	w := do(t, r, http.MethodDelete, elementsPath+"/does-not-exist", "")
 	requireStatus(t, w, http.StatusNotFound)
 }
 
@@ -270,18 +265,18 @@ func TestSearchElements(t *testing.T) {
 
 	resources := body["Resources"].([]interface{})
 	if len(resources) != 3 {
-		t.Fatalf("se devolvieron %d recursos", len(resources))
+		t.Fatalf("returned %d resources", len(resources))
 	}
-	nombres := make([]string, 0, 3)
+	names := make([]string, 0, 3)
 	for _, res := range resources {
-		nombres = append(nombres, res.(map[string]interface{})["name"].(string))
+		names = append(names, res.(map[string]interface{})["name"].(string))
 	}
-	if nombres[0] != "AAA" || nombres[1] != "BBB" || nombres[2] != "CCC" {
-		t.Errorf("orden ascendente incorrecto: %v", nombres)
+	if names[0] != "AAA" || names[1] != "BBB" || names[2] != "CCC" {
+		t.Errorf("wrong ascending order: %v", names)
 	}
 }
 
-func TestSearchElementsOrdenDescendente(t *testing.T) {
+func TestSearchElementsDescending(t *testing.T) {
 	r, _ := newTestServer(t)
 	createElement(t, r, "AAA", 1)
 	createElement(t, r, "BBB", 2)
@@ -290,11 +285,11 @@ func TestSearchElementsOrdenDescendente(t *testing.T) {
 	requireStatus(t, w, http.StatusOK)
 	resources := decode(t, w)["Resources"].([]interface{})
 	if resources[0].(map[string]interface{})["name"] != "BBB" {
-		t.Errorf("orden descendente incorrecto: %v", resources)
+		t.Errorf("wrong descending order: %v", resources)
 	}
 }
 
-func TestSearchElementsPaginacion(t *testing.T) {
+func TestSearchElementsPagination(t *testing.T) {
 	r, _ := newTestServer(t)
 	createElement(t, r, "AAA", 1)
 	createElement(t, r, "BBB", 2)
@@ -305,34 +300,34 @@ func TestSearchElementsPaginacion(t *testing.T) {
 	body := decode(t, w)
 
 	if body["totalResults"] != float64(3) {
-		t.Errorf("totalResults debe contar todo el conjunto, no la página: %v", body["totalResults"])
+		t.Errorf("totalResults must count the whole set, not the page: %v", body["totalResults"])
 	}
 	if body["startIndex"] != float64(2) {
 		t.Errorf("startIndex = %v", body["startIndex"])
 	}
 	resources := body["Resources"].([]interface{})
 	if len(resources) != 2 {
-		t.Fatalf("se esperaban 2 recursos, vinieron %d", len(resources))
+		t.Fatalf("want 2 resources, got %d", len(resources))
 	}
 	if resources[0].(map[string]interface{})["name"] != "BBB" {
-		t.Errorf("la página empieza en %v", resources[0])
+		t.Errorf("the page starts at %v", resources[0])
 	}
 }
 
-func TestSearchElementsCensuraPorRol(t *testing.T) {
+func TestSearchElementsMasksByRole(t *testing.T) {
 	r, _ := newTestServer(t)
 	createElement(t, r, "AAA", 1)
 
 	w := do(t, r, http.MethodGet, elementsPath, "")
 	requireStatus(t, w, http.StatusOK)
 	resources := decode(t, w)["Resources"].([]interface{})
-	primero := resources[0].(map[string]interface{})
-	if primero["description"] != "" {
-		t.Errorf("description debía venir censurada en el search: %v", primero["description"])
+	first := resources[0].(map[string]interface{})
+	if first["description"] != "" {
+		t.Errorf("description should be masked in search: %v", first["description"])
 	}
 }
 
-func TestSearchElementsParametrosInvalidos(t *testing.T) {
+func TestSearchElementsInvalidParameters(t *testing.T) {
 	cases := []string{"?startIndex=abc", "?count=abc"}
 	for _, query := range cases {
 		t.Run(query, func(t *testing.T) {
@@ -343,24 +338,24 @@ func TestSearchElementsParametrosInvalidos(t *testing.T) {
 	}
 }
 
-func TestDiscoveryNoImplementada(t *testing.T) {
+func TestDiscoveryNotImplemented(t *testing.T) {
 	r, _ := newTestServer(t)
-	// TODO(B9/mejora 8): los tres endpoints deben servir la configuración real
-	// y colgar de /scim/v2.
+	// TODO(B9/improvement 8): all three must serve the real configuration and
+	// hang off /scim/v2.
 	for _, path := range []string{"/ServiceProviderConfig", "/ResourceTypes", "/Schemas"} {
 		w := do(t, r, http.MethodGet, path, "")
 		requireStatus(t, w, http.StatusNotImplemented)
 	}
 }
 
-func TestRutasRegistradasParaCadaResourceType(t *testing.T) {
+func TestRoutesRegisteredForEveryResourceType(t *testing.T) {
 	r, _ := newTestServer(t)
-	rutas := make(map[string]bool)
+	routes := make(map[string]bool)
 	for _, info := range r.Routes() {
-		rutas[info.Method+" "+info.Path] = true
+		routes[info.Method+" "+info.Path] = true
 	}
 	for _, endpoint := range []string{"/Users", "/Groups", "/Elements"} {
-		for _, esperada := range []string{
+		for _, want := range []string{
 			"POST " + PREFIX + endpoint,
 			"GET " + PREFIX + endpoint,
 			"GET " + PREFIX + endpoint + "/:id",
@@ -368,8 +363,8 @@ func TestRutasRegistradasParaCadaResourceType(t *testing.T) {
 			"PATCH " + PREFIX + endpoint + "/:id",
 			"DELETE " + PREFIX + endpoint + "/:id",
 		} {
-			if !rutas[esperada] {
-				t.Errorf("ruta no registrada: %s", esperada)
+			if !routes[want] {
+				t.Errorf("route not registered: %s", want)
 			}
 		}
 	}

@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// El MemoryStore es infraestructura de test: si miente, mienten todos los tests
-// que se apoyan en él. Estos casos fijan su contrato contra el de Store.
+// MemoryStore is test infrastructure: if it lies, every test built on it lies
+// too. These cases pin its contract against Store.
 
 func TestMemoryStoreCRUD(t *testing.T) {
 	s := NewMemoryStore()
@@ -15,81 +15,81 @@ func TestMemoryStoreCRUD(t *testing.T) {
 	}
 
 	if _, err := s.Get("Element", "1"); !errors.Is(err, ErrNotFound) {
-		t.Errorf("Get sobre bucket vacío = %v, se esperaba ErrNotFound", err)
+		t.Errorf("Get on an empty bucket = %v, want ErrNotFound", err)
 	}
 	if err := s.Replace("Element", "1", map[string]interface{}{}); !errors.Is(err, ErrNotFound) {
-		t.Errorf("Replace sobre inexistente = %v, se esperaba ErrNotFound", err)
+		t.Errorf("Replace on a missing document = %v, want ErrNotFound", err)
 	}
 	if err := s.Remove("Element", "1"); !errors.Is(err, ErrNotFound) {
-		t.Errorf("Remove sobre inexistente = %v, se esperaba ErrNotFound", err)
+		t.Errorf("Remove on a missing document = %v, want ErrNotFound", err)
 	}
 
-	if err := s.Upsert("Element", "1", map[string]interface{}{"name": "uno"}); err != nil {
+	if err := s.Upsert("Element", "1", map[string]interface{}{"name": "one"}); err != nil {
 		t.Fatal(err)
 	}
 	doc, err := s.Get("Element", "1")
-	if err != nil || doc["name"] != "uno" {
-		t.Fatalf("Get tras Upsert = %v, %v", doc, err)
+	if err != nil || doc["name"] != "one" {
+		t.Fatalf("Get after Upsert = %v, %v", doc, err)
 	}
 
-	if err := s.Replace("Element", "1", map[string]interface{}{"name": "dos"}); err != nil {
+	if err := s.Replace("Element", "1", map[string]interface{}{"name": "two"}); err != nil {
 		t.Fatal(err)
 	}
 	doc, _ = s.Get("Element", "1")
-	if doc["name"] != "dos" {
-		t.Errorf("Replace no aplicó: %v", doc)
+	if doc["name"] != "two" {
+		t.Errorf("Replace did not apply: %v", doc)
 	}
 
 	if err := s.Remove("Element", "1"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Get("Element", "1"); !errors.Is(err, ErrNotFound) {
-		t.Errorf("el documento sobrevivió al Remove")
+		t.Error("the document survived Remove")
 	}
 }
 
-// Upsert sobre un bucket que nadie declaró debe funcionar igual que en
-// Couchbase, donde el bucket ya existe desde el arranque.
-func TestMemoryStoreUpsertCreaBucket(t *testing.T) {
+// Upserting into a bucket nobody declared must work, matching Couchbase where
+// every bucket already exists from startup.
+func TestMemoryStoreUpsertCreatesBucket(t *testing.T) {
 	s := NewMemoryStore()
-	if err := s.Upsert("Nuevo", "1", map[string]interface{}{"a": 1}); err != nil {
+	if err := s.Upsert("New", "1", map[string]interface{}{"a": 1}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Get("Nuevo", "1"); err != nil {
+	if _, err := s.Get("New", "1"); err != nil {
 		t.Fatal(err)
 	}
 }
 
-// El store debe aislar al llamante de su estado interno, como haría un driver
-// real que serializa.
-func TestMemoryStoreAislaElEstado(t *testing.T) {
+// The store must isolate callers from its internal state, as a real driver
+// that serializes would.
+func TestMemoryStoreIsolatesState(t *testing.T) {
 	s := NewMemoryStore()
-	original := map[string]interface{}{"anidado": map[string]interface{}{"v": "inicial"}}
+	original := map[string]interface{}{"nested": map[string]interface{}{"v": "initial"}}
 	if err := s.Upsert("Element", "1", original); err != nil {
 		t.Fatal(err)
 	}
 
-	original["anidado"].(map[string]interface{})["v"] = "mutado-por-fuera"
+	original["nested"].(map[string]interface{})["v"] = "mutated-outside"
 	doc, _ := s.Get("Element", "1")
-	if doc["anidado"].(map[string]interface{})["v"] != "inicial" {
-		t.Error("mutar el mapa original alteró lo almacenado")
+	if doc["nested"].(map[string]interface{})["v"] != "initial" {
+		t.Error("mutating the original map altered stored state")
 	}
 
-	doc["anidado"].(map[string]interface{})["v"] = "mutado-en-la-copia"
+	doc["nested"].(map[string]interface{})["v"] = "mutated-in-the-copy"
 	doc2, _ := s.Get("Element", "1")
-	if doc2["anidado"].(map[string]interface{})["v"] != "inicial" {
-		t.Error("mutar el mapa devuelto alteró lo almacenado")
+	if doc2["nested"].(map[string]interface{})["v"] != "initial" {
+		t.Error("mutating the returned map altered stored state")
 	}
 }
 
-// Un struct Go escrito al store debe volver como map con números float64,
-// igual que al pasar por Couchbase. Sin esto el fake escondería los type
-// asserts que sí rompen en producción.
-func TestMemoryStoreNormalizaComoJSON(t *testing.T) {
+// A Go struct written to the store must come back as a map with float64
+// numbers, exactly as it would through Couchbase. Without this the fake would
+// hide the type assertions that do break in production.
+func TestMemoryStoreNormalizesLikeJSON(t *testing.T) {
 	s := NewMemoryStore()
 	doc := map[string]interface{}{
-		"meta":   Meta{ResourceType: "Element", Created: "2020-01-01T00:00:00Z"},
-		"entero": int64(42),
+		"meta":    Meta{ResourceType: "Element", Created: "2020-01-01T00:00:00Z"},
+		"integer": int64(42),
 	}
 	if err := s.Upsert("Element", "1", doc); err != nil {
 		t.Fatal(err)
@@ -100,17 +100,17 @@ func TestMemoryStoreNormalizaComoJSON(t *testing.T) {
 	}
 	meta, ok := out["meta"].(map[string]interface{})
 	if !ok {
-		t.Fatalf("meta volvió como %T, se esperaba map[string]interface{}", out["meta"])
+		t.Fatalf("meta came back as %T, want map[string]interface{}", out["meta"])
 	}
 	if meta["resourceType"] != "Element" {
 		t.Errorf("meta = %v", meta)
 	}
-	if _, ok := out["entero"].(float64); !ok {
-		t.Errorf("entero volvió como %T, se esperaba float64", out["entero"])
+	if _, ok := out["integer"].(float64); !ok {
+		t.Errorf("integer came back as %T, want float64", out["integer"])
 	}
 }
 
-func TestMemoryStoreSearchOrdenYPaginacion(t *testing.T) {
+func TestMemoryStoreSearchOrderAndPagination(t *testing.T) {
 	s := NewMemoryStore()
 	for _, name := range []string{"c", "a", "b"} {
 		if err := s.Upsert("Element", name, map[string]interface{}{"id": name, "name": name}); err != nil {
@@ -126,45 +126,45 @@ func TestMemoryStoreSearchOrdenYPaginacion(t *testing.T) {
 		t.Errorf("total = %d", total)
 	}
 	if page[0]["name"] != "a" || page[2]["name"] != "c" {
-		t.Errorf("orden ascendente = %v", page)
+		t.Errorf("ascending order = %v", page)
 	}
 
 	_, page, _ = s.Search(SearchQuery{Bucket: "Element", SortBy: "name", SortDescending: true, Limit: 10})
 	if page[0]["name"] != "c" {
-		t.Errorf("orden descendente = %v", page)
+		t.Errorf("descending order = %v", page)
 	}
 
 	total, page, _ = s.Search(SearchQuery{Bucket: "Element", SortBy: "name", Offset: 1, Limit: 1})
 	if total != 3 {
-		t.Errorf("total debe ignorar la paginación, fue %d", total)
+		t.Errorf("total must ignore pagination, got %d", total)
 	}
 	if len(page) != 1 || page[0]["name"] != "b" {
-		t.Errorf("página = %v", page)
+		t.Errorf("page = %v", page)
 	}
 
-	// Un offset más allá del final devuelve una página vacía, no un error.
+	// An offset past the end yields an empty page, not an error.
 	total, page, err = s.Search(SearchQuery{Bucket: "Element", Offset: 99, Limit: 10})
 	if err != nil || total != 3 || len(page) != 0 {
-		t.Errorf("offset fuera de rango = %d, %v, %v", total, page, err)
+		t.Errorf("offset out of range = %d, %v, %v", total, page, err)
 	}
 
-	// Un bucket desconocido es un conjunto vacío, no un error.
-	total, page, err = s.Search(SearchQuery{Bucket: "NoExiste", Limit: 10})
+	// An unknown bucket is an empty set, not an error.
+	total, page, err = s.Search(SearchQuery{Bucket: "DoesNotExist", Limit: 10})
 	if err != nil || total != 0 || len(page) != 0 {
-		t.Errorf("bucket desconocido = %d, %v, %v", total, page, err)
+		t.Errorf("unknown bucket = %d, %v, %v", total, page, err)
 	}
 }
 
-// El fake no evalúa filtros: debe decirlo en voz alta en vez de devolver
-// resultados silenciosamente incorrectos.
-func TestMemoryStoreRechazaFiltros(t *testing.T) {
+// The fake does not evaluate filters: it must say so out loud rather than
+// silently return wrong results.
+func TestMemoryStoreRejectsFilters(t *testing.T) {
 	s := NewMemoryStore()
 	if _, _, err := s.Search(SearchQuery{Bucket: "Element", Filter: `name eq "x"`}); !errors.Is(err, ErrFilterUnsupported) {
-		t.Errorf("Search con filtro = %v, se esperaba ErrFilterUnsupported", err)
+		t.Errorf("Search with a filter = %v, want ErrFilterUnsupported", err)
 	}
 }
 
-// Comprobación estática de que ambas implementaciones satisfacen Store.
+// Compile-time check that both implementations satisfy Store.
 var (
 	_ Store = (*MemoryStore)(nil)
 	_ Store = (*CouchbaseStore)(nil)

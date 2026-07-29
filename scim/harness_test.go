@@ -28,13 +28,7 @@ func newTestServer(t *testing.T) (*gin.Engine, *MemoryStore) {
 // do issues a request against the router and returns the recorder.
 func do(t *testing.T, r http.Handler, method, target, body string) *httptest.ResponseRecorder {
 	t.Helper()
-	var reader *strings.Reader
-	if body == "" {
-		reader = strings.NewReader("")
-	} else {
-		reader = strings.NewReader(body)
-	}
-	req := httptest.NewRequest(method, target, reader)
+	req := httptest.NewRequest(method, target, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -46,7 +40,7 @@ func decode(t *testing.T, w *httptest.ResponseRecorder) map[string]interface{} {
 	t.Helper()
 	var out map[string]interface{}
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
-		t.Fatalf("respuesta no es JSON (status %d): %v\nbody: %s", w.Code, err, w.Body.String())
+		t.Fatalf("response is not JSON (status %d): %v\nbody: %s", w.Code, err, w.Body.String())
 	}
 	return out
 }
@@ -55,8 +49,20 @@ func decode(t *testing.T, w *httptest.ResponseRecorder) map[string]interface{} {
 func requireStatus(t *testing.T, w *httptest.ResponseRecorder, want int) {
 	t.Helper()
 	if w.Code != want {
-		t.Fatalf("status = %d, se esperaba %d\nbody: %s", w.Code, want, w.Body.String())
+		t.Fatalf("status = %d, want %d\nbody: %s", w.Code, want, w.Body.String())
 	}
+}
+
+// requireSCIMError asserts the response is a SCIM error object with the given status.
+func requireSCIMError(t *testing.T, w *httptest.ResponseRecorder, want int) map[string]interface{} {
+	t.Helper()
+	requireStatus(t, w, want)
+	out := decode(t, w)
+	schemas, _ := out["schemas"].([]interface{})
+	if len(schemas) != 1 || schemas[0] != "urn:ietf:params:scim:api:messages:2.0:Error" {
+		t.Errorf("not a SCIM error object: %v", out)
+	}
+	return out
 }
 
 const (
@@ -72,7 +78,7 @@ func validElement(name string, required int) string {
 	body := map[string]interface{}{
 		"schemas":     []string{schemaCore, schemaExt},
 		"name":        name,
-		"description": "descripción de " + name,
+		"description": "description of " + name,
 		"$ref":        "/" + name,
 		schemaExt:     map[string]interface{}{"required": required},
 	}
@@ -87,6 +93,6 @@ func validElement(name string, required int) string {
 func createElement(t *testing.T, r http.Handler, name string, required int) map[string]interface{} {
 	t.Helper()
 	w := do(t, r, http.MethodPost, elementsPath, validElement(name, required))
-	requireStatus(t, w, http.StatusOK) // TODO(B9): debe ser 201 Created
+	requireStatus(t, w, http.StatusOK) // TODO(B9): must become 201 Created
 	return decode(t, w)
 }
