@@ -190,7 +190,11 @@ Un release 1.0 no debería publicarse sin esto resuelto.
 4. **Consultas parametrizadas** con `gocb.QueryOptions{PositionalParameters: ...}` en toda la ruta de búsqueda; ningún literal debe concatenarse en el N1QL.
 5. **TLS configurable de verdad**: `SCIM_COUCHBASE_TLS_SKIP_VERIFY` (por defecto `false`) y ruta de CA; permitir `couchbase://` para desarrollo local. Añadir TLS al listener HTTP.
 6. **Rate limiting y límite de tamaño de body** (`http.MaxBytesReader`); hoy un POST de 1 GB se lee entero a memoria con `buf.ReadFrom(c.Request.Body)`.
-7. **Unicidad de atributos**: honrar `uniqueness: server|global` (mínimo `userName`) con índice único en Couchbase y respuesta `409 uniqueness`.
+7. ~~**Unicidad de atributos**~~ **Hecho**. `uniqueness: server|global` se aplica en create, replace y patch, con `409` y `scimType: uniqueness`. Un recurso conserva su propio valor sin colisionar consigo mismo, y borrar libera el valor. Funciona también dentro de extensiones.
+
+    La consulta va por `Store.FindIDByAttribute`, con el valor como **parámetro ligado** en Couchbase: es una consulta construida fuera de la traducción de filtros, así que no debía abrir su propio agujero de inyección.
+
+    **Queda abierto**: la comprobación es leer-y-luego-escribir, no atómica. Dos peticiones concurrentes con el mismo `userName` pueden pasar ambas. Cerrarlo del todo pide un índice único en Couchbase o un documento centinela por valor.
 
 ### Cumplimiento SCIM
 

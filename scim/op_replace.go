@@ -53,6 +53,9 @@ func replace(c *gin.Context, resourceType ResourceType, id string, element map[s
 	if !ok {
 		return
 	}
+	if !EnforceUniqueness(c, resourceType, element, id) {
+		return
+	}
 	element["id"] = id
 	meta := updateMeta(previousMeta, element, resourceType)
 	element["meta"] = meta

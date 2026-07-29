@@ -35,6 +35,9 @@ func Create(resource string) func(c *gin.Context) {
 		if !ok {
 			return
 		}
+		if !EnforceUniqueness(c, resourceType, element, "") {
+			return
+		}
 
 		id := uuid.New().String()
 		element["id"] = id

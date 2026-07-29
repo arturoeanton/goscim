@@ -38,6 +38,10 @@ type Store interface {
 	// Search returns the total number of matching resources (ignoring
 	// pagination) along with the requested page.
 	Search(q SearchQuery) (total int, resources []map[string]interface{}, err error)
+	// FindIDByAttribute returns the id of a resource whose attribute holds
+	// value, or "" when there is none. It backs the uniqueness check, which
+	// needs an exact lookup rather than a filter expression.
+	FindIDByAttribute(bucket, attributePath string, value interface{}) (string, error)
 	Close() error
 }
 

@@ -140,6 +140,44 @@ func (s *MemoryStore) Search(q SearchQuery) (int, []map[string]interface{}, erro
 	return total, page, nil
 }
 
+// FindIDByAttribute implements Store.
+//
+// The value is normalised through JSON before comparing, because that is what
+// storing it did: an int64 handed in by the validator is a float64 once it has
+// been through the store, and comparing the two as interfaces would never
+// match even though N1QL would compare them numerically.
+func (s *MemoryStore) FindIDByAttribute(bucket, attributePath string, value interface{}) (string, error) {
+	wanted, err := normalizeValue(value)
+	if err != nil {
+		return "", err
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	path := opPathTopathArray(attributePath)
+	for id, doc := range s.buckets[bucket] {
+		if resolvePath(doc, path) == wanted {
+			return id, nil
+		}
+	}
+	return "", nil
+}
+
+// normalizeValue round-trips a scalar through JSON, matching how the store
+// holds it.
+func normalizeValue(value interface{}) (interface{}, error) {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	var out interface{}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // resolvePath walks a dotted attribute path through nested objects.
 func resolvePath(doc map[string]interface{}, path []string) interface{} {
 	var current interface{} = doc

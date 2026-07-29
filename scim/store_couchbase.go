@@ -219,6 +219,35 @@ func (s *CouchbaseStore) Search(q SearchQuery) (int, []map[string]interface{}, e
 	return countResult.Count, resources, rows.Err()
 }
 
+// FindIDByAttribute implements Store.
+//
+// The value is passed as a bound parameter rather than concatenated: it comes
+// from a client payload, and this is a query built outside the filter
+// translation, so it must not grow its own injection hole.
+func (s *CouchbaseStore) FindIDByAttribute(bucket, attributePath string, value interface{}) (string, error) {
+	query := "SELECT id FROM `" + bucket + "` WHERE " + parser.AddQuote(attributePath) + " = $1 LIMIT 1"
+
+	rows, err := s.cluster.Query(query, &gocb.QueryOptions{
+		ScanConsistency:      queryScanConsistency(),
+		PositionalParameters: []interface{}{value},
+	})
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+
+	var row struct {
+		ID string `json:"id"`
+	}
+	if err := rows.One(&row); err != nil {
+		if errors.Is(err, gocb.ErrNoResult) {
+			return "", nil
+		}
+		return "", err
+	}
+	return row.ID, rows.Err()
+}
+
 // EnsureBucket implements Store, creating the bucket and its primary index.
 func (s *CouchbaseStore) EnsureBucket(name string) error {
 	defaultConfig := gocb.CreateBucketSettings{
