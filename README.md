@@ -1,327 +1,165 @@
-# 🚀 GoSCIM - Lightning Fast Identity Management
+# GoSCIM
 
-
-
+[![CI](https://github.com/arturoeanton/goscim/actions/workflows/ci.yml/badge.svg)](https://github.com/arturoeanton/goscim/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/arturoeanton/goscim)](https://goreportcard.com/report/github.com/arturoeanton/goscim)
-[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://choosealicense.com/licenses/mit/)
-[![GitHub contributors](https://img.shields.io/github/contributors/arturoeanton/goscim.svg)](https://GitHub.com/arturoeanton/goscim/graphs/contributors/)
-[![GitHub issues](https://img.shields.io/github/issues/arturoeanton/goscim.svg)](https://GitHub.com/arturoeanton/goscim/issues/)
-[![GitHub stars](https://img.shields.io/github/stars/arturoeanton/goscim.svg?style=social&label=Star&maxAge=2592000)](https://GitHub.com/arturoeanton/goscim/stargazers/)
+[![Go Reference](https://pkg.go.dev/badge/github.com/arturoeanton/goscim.svg)](https://pkg.go.dev/github.com/arturoeanton/goscim)
+[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/arturoeanton/goscim)](https://github.com/arturoeanton/goscim/releases)
 
-> 💡 **Note:** If you need to use PostgreSQL backend instead of Couchbase, please check out our sister project: **[go-vorpal-scim](https://github.com/arturoeanton/go-vorpal-scim)**.
+A **SCIM 2.0** server in Go, backed by Couchbase.
 
----
+Resource types, schemas and per-attribute permissions are JSON files, so adding
+a resource type takes no code. Authentication is required, filter values are
+bound rather than interpolated into queries, and permissions are enforced per
+attribute on both read and write.
 
-> **A blazingly fast, lightweight SCIM 2.0 server built in Go that makes identity management simple and scalable** 🔥
+> Using PostgreSQL instead of Couchbase? See the sister project
+> [go-vorpal-scim](https://github.com/arturoeanton/go-vorpal-scim).
 
-GoSCIM is a small, config-driven implementation of the SCIM 2.0 protocol backed by Couchbase. Resource types, schemas and per-attribute permissions are JSON files, so adding one takes no code.
-
-## ✨ Why GoSCIM?
-
-- 🔧 **Dynamic schemas**: add a resource type by dropping in two JSON files
-- 🛡️ **Authentication**: OAuth 2.0 access tokens (RFC 9068) or HTTP Basic
-- 🔐 **Per-attribute authorization**: role lists plus SCIM's own `mutability`
-- 🎯 **RFC 7643/7644**: CRUD, filtering, sorting, pagination, ETags
-- 🔍 **Filter parser**: ANTLR grammar translated to N1QL with bound parameters
-- 🧪 **Tested**: unit suite plus an integration suite against a real Couchbase
-
-See [what is not implemented](CHANGELOG.md#not-implemented) before choosing it.
-
-## 🎯 Perfect For
-
-- **Startups** building their first identity system
-- **Enterprises** replacing expensive identity solutions
-- **DevOps Teams** automating user provisioning
-- **SaaS Companies** needing multi-tenant identity management
-- **Developers** learning SCIM protocol implementation
-
-## ⚡ Quick Start
-
-Get GoSCIM running in under 2 minutes:
+## Quick start
 
 ```bash
-git clone https://github.com/arturoeanton/goscim.git
-cd goscim
+docker run -d --name goscim-db -p 8091-8094:8091-8094 -p 11210:11210 \
+  couchbase:community-7.1.1
+# Set up the cluster at http://localhost:8091 with the credentials below.
 
-# A Couchbase to talk to
-docker run -d --name db -p 8091-8094:8091-8094 -p 11210:11210 couchbase:community-7.1.1
-# then create the cluster at http://localhost:8091 with the credentials below
+git clone https://github.com/arturoeanton/goscim.git && cd goscim
 
-export SCIM_AUTH=basic
+export SCIM_AUTH=basic                       # how clients authenticate
 export SCIM_BASIC_USERS='admin:secret:admin'
-export SCIM_ADMIN_USER=Administrator      # Couchbase, not the SCIM API
-export SCIM_ADMIN_PASSWORD='password'
-export SCIM_COUCHBASE_TLS=false           # a local cluster without certificates
+export SCIM_ADMIN_USER=Administrator         # how the server reaches Couchbase
+export SCIM_ADMIN_PASSWORD=password
+export SCIM_COUCHBASE_TLS=false              # local cluster, no certificate
 
 go run .
 ```
 
-Then `curl -u admin:secret http://localhost:8080/scim/v2/ServiceProviderConfig`.
+```bash
+curl -s -u admin:secret -X POST http://localhost:8080/scim/v2/Users \
+  -H 'Content-Type: application/scim+json' \
+  -d '{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],
+       "userName":"jane.doe@example.com",
+       "emails":[{"value":"jane.doe@example.com","type":"work","primary":true}],
+       "active":true}'
+```
 
-`SCIM_AUTH` has no default: the server refuses to start until you choose
-`jwt`, `basic`, or `none` for an unauthenticated deployment.
+`201 Created`, with the resource in the body, its URI in `Location` and its
+revision in `ETag`.
 
-## 🌟 Features That Make Developers Happy
+`SCIM_AUTH` has no default: the server refuses to start until you pick `jwt`,
+`basic`, or `none`. Full walkthrough in
+[getting started](docs/getting-started.md).
 
-### 🏗️ **Dynamic Schema System**
-No code changes needed - just drop JSON schemas and restart:
+## What it does
+
+- **CRUD, search, filtering, sorting and pagination** over RFC 7643/7644
+- **Discovery**: `ServiceProviderConfig`, `ResourceTypes`, `Schemas`, derived
+  from the running code rather than a file that can drift from it
+- **Authentication**: OAuth 2.0 access tokens (RFC 9068) verified against a
+  JWKS, HTTP Basic for development, or an explicit anonymous mode
+- **Authorization per attribute**: `$reader` / `$writer` role lists alongside
+  SCIM's own `mutability`, `returned` and `uniqueness`
+- **Concurrency control**: `ETag` with `If-Match` and `If-None-Match`
+- **Schema-driven everything**: add a resource type by dropping in two JSON
+  files and restarting
+
+## What it does not do
+
+Worth knowing before you invest time:
+
+- `POST /Bulk`
+- Value paths — `emails[type eq "work"]` — in filters or PATCH paths
+- `attributes` and `excludedAttributes`
+- `POST /.search`
+- Health, readiness or metrics endpoints
+- Password hashing: `password` is stored exactly as sent
+
+The [1.0 audit](RELEASE-1.0.md) records why each is open and roughly what it
+would take.
+
+## Adding a resource type
+
+Two files, no code:
 
 ```json
+// config/schemas/urn+ietf+params+scim+schemas+custom+2.0+Device.json
 {
-  "id": "urn:ietf:params:scim:schemas:custom:2.0:Employee",
-  "name": "Employee",
+  "id": "urn:ietf:params:scim:schemas:custom:2.0:Device",
+  "name": "Device",
   "attributes": [
-    {
-      "name": "employeeId",
-      "type": "string",
-      "required": true,
-      "uniqueness": "server"
-    }
+    { "name": "serialNumber", "type": "string",
+      "required": true, "uniqueness": "server", "mutability": "immutable" }
   ]
 }
 ```
 
-### 🔍 **Powerful Query Engine**
-Advanced filtering with natural syntax:
-
-```http
-GET /Users?filter=name.familyName co "Garcia" and active eq true
-GET /Users?filter=emails[type eq "work" and value ew "@company.com"]
-```
-
-### 🔌 **Easy Integrations**
-Connect to any system with our flexible connector architecture:
-
-```go
-// Custom connector in just a few lines
-func (c *CustomConnector) SyncUsers() error {
-    users := c.externalSystem.GetUsers()
-    for _, user := range users {
-        scimUser := convertToSCIM(user)
-        c.scimClient.CreateOrUpdateUser(scimUser)
-    }
-    return nil
+```json
+// config/resourceType/Device.json
+{
+  "schemas": ["urn:ietf:params:scim:schemas:core:2.0:ResourceType"],
+  "id": "Device", "name": "Device", "endpoint": "/Devices",
+  "schema": "urn:ietf:params:scim:schemas:custom:2.0:Device",
+  "schemaExtensions": []
 }
 ```
 
-## 🛠️ Real-World Examples
+Restart, and `/scim/v2/Devices` exists with all six verbs, its own bucket,
+`serialNumber` enforced unique and refused on update.
 
-### Create a User
+## Filters
 
-Answers `201 Created` with the new resource in the body and its URI in
-`Location`.
+```
+userName eq "bjensen"
+name.familyName co "O"
+title pr and userType eq "Employee"
+userType eq "Employee" and (emails co "example.com" or emails co "example.org")
+urn:ietf:params:scim:schemas:extension:enterprise:2.0:User.department eq "Sales"
+```
+
+All RFC 7644 operators — `eq ne co sw ew gt ge lt le pr`, `and or not`, `( )`.
+Values are passed to Couchbase as bound parameters and never enter the query
+text; a filter that fails to parse is refused rather than translated.
+
+## Documentation
+
+| | |
+|---|---|
+| [Getting started](docs/getting-started.md) | A running server and your first user |
+| [Installation](docs/installation.md) | Couchbase, building, deploying |
+| [Configuration](docs/configuration.md) | Every variable and config file |
+| [API reference](docs/api.md) | Endpoints, payloads, status codes, filters |
+| [Schemas and permissions](docs/schemas.md) | Attributes, and who may read or write them |
+| [Architecture](docs/architecture.md) | How it fits together, and why |
+| [Security](docs/security.md) | Threat model and hardening checklist |
+| [Operations](docs/operations.md) | Signals, consistency, troubleshooting |
+| [Development](docs/development.md) | Building, testing, code layout |
+| [Changelog](CHANGELOG.md) | Releases and breaking changes |
+
+## Requirements
+
+Go 1.25+ to build. Couchbase 7.x, Community or Enterprise, with the data,
+query and index services.
+
+## Development
 
 ```bash
-curl -X POST https://your-scim-server.com/scim/v2/Users \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
-    "userName": "jane.doe@company.com",
-    "name": {
-      "familyName": "Doe",
-      "givenName": "Jane"
-    },
-    "emails": [{
-      "value": "jane.doe@company.com",
-      "type": "work",
-      "primary": true
-    }],
-    "active": true
-  }'
-```
-
-### Search with Filters
-```bash
-curl "https://your-scim-server.com/scim/v2/Users?filter=userName sw 'admin'&sortBy=name.familyName"
-```
-
-### Update User
-```bash
-curl -X PATCH https://your-scim-server.com/scim/v2/Users/123 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
-    "Operations": [{
-      "op": "replace",
-      "path": "active",
-      "value": false
-    }]
-  }'
-```
-
-## 🏗️ Architecture
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Your Apps     │    │   Identity      │    │   External      │
-│   (Consumers)   │◄──►│   Hub (GoSCIM)  │◄──►│   Systems       │
-│                 │    │                 │    │   (Providers)   │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-```
-
-- **Stateless**: no per-process state, so instances scale horizontally
-- **Couchbase backend**: one bucket per resource type, N1QL for search
-
-## 📈 Scale
-
-No benchmarks have been published for this project, so this section used to
-contain numbers that were not measured. If you run any, a pull request adding
-them with the method alongside would be welcome.
-
-## 🤝 Join Our Amazing Community
-
-We're building something special, and we'd love your help! 
-
-### 🌟 **Star us** if you find GoSCIM useful!
-
-### 🛠️ **Ways to Contribute**
-- 🐛 [Report bugs](https://github.com/arturoeanton/goscim/issues/new?template=bug_report.md)
-- 💡 [Suggest features](https://github.com/arturoeanton/goscim/issues/new?template=feature_request.md)
-- 📝 [Improve documentation](https://github.com/arturoeanton/goscim/tree/main/docs)
-- 🔧 [Submit pull requests](https://github.com/arturoeanton/goscim/pulls)
-- 💬 [Join discussions](https://github.com/arturoeanton/goscim/discussions)
-
-### 🎯 **Quick Contribution Ideas**
-- Implement `/Bulk` (RFC 7644 3.7)
-- Implement value paths in filters and patch paths
-- Implement `attributes` / `excludedAttributes`
-- Add a Dockerfile and a compose file
-- Add health, readiness and metrics endpoints
-- Complete the translations under `docs/`
-
-`RELEASE-1.0.md` lists what is open and why.
-
-### 🏆 **Hall of Fame**
-Special thanks to all our contributors! Every contribution matters, from bug reports to major features.
-
-## 📚 Documentation
-
-| Topic | Link |
-|-------|------|
-| 🚀 **Getting Started** | [docs/en/getting-started.md](docs/en/getting-started.md) |
-| 🔧 **Installation Guide** | [docs/en/installation.md](docs/en/installation.md) |
-| 📋 **Changelog** | [CHANGELOG.md](CHANGELOG.md) |
-| 🔎 **1.0 audit and open items** | [RELEASE-1.0.md](RELEASE-1.0.md) |
-| 🛡️ **Security Guide** | [docs/en/security.md](docs/en/security.md) |
-| 👩‍💻 **Working on the code** | [CLAUDE.md](CLAUDE.md) |
-
-### 🌍 **Multi-Language Docs**
-- 🇺🇸 [English](docs/en/)
-- 🇪🇸 [Español](docs/es/)
-
-## ⚙️ Configuration
-
-| Variable | Default | Meaning |
-|---|---|---|
-| `SCIM_AUTH` | *(none — required)* | `jwt`, `basic` or `none` |
-| `SCIM_PORT` | `:8080` | Listen address |
-| `SCIM_CONFIG_DIR` | `config` | Where schemas and resource types live |
-| `SCIM_TRUSTED_PROXIES` | `127.0.0.1` | Comma-separated, or `none` |
-| `SCIM_JWT_JWKS_URL` | — | Required for `SCIM_AUTH=jwt` |
-| `SCIM_JWT_ISSUER` | — | Required for `jwt`; the token's `iss` |
-| `SCIM_JWT_AUDIENCE` | — | Required for `jwt`; the token's `aud` |
-| `SCIM_JWT_ROLES_CLAIM` | — | An extra claim to read roles from |
-| `SCIM_BASIC_USERS` | — | `user:password:role1,role2;...` |
-| `SCIM_ANONYMOUS_ROLES` | *(empty)* | Roles for `SCIM_AUTH=none` |
-| `SCIM_ADMIN_USER` | `Administrator` | Couchbase user |
-| `SCIM_ADMIN_PASSWORD` | — | Couchbase password |
-| `SCIM_COUCHBASE_URL` | `localhost` | Couchbase host, `host:port` |
-| `SCIM_COUCHBASE_TLS` | `true` | `false` for a plain local cluster |
-| `SCIM_COUCHBASE_CA_CERT` | — | PEM that signed the cluster certificate |
-| `SCIM_COUCHBASE_TLS_SKIP_VERIFY` | `false` | Accept any certificate |
-| `SCIM_QUERY_CONSISTENCY` | `request_plus` | `not_bounded` trades freshness for latency |
-
-Roles for `jwt` come from the token: RFC 9068 §2.2.3.1 reuses SCIM's own
-`roles`, `groups` and `entitlements` claims, and `scope` is read too.
-
-## 🛠️ Working on it
-
-```bash
-make check        # build, vet, and the unit suite with the race detector
+make check        # build, vet, unit suite with the race detector
 make integration  # the suite against a real Couchbase, in a container
 make cover        # coverage
-make generate     # regenerate the filter parser (needs Docker)
 ```
 
-## 🔧 Tech Stack
+The unit suite runs the real router over an in-memory store; the integration
+suite starts Couchbase in a container and drives the same server through it.
+Contributions are welcome — see [CONTRIBUTING](CONTRIBUTING.md), and
+[RELEASE-1.0](RELEASE-1.0.md) for what is open.
 
-- **Language**: Go 1.25+
-- **Database**: Couchbase 7.x (Community or Enterprise)
-- **Web framework**: Gin
-- **Query parser**: ANTLR 4.13
-- **Auth**: OAuth 2.0 access tokens (RFC 9068) via JWKS, or HTTP Basic
+## Status
 
-## 📊 Project Status
+1.0.0. The test suite covers the request path end to end, and the integration
+suite exercises it against a real Couchbase. It has not yet been run against a
+production identity provider such as Okta or Entra ID; if you do, reports are
+welcome — that is where the remaining interoperability gaps will show up.
 
-- ✅ **Core operations**: create, read, replace, patch, delete, search
-- ✅ **Discovery**: ServiceProviderConfig, ResourceTypes, Schemas
-- ✅ **Filtering**: all RFC 7644 operators, with bound parameters
-- ✅ **Schema extensions**: custom attributes and resource types
-- ✅ **Authorization**: per-attribute roles, `mutability`, `returned`
-- ✅ **Concurrency**: ETag with If-Match / If-None-Match
-- ❌ **Bulk operations**: not implemented
-- ❌ **Value paths** (`emails[type eq "work"]`): not implemented
-- ❌ **`attributes` / `excludedAttributes`**: not implemented
-- ❌ **Health, readiness, metrics endpoints**: not implemented
+## License
 
-## 💡 Use Cases
-
-### Identity Automation
-```
-Employee Onboarding → GoSCIM → Automatic provisioning in:
-├── Active Directory
-├── Salesforce
-├── Slack
-├── Jira
-└── Custom Apps
-```
-
-### Multi-Tenant SaaS
-```
-Customer Signup → GoSCIM → Isolated tenant with:
-├── Custom schemas
-├── Role-based access
-├── Branded experience
-└── API access
-```
-
-### Compliance & Audit
-```
-User Changes → GoSCIM → Automated:
-├── Audit logging
-├── Compliance reports
-├── Access reviews
-└── Webhook notifications
-```
-
-## 🌟 Why Open Source?
-
-We believe identity management should be **accessible**, **transparent**, and **community-driven**. By open-sourcing GoSCIM, we're empowering developers worldwide to build better identity solutions.
-
-**Join us in democratizing identity management!** 🚀
-
-## 📄 License
-
-GoSCIM is released under the [MIT License](LICENSE). Feel free to use it in your projects, contribute back, and help us make identity management better for everyone!
-
-**Commercial use** is welcomed, but we'd appreciate:
-- 🌟 A star on GitHub
-- 📢 Attribution in your project
-- 🤝 Contributing improvements back to the community
-
-## 🙏 Acknowledgments
-
-- Built with ❤️ by [Arturo Anton](https://github.com/arturoeanton) and the community
-- Inspired by the SCIM protocol and the need for simple, scalable identity management
-- Special thanks to all contributors and early adopters!
-
----
-
-<div align="center">
-
-**[⭐ Star us on GitHub](https://github.com/arturoeanton/goscim)** • **[🐛 Report Issues](https://github.com/arturoeanton/goscim/issues)** • **[💬 Join Discussions](https://github.com/arturoeanton/goscim/discussions)**
-
-Made with ❤️ for the developer community
-
-</div>
+[MIT](LICENSE).

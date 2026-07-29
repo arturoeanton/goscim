@@ -1,223 +1,143 @@
-# Contributing to GoSCIM 🚀
+# Contributing to GoSCIM
 
-First off, thanks for taking the time to contribute! ❤️
+Thanks for considering it. This page covers what you need to get a change
+merged.
 
-GoSCIM is a community-driven project, and we welcome contributions of all kinds. Whether you're fixing a bug, adding a feature, improving documentation, or helping other users, your contribution is valuable!
+## Getting set up
 
-## 🌟 Ways to Contribute
+Requirements: Go 1.25 or later, Docker (for the integration suite), Git.
 
-### 🐛 Reporting Bugs
-- Use the [Bug Report template](https://github.com/arturoeanton/goscim/issues/new?template=bug_report.md)
-- Search existing issues first to avoid duplicates
-- Provide detailed steps to reproduce
-- Include system information and logs
-
-### 💡 Suggesting Features
-- Use the [Feature Request template](https://github.com/arturoeanton/goscim/issues/new?template=feature_request.md)
-- Explain the use case and why it's needed
-- Consider if it fits GoSCIM's scope and philosophy
-
-### 📝 Improving Documentation
-- Fix typos, unclear explanations, or missing information
-- Add examples and tutorials
-- Translate documentation to other languages
-- Create video tutorials or blog posts
-
-### 🔧 Contributing Code
-- Fix bugs
-- Implement new features
-- Improve performance
-- Add tests
-- Refactor code
-
-## 🚀 Quick Start for Contributors
-
-### 1. Fork and Clone
 ```bash
-# Fork the repository on GitHub, then:
-git clone https://github.com/YOUR_USERNAME/goscim.git
+git clone https://github.com/arturoeanton/goscim.git
 cd goscim
-git remote add upstream https://github.com/arturoeanton/goscim.git
+make check
 ```
 
-### 2. Set Up Development Environment
+`make check` builds, vets and runs the unit suite with the race detector. It
+needs no database: the unit tests run the real router over an in-memory store.
+
+For the integration suite, which starts Couchbase in a container:
+
 ```bash
-# Install dependencies
-go mod tidy
-
-# Start development database
-docker-compose -f docker-compose.dev.yml up -d
-
-# Run tests to ensure everything works
-go test ./...
+make integration
 ```
 
-### 3. Create a Branch
-```bash
-git checkout -b feature/awesome-new-feature
-# or
-git checkout -b fix/critical-bug
-```
+It takes a few minutes on the first run while the image downloads.
 
-## 📋 Development Guidelines
+[docs/development.md](docs/development.md) has the code layout, the test
+helpers, and how to regenerate the filter parser.
 
-### Code Style
-- Follow standard Go conventions (`gofmt`, `golint`)
-- Use meaningful variable and function names
-- Add comments for public functions and complex logic
-- Keep functions small and focused
+## What to work on
 
-### Testing
-- Write tests for new functionality
-- Ensure existing tests pass
-- Aim for good test coverage
-- Include both unit and integration tests
+[RELEASE-1.0.md](RELEASE-1.0.md) lists what is open and why, which is the most
+useful place to look. The larger items:
 
-### Documentation
-- Update relevant documentation for new features
-- Add examples in code comments
-- Update API documentation if needed
+- `POST /Bulk` (RFC 7644 §3.7)
+- Value paths — `emails[type eq "work"]` — in filters and PATCH paths
+- `attributes` and `excludedAttributes`
+- `POST /.search`
+- Health, readiness and metrics endpoints
+- A Dockerfile and a compose file
+- Password hashing
 
-## 🔄 Pull Request Process
+Issues labelled `good first issue` and `help wanted` are also a reasonable
+starting point. If you are planning something substantial, open an issue first
+so nobody duplicates the work.
 
-### 1. Before You Submit
-- [ ] Code follows the style guidelines
-- [ ] Tests are written and passing
-- [ ] Documentation is updated
-- [ ] Commit messages are clear and descriptive
+### Translations
 
-### 2. Creating the PR
-- Use a descriptive title
-- Fill out the PR template completely
-- Reference any related issues
-- Add screenshots if applicable
+Documentation is English-only. Earlier releases carried partial translations
+into six languages; every one of them fell behind the code, and documentation
+that has fallen behind is worse than none, because a reader follows it.
 
-### 3. Review Process
-- Maintainers will review your PR
-- Address any feedback promptly
-- Keep the conversation constructive
-- Be patient - reviews take time!
+If you want to maintain a translation, open an issue proposing it. What matters
+is a commitment to keep it in step with the English version, not the initial
+translation.
 
-## 🎯 Good First Issues
+## Reporting a bug
 
-Looking for a place to start? Check out issues labeled:
-- `good first issue` - Perfect for newcomers
-- `help wanted` - We need community help
-- `documentation` - Great for non-code contributions
-- `bug` - Fix existing problems
+Include the version or commit, what you expected, what happened, and the
+smallest way to reproduce it. Relevant configuration — the `SCIM_AUTH` scheme,
+the resource type, the schema — usually matters more than the stack trace.
 
-## 🏆 Recognition
+**Security issues do not go in the tracker.** See [SECURITY.md](SECURITY.md).
 
-We appreciate all contributions! Contributors are recognized in:
-- The project README
-- Release notes for significant contributions
-- GitHub contributor statistics
-- Special mentions in community updates
+## Making a change
 
-## 💬 Getting Help
+1. Branch from `main`.
+2. Write the change, and a test that fails without it.
+3. `make check`, and `make integration` if you touched storage, filters, or
+   startup.
+4. Open a pull request explaining what problem it solves.
 
-- 💭 [GitHub Discussions](https://github.com/arturoeanton/goscim/discussions) - General questions and ideas
-- 🐛 [GitHub Issues](https://github.com/arturoeanton/goscim/issues) - Bug reports and feature requests
-- 📚 [Documentation](docs/) - Comprehensive guides and references
+### Tests
 
-## 🌐 Community Guidelines
+A change to behaviour needs a test. Two things this project has learned the
+hard way and would rather not relearn:
 
-### Be Respectful
-- Use welcoming and inclusive language
-- Respect different viewpoints and experiences
-- Accept constructive criticism gracefully
-- Focus on what's best for the community
+**Drive the router, not the function.** The HTTP surface is the contract
+clients depend on, and it catches middleware ordering mistakes a direct call
+never will. `newTestServer(t)` gives you the real router over an in-memory
+store.
 
-### Be Helpful
-- Help newcomers and answer questions
-- Share knowledge and best practices
-- Provide constructive feedback
-- Celebrate others' contributions
+**Check that the test can fail.** Break the code on purpose and confirm the
+test goes red. The 1.0 work found two tests that passed for the wrong reason —
+one asserted a `200` from `sortBy` without checking the ordering, another
+exercised the JWT library's type safety rather than the algorithm allow-list it
+was named after. A green suite is not evidence until you have seen it go red.
 
-### Be Professional
-- Keep discussions on-topic
-- Avoid personal attacks or harassment
-- Follow the [GitHub Community Guidelines](https://docs.github.com/en/github/site-policy/github-community-guidelines)
+Anything touching the filter translation, bucket creation or query behaviour
+also belongs in the integration suite. The in-memory store deliberately does
+not evaluate filters, so unit tests cannot cover that path.
 
-## 🛠️ Development Setup Details
+### Style
 
-### Prerequisites
-- Go 1.16 or later
-- Docker and Docker Compose
-- Git
+- `gofmt`. CI checks it, generated parser files excepted.
+- Comments explain **why**, not what. If the reason is not obvious from the
+  code, write it down; if it is, do not.
+- Errors get context: `fmt.Errorf("creating bucket %q: %w", name, err)`.
+- Storage errors are normalised at the `Store` boundary — handlers never import
+  gocb.
+- Keep `name` and `endpoint` straight: `name` is the Couchbase bucket,
+  `endpoint` is the URL path.
 
-### Environment Setup
-```bash
-# Set up environment variables
-cp .env.example .env
-# Edit .env with your settings
+### Commits
 
-# Install development tools
-make setup-dev
+One logical change per commit, with a message that says what problem it solves
+rather than what lines moved. If the reasoning behind an approach is not
+obvious, the commit message is the right place for it.
 
-# Start development services
-make dev
-```
+## Pull requests
 
-### Testing
-```bash
-# Run all tests
-make test
+CI runs build, `gofmt`, `go vet`, the race-detector suite, coverage,
+`govulncheck` and a `go mod tidy` check, plus the integration suite. All of it
+has to pass.
 
-# Run tests with coverage
-make coverage
+In the description, say what problem the change solves, how you tested it, and
+anything you decided against and why. If it changes the wire contract, say so
+explicitly — that goes in the CHANGELOG.
 
-# Run specific tests
-go test ./scim/parser -v
+Review is a conversation. Expect questions; ask your own.
 
-# Run integration tests
-make test-integration
-```
+## Documentation
 
-### Building
-```bash
-# Build for current platform
-make build
+Code changes that alter behaviour need the documentation updated in the same
+pull request. Stale documentation is a bug, and it is the kind that survives
+for years.
 
-# Build for all platforms
-make build-all
+The English documentation under `docs/` is authoritative. `README.md` should
+stay short and accurate; the detail belongs in `docs/`.
 
-# Build Docker image
-make docker-build
-```
+## Code of conduct
 
-## 📁 Project Structure
+Be decent. Assume good faith, keep criticism about the work, and take
+disagreements to the technical merits. Harassment of any kind is not welcome
+here, and the [GitHub Community Guidelines](https://docs.github.com/en/site-policy/github-terms/github-community-guidelines)
+apply.
 
-```
-goscim/
-├── main.go              # Entry point
-├── scim/                # Core SCIM implementation
-│   ├── config.go       # Configuration management
-│   ├── types.go        # Data structures
-│   ├── op_*.go         # SCIM operations
-│   └── parser/         # Filter parser
-├── config/             # Configuration files
-│   ├── schemas/        # SCIM schemas
-│   └── resourceType/   # Resource definitions
-├── docs/               # Documentation
-├── test/               # Test files
-└── scripts/            # Build and utility scripts
-```
+## Getting help
 
-## 🔐 Security
-
-- Report security vulnerabilities privately to the maintainers
-- Don't open public issues for security problems
-- Follow responsible disclosure practices
-
-## 📄 License
-
-By contributing to GoSCIM, you agree that your contributions will be licensed under the MIT License.
-
-## 🎉 Thank You!
-
-Your contributions make GoSCIM better for everyone. Thank you for being part of our community!
-
----
-
-Questions? Feel free to reach out in [Discussions](https://github.com/arturoeanton/goscim/discussions) or open an issue. We're here to help! 😊
+- [Discussions](https://github.com/arturoeanton/goscim/discussions) for
+  questions and ideas
+- [Issues](https://github.com/arturoeanton/goscim/issues) for bugs and features
+- [docs/](docs/) for everything else

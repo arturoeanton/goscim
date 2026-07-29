@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **goscim** is a SCIM 2.0 (RFC 7643/7644) server in Go, backed by Couchbase. It is a small codebase (~1.4k lines of hand-written Go) whose defining trait is that **resource types, endpoints, storage buckets and validation are all driven by JSON config, not code**.
 
-Note: the README is aspirational marketing. Several features it advertises (OAuth 2.0/JWT auth, Prometheus metrics, health checks, docker-compose, webhooks) do **not** exist in the code. Trust the code over the README and over `docs/`.
+The README and `docs/` were rewritten for 1.0 and now describe what the code actually does; earlier versions advertised authentication, metrics, health checks and a compose file that did not exist. They are trustworthy as of 1.0 — keep them that way.
 
 ## Commands
 
@@ -122,4 +122,5 @@ Two mechanisms, both applied per attribute and both recursing into complex and m
 - Responses go through `scim/response.go`: `writeSCIM` sets the `application/scim+json` media type (gin only fills in `Content-Type` when it is unset, so setting it first wins), and `entityTag`/`checkPrecondition` implement `ETag`, `If-Match` and `If-None-Match` over `meta.version`. Errors go through `MakeError` / `MakeTypedError`, the latter carrying the RFC 7644 3.12 `scimType` keyword.
 - Config folder paths are hardcoded relative (`"config"`, `FolderBucketSetting = "config/bucketSettings/"`), so the process must start from the repo root.
 - Manual API testing lives in `httpexamples/*.http` (REST Client format).
-- Docs exist in `docs/{en,es,fr,gr,it,jp,pr,ch}/`; only `en` and `es` are complete.
+- Documentation is English-only, in `docs/`, and is authoritative: `getting-started`, `installation`, `configuration`, `api`, `schemas`, `architecture`, `security`, `operations`, `development`. The six partial translations were removed in 1.0 because every one had fallen behind the code.
+- A behaviour change needs the docs updated in the same commit. Several statements in this file and in `docs/` were false for months because a fix landed without them.
