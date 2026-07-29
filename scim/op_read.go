@@ -1,11 +1,10 @@
 package scim
 
 import (
+	"errors"
 	"log"
 	"net/http"
 
-	"github.com/couchbase/gocb/v2"
-	"github.com/couchbase/gocbcore/v10/memd"
 	"github.com/gin-gonic/gin"
 )
 
@@ -25,20 +24,15 @@ func Read(resource string) func(c *gin.Context) {
 }
 
 func getElementByID(c *gin.Context, id string, resourceType ResoruceType) (map[string]interface{}, error) {
-	bucket := Cluster.Bucket(resourceType.Name)
-	data, err := bucket.DefaultCollection().Get(id, &gocb.GetOptions{})
+	element, err := DB.Get(resourceType.Name, id)
 	if err != nil {
-		if se, ok := err.(*gocb.KeyValueError); ok {
-			if se.StatusCode == memd.StatusKeyNotFound {
-				MakeError(c, http.StatusNotFound, se.ErrorDescription)
-				return nil, err
-			}
+		if errors.Is(err, ErrNotFound) {
+			MakeError(c, http.StatusNotFound, "Resource "+id+" not found")
+			return nil, err
 		}
 		MakeError(c, http.StatusInternalServerError, err.Error())
 		log.Println(err.Error())
 		return nil, err
 	}
-	var resultCouchbase interface{}
-	data.Content(&resultCouchbase)
-	return resultCouchbase.(map[string]interface{}), nil
+	return element, nil
 }

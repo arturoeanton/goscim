@@ -10,7 +10,10 @@ import (
 
 func main() {
 
-	scim.InitDB()
+	if err := scim.InitDB(); err != nil {
+		log.Fatalln(">>>", err.Error())
+	}
+	defer scim.DB.Close()
 
 	log.Println("GoScim v0.1")
 	folderConfig := "config"
@@ -22,11 +25,8 @@ func main() {
 
 	r := gin.Default()
 	r.SetTrustedProxies([]string{"127.0.0.1"})
-	scim.ReadResourceType(folderConfig, r)
-	//r.POST(scim.PREFIX+"/Bulk", operations.Bulk) // Bulk: 		POST https://example.com/{v}/Bulk
-
-	r.GET("/ServiceProviderConfig", scim.DiscoveryServiceProviderConfig) // GET /ServiceProviderConfig -> Specification compliance, authentication schemes, data models.
-	r.GET("/ResourceTypes", scim.DiscoveryResourceTypes)                 // GET /ResourceTypes 		-> An endpoint used to discover the types of resources available.
-	r.GET("/Schemas", scim.DiscoverySchemas)                             // GET /Schemas 				-> Introspect resources and attribute extensions.
+	if _, err := scim.NewRouter(folderConfig, r); err != nil {
+		log.Fatalln(">>>", err.Error())
+	}
 	r.Run(port)
 }

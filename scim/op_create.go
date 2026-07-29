@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/couchbase/gocb/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -38,10 +37,7 @@ func Create(resource string) func(c *gin.Context) {
 		element["id"] = uuid.New().String()
 		element["meta"] = generateMeta(element, resourceType)
 
-		bucket := Cluster.Bucket(resourceType.Name)
-		collection := bucket.DefaultCollection()
-		_, err := collection.Upsert(element["id"].(string), element, &gocb.UpsertOptions{})
-		if err != nil {
+		if err := DB.Upsert(resourceType.Name, element["id"].(string), element); err != nil {
 			MakeError(c, http.StatusInternalServerError, err.Error())
 			log.Println(err.Error())
 			return

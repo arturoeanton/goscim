@@ -1,11 +1,10 @@
 package scim
 
 import (
+	"errors"
 	"log"
 	"net/http"
 
-	"github.com/couchbase/gocb/v2"
-	"github.com/couchbase/gocbcore/v10/memd"
 	"github.com/gin-gonic/gin"
 )
 
@@ -21,15 +20,10 @@ func Delete(resource string) func(c *gin.Context) {
 			return
 		}
 		resourceType := Resources[resource]
-		bucket := Cluster.Bucket(resourceType.Name)
-		collection := bucket.DefaultCollection()
-		_, err := collection.Remove(id, &gocb.RemoveOptions{})
-		if err != nil {
-			if se, ok := err.(*gocb.KeyValueError); ok {
-				if se.StatusCode == memd.StatusKeyNotFound {
-					MakeError(c, http.StatusNotFound, se.ErrorDescription)
-					return
-				}
+		if err := DB.Remove(resourceType.Name, id); err != nil {
+			if errors.Is(err, ErrNotFound) {
+				MakeError(c, http.StatusNotFound, "Resource "+id+" not found")
+				return
 			}
 			MakeError(c, http.StatusInternalServerError, err.Error())
 			log.Println(err.Error())

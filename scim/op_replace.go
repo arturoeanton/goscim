@@ -3,11 +3,10 @@ package scim
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 
-	"github.com/couchbase/gocb/v2"
-	"github.com/couchbase/gocbcore/v10/memd"
 	"github.com/gin-gonic/gin"
 )
 
@@ -44,15 +43,10 @@ func replace(c *gin.Context, resourceType ResoruceType, id string, element map[s
 	element["id"] = id
 	element["meta"] = updateMeta(meta, element, resourceType)
 
-	bucket := Cluster.Bucket(resourceType.Name)
-	collection := bucket.DefaultCollection()
-	_, err := collection.Replace(element["id"].(string), element, &gocb.ReplaceOptions{})
-	if err != nil {
-		if se, ok := err.(*gocb.KeyValueError); ok {
-			if se.StatusCode == memd.StatusKeyNotFound {
-				MakeError(c, http.StatusNotFound, se.ErrorDescription)
-				return
-			}
+	if err := DB.Replace(resourceType.Name, id, element); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			MakeError(c, http.StatusNotFound, "Resource "+id+" not found")
+			return
 		}
 		MakeError(c, http.StatusInternalServerError, err.Error())
 		log.Println(err.Error())
