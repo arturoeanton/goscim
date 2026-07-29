@@ -1,8 +1,8 @@
-// Generated from ScimFilter.g4 by ANTLR 4.7.
+// Code generated from ScimFilter.g4 by ANTLR 4.13.2. DO NOT EDIT.
 
 package parser // ScimFilter
 
-import "github.com/antlr/antlr4/runtime/Go/antlr"
+import "github.com/antlr4-go/antlr/v4"
 
 // BaseScimFilterListener is a complete listener for a parse tree produced by ScimFilterParser.
 type BaseScimFilterListener struct{}

@@ -208,14 +208,18 @@ Un release 1.0 no debería publicarse sin esto resuelto.
 16. **CI en GitHub Actions**: `build`, `vet`, `staticcheck`, `go test -race -cover`, `govulncheck` y `gosec` en cada PR. `.github/` hoy solo tiene plantillas.
 17. **Actualizar dependencias y toolchain** — *hecho en parte*. `go` subió de 1.16 a 1.25; gin 1.7.7 → 1.12.0, gocb 2.3.5 → 2.12.4, gocbcore 10.0.7 → 10.9.3, uuid 1.3.0 → 1.6.0, y grpc/quic-go/otel (transitivas de gocb y gin) a versiones sin vulnerabilidades alcanzables. `govulncheck` pasa de 25 vulnerabilidades en módulos requeridos a **0 alcanzables desde nuestro código**.
 
-    **Queda abierto**: el runtime de ANTLR sigue en la versión de 2022 porque el código generado es de ANTLR 4.7 y el runtime 4.10+ cambió el formato del ATN serializado (`DeserializeFromUInt16` ya no existe). Actualizarlo exige regenerar el parser, y eso necesita la herramienta ANTLR en Java. Migrar `ioutil` a `os` también sigue pendiente.
+    El parser se regeneró con ANTLR 4.13.2 y se migró al runtime mantenido `github.com/antlr4-go/antlr/v4` (el path viejo `github.com/antlr/antlr4/runtime/Go/antlr` está sin mantenimiento desde 2022). La herramienta ANTLR es Java y no hay JDK en la máquina, así que `make generate` la ejecuta en un contenedor y descarga el jar bajo demanda.
+
+    **Coste**: el generador Go de ANTLR emite código inalcanzable, y `go vet` propaga los diagnósticos de una dependencia a todo paquete que la importe, así que no se puede desactivar solo para el paquete generado. `make vet` desactiva el analizador `unreachable` en todo el proyecto; el resto siguen activos. `go vet ./...` a secas sale con 1.
+
+    **Queda abierto**: migrar `ioutil` a `os`.
 18. **Dockerfile multi-stage + docker-compose** con Couchbase y provisión automática del cluster. El README promete `docker-compose up -d` y el archivo no existe.
 19. **Configuración por entorno, no por CWD**: `SCIM_CONFIG_DIR` en lugar de las rutas relativas `"config"` y `"config/bucketSettings/"`, que obligan a lanzar el binario desde la raíz del repo.
 20. **Arranque y apagado de nivel producción**: `http.Server` con `ReadTimeout`/`WriteTimeout`/`IdleTimeout` (hoy `r.Run` no fija ninguno → slowloris), graceful shutdown por `SIGTERM`, y sustituir los `log.Fatalln` de `CreateBucket`/`InitDB` por errores propagados. Añadir `/healthz` y `/readyz`, logging estructurado con request-id, y métricas Prometheus — las tres cosas que el README ya anuncia.
 
 ### Extras de pulido (no bloqueantes, alto retorno)
 
-- **Higiene del repositorio**: `antlr-4.7-complete.jar` (2 MB) versionado, y `.antlr/` y `.scannerwork/` commiteados. Sacarlos y añadirlos a `.gitignore`; descargar ANTLR desde un `Makefile`.
+- ~~**Higiene del repositorio**: `antlr-4.7-complete.jar` (2 MB) versionado, y `.antlr/` y `.scannerwork/` commiteados.~~ **Hecho**: los tres fuera del repo y en `.gitignore`; el jar lo descarga `make generate`.
 - **Alinear README con la realidad**: OAuth 2.0/JWT, Prometheus, health checks, webhooks y la tabla de rendimiento («10.000 req/s») no tienen respaldo en el código. Para un 1.0 «premium», mover eso a un roadmap explícito.
 - **Corregir el typo `ResoruceType`** en un solo commit mecánico antes de congelar la API pública del paquete — después del 1.0 será un breaking change.
 - **Unificar el regex URN duplicado** entre `AddQuote`, `opPathTopathArray` y `splitURNPath` en un único helper.

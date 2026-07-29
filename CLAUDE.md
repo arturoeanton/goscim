@@ -68,23 +68,28 @@ Handlers never touch Couchbase directly. They go through the `Store` interface i
 
 ### Filter parser (`scim/parser/`)
 
-ANTLR 4.7 grammar in `ScimFilter.g4` at the repo root. **Everything in `scim/parser/` is generated except `scimfilter_listener_implement.go`, which is hand-written and must never be overwritten.** It holds `FilterToN1QL` and `AddQuote`.
+ANTLR grammar in `ScimFilter.g4` at the repo root, generated with ANTLR 4.13 against the `github.com/antlr4-go/antlr/v4` runtime. **Everything in `scim/parser/` is generated except `scimfilter_listener_implement.go` and `errors.go`, which are hand-written and must never be overwritten.** They hold `FilterToN1QL`, `Validate` and `AddQuote`.
 
-`FilterToN1QL(resourceName, filter)` returns *two* queries — the page query and a `count(*)` query — by walking the parse tree and doing **token-by-token string substitution** in `VisitTerminal`: `eq`→`=`, `co`/`sw`/`ew`→`LIKE` with `%` wrapping applied to the *next* token via the `prevOperation` field, `pr`→`IS NOT NULL`. There is no AST, no query builder, and **no parameter binding** — literals are concatenated into the SQL text. Parse errors are not checked, so malformed filters still emit a query.
+`FilterToN1QL(resourceName, filter)` returns *two* queries — the page query and a `count(*)` query — by walking the parse tree and doing **token-by-token string substitution** in `VisitTerminal`: `eq`→`=`, `co`/`sw`/`ew`→`LIKE` with `%` wrapping applied to the *next* token via the `prevOperation` field, `pr`→`IS NOT NULL`. There is no AST, no query builder, and **no parameter binding** — literals are concatenated into the SQL text, which is why the string-literal escaping in `escapeStringLiteral` and the identifier escaping in `AddQuote` matter. Syntax errors are collected by the listener in `errors.go` and returned as a `*SyntaxError`; a filter that does not parse is never translated.
 
-`AddQuote` backtick-quotes attribute paths and splits a URN prefix from the attribute path using a regex. `scim/op_update.go:opPathTopathArray` duplicates that same regex for PATCH paths — change one and you must change the other.
+`AddQuote` backtick-quotes attribute paths and splits a URN prefix from the attribute path using a regex. That same regex is duplicated in `scim/op_update.go:opPathTopathArray` for PATCH paths and in `scim/sortby.go:splitURNPath` for sortBy — change one and you must change all three.
 
 Regenerating (only needed when editing the `.g4`):
 ```bash
-java -jar antlr-4.7-complete.jar -Dlanguage=Go -o scim/parser ScimFilter.g4
+make generate   # runs ANTLR in a container, no JDK needed on the machine
+make check
 ```
-The `.g4` declares `language = Java` in its `options` block; the `-Dlanguage=Go` flag overrides it. Generated filenames must stay lowercase (`scimfilter_*.go`) to match what is committed.
+The jar is downloaded into `build/` on demand rather than committed. The generator writes only the four `scimfilter_{lexer,parser,listener,base_listener}.go` files and the `.tokens`; it does not touch the two hand-written files.
+
+The entry rule is `p.Start_()` — ANTLR suffixes it because `Start` collides with a method on the generated parser.
+
+`make vet` disables the `unreachable` analyser project-wide. The ANTLR Go target emits unreachable statements in the generated parser, and vet surfaces a dependency's diagnostics in every package importing it, so it cannot be disabled for that package alone. Plain `go vet ./...` therefore exits 1; use `make vet`.
 
 ### Request pipeline
 
 Create/Replace share one shape: unmarshal body → `ValidateFieldSchemas` (checks `schemas` array against `resourceType.Schema` + `schemaExtensions`) → `ValidateSchemas` (walks the core schema, then each extension object nested under its own URN key) → stamp `id`/`meta` → Couchbase upsert/replace.
 
-`scim/validate.go` is a **strict whitelist**: any key present in the payload that is not declared in the schema is a 400. It dispatches per SCIM type (`string`/`boolean`/`decimal`/`integer`/`dateTime`/`binary`/`reference`/`complex`); `binary` and `reference` are no-ops. It also **ignores the `multiValued` flag entirely**, so an attribute declared `multiValued: true` is still validated as if it were scalar.
+`scim/validate.go` is a **strict whitelist**: any key present in the payload that is not declared in the schema is a 400. `validateAttribute` decides array versus scalar from `Attribute.MultiValued` and `validateValue` checks one value against the declared type, recursing for complex ones; `binary` and `reference` carry no constraint beyond being JSON. At most one element of a multi-valued attribute may be `primary` (RFC 7643 §2.4).
 
 Update (PATCH) applies `add`/`replace`/`remove` operations by pointer-walking the stored document (`pointValue`), then funnels into the same `replace()` as PUT, so patched documents are re-validated.
 

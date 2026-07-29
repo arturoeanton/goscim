@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/antlr/antlr4/runtime/Go/antlr"
+	"github.com/antlr4-go/antlr/v4"
 )
 
 // ScimFilterListenerN1QL is
@@ -43,7 +43,7 @@ func FilterToN1QL(resourceName string, filter string) (string, string, error) {
 		return "SELECT * FROM `" + resourceName + "`", "SELECT count(*)  as count FROM `" + resourceName + "`", nil
 	}
 	p, collector := newFilterParser(filter)
-	tree := p.Start()
+	tree := p.Start_()
 	if len(collector.problems) > 0 {
 		return "", "", &SyntaxError{Filter: filter, Problems: collector.problems}
 	}
@@ -61,22 +61,22 @@ func (l *ScimFilterListenerN1QL) VisitTerminal(node antlr.TerminalNode) {
 	switch node.GetSymbol().GetTokenType() {
 	case ScimFilterParserATTRNAME:
 		{
-			payload, ok := node.GetParent().GetPayload().(*antlr.BaseParserRuleContext)
-			if ok {
-				_, ok := payload.BaseRuleContext.GetParent().(*ATTR_OPER_CRITERIAContext)
-				if !ok {
-					value = AddQuote(value)
-				} else {
-					if l.prevOperation == "co" {
-						value = "%" + value + "%"
-					}
-					if l.prevOperation == "sw" {
-						value = value + "%"
-					}
-					if l.prevOperation == "ew" {
-						value = "%" + value
-					}
+			// The same token type carries both attribute paths and the text
+			// inside a quoted value, told apart by where in the tree it sits.
+			// EnterCriteria/ExitCriteria already track that, which is both
+			// clearer and sturdier than reaching through the node's parent
+			// payload as this used to.
+			if l.inCriteria {
+				switch l.prevOperation {
+				case "co":
+					value = "%" + value + "%"
+				case "sw":
+					value = value + "%"
+				case "ew":
+					value = "%" + value
 				}
+			} else {
+				value = AddQuote(value)
 			}
 			l.prevOperation = ""
 		}

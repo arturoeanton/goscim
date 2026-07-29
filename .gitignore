@@ -23,3 +23,11 @@ node_modules
 .vscode/
 test/
 
+
+# Build artefacts and downloaded tooling
+build/
+*.jar
+
+# Generator and scanner leftovers
+.antlr/
+.scannerwork/

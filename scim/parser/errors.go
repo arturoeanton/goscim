@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/antlr/antlr4/runtime/Go/antlr"
+	"github.com/antlr4-go/antlr/v4"
 )
 
 // SyntaxError reports that a SCIM filter could not be parsed. ANTLR recovers
@@ -57,7 +57,7 @@ func Validate(filter string) error {
 		return nil
 	}
 	p, collector := newFilterParser(filter)
-	p.Start()
+	p.Start_()
 	if len(collector.problems) > 0 {
 		return &SyntaxError{Filter: filter, Problems: collector.problems}
 	}
