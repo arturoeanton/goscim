@@ -112,7 +112,7 @@ Fix: si la clave no está presente y `!ext.Required`, saltar; si está presente 
 
 ---
 
-### B6 · ALTO · Panic (500) en PATCH con un `path` inexistente
+### B6 · ALTO · Panic (500) en PATCH con un `path` inexistente — CORREGIDO
 `scim/op_update.go:76-86`
 
 `pointValue` camina el path haciendo `elemPoint.(map[string]interface{})[field]`. En cuanto un segmento no existe, `elemPoint` es `nil` y el siguiente type assert entra en panic.
