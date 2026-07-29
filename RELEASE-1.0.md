@@ -8,7 +8,7 @@ Estado de partida: `go build ./...`, `go vet ./...` y `go test ./...` pasan (3 t
 
 ## Parte 1 — 10 bugs
 
-### B1 · CRÍTICO · Operadores `gt`/`ge`/`lt`/`le` invertidos
+### B1 · CRÍTICO · Operadores `gt`/`ge`/`lt`/`le` invertidos — CORREGIDO
 `scim/parser/scimfilter_listener_implement.go:82-101`
 
 `ge` genera `>`, `gt` genera `>=`, `le` genera `<`, `lt` genera `<=`. Los cuatro están cruzados: cada búsqueda por rango devuelve el conjunto equivocado, silenciosamente.

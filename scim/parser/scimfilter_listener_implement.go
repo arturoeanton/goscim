@@ -81,28 +81,30 @@ func (l *ScimFilterListenerN1QL) VisitTerminal(node antlr.TerminalNode) {
 		}
 	case ScimFilterLexerGE:
 		{
-			value = ">"
+			value = ">="
 			l.prevOperation = "ge"
 		}
 	case ScimFilterLexerGT:
 		{
-			value = ">="
+			value = ">"
 			l.prevOperation = "gt"
 		}
 	case ScimFilterLexerLE:
 		{
-			value = "<"
+			value = "<="
 			l.prevOperation = "le"
 		}
 	case ScimFilterLexerLT:
 		{
-			value = "<="
+			value = "<"
 			l.prevOperation = "lt"
 		}
 
 	case ScimFilterLexerPR:
 		{
-			value = " IS NOT NULL"
+			// The grammar requires at least one WS token before PR, which is
+			// emitted verbatim, so this value must not add its own leading space.
+			value = "IS NOT NULL"
 			// IS NOT NULL - returns rows which contain a value (not NULL or missing).
 			// IS NOT MISSING - returns rows which contain a value or null.
 			// IS VALUED - synonym for IS NOT NULL
