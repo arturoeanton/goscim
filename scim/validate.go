@@ -1,6 +1,7 @@
 package scim
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -8,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-//ValidateFieldSchemas is ..
+// ValidateFieldSchemas is ..
 func ValidateFieldSchemas(c *gin.Context, element map[string]interface{}, resourceType ResoruceType) (bool, []string) {
 	schemas, ok := element["schemas"]
 	if !ok {
@@ -50,7 +51,7 @@ func ValidateFieldSchemas(c *gin.Context, element map[string]interface{}, resour
 	return true, elementSchemas
 }
 
-//ValidateSchemas is
+// ValidateSchemas is
 func ValidateSchemas(c *gin.Context, element map[string]interface{}, schemaNameCore string, schemas []SchemaExtension) (bool, map[string]interface{}) {
 	var flag bool
 	schema := Schemas[schemaNameCore]
@@ -105,54 +106,6 @@ func validateSchema(c *gin.Context, element map[string]interface{}, schema Schem
 	return true, element
 }
 
-func validateAttribute(c *gin.Context, element map[string]interface{}, attribute Attribute) (bool, map[string]interface{}) {
-
-	_, ok := element[attribute.Name]
-	if !ok && attribute.Required {
-		MakeError(c, http.StatusBadRequest, attribute.Name+" is required")
-		return false, nil
-	}
-	if !ok && !attribute.Required {
-		return true, element
-	}
-
-	var flag bool
-	flag, element = validateAttributeString(c, element, attribute)
-	if !flag {
-		return false, nil
-	}
-	flag, element = validateAttributeBoolean(c, element, attribute)
-	if !flag {
-		return false, nil
-	}
-	flag, element = validateAttributeDecimal(c, element, attribute)
-	if !flag {
-		return false, nil
-	}
-	flag, element = validateAttributeInteger(c, element, attribute)
-	if !flag {
-		return false, nil
-	}
-	flag, element = validateAttributeDateTime(c, element, attribute)
-	if !flag {
-		return false, nil
-	}
-	flag, element = validateAttributeBinary(c, element, attribute)
-	if !flag {
-		return false, nil
-	}
-
-	flag, element = validateAttributeReference(c, element, attribute)
-	if !flag {
-		return false, nil
-	}
-	flag, element = validateAttributeComplex(c, element, attribute)
-	if !flag {
-		return false, nil
-	}
-	return true, element
-}
-
 /*
    +-----------+-------------+-----------------------------------------+
    | SCIM Data | SCIM Schema | JSON Type                               |
@@ -178,115 +131,162 @@ func validateAttribute(c *gin.Context, element map[string]interface{}, attribute
    |           |             |                                         |
    | Complex   | "complex"   | Object per Section 4 of [RFC7159]       |
    +-----------+-------------+-----------------------------------------+
+
+   Orthogonally to the type, RFC 7643 2.2 says an attribute declared
+   "multiValued": true carries a JSON array whose elements each have the
+   attribute's type.
 */
-func validateAttributeString(c *gin.Context, element map[string]interface{}, attribute Attribute) (bool, map[string]interface{}) {
-	if attribute.Type == "string" {
-		if _, ok := element[attribute.Name].(string); !ok {
-			MakeError(c, http.StatusBadRequest, attribute.Name+" should be string")
+
+// validateAttribute checks one attribute of element in place, replacing its
+// value with the normalised form (integers become int64, complex values are
+// validated recursively).
+func validateAttribute(c *gin.Context, element map[string]interface{}, attribute Attribute) (bool, map[string]interface{}) {
+	raw, present := element[attribute.Name]
+	if !present {
+		if attribute.Required {
+			MakeTypedError(c, http.StatusBadRequest, "invalidValue", attribute.Name+" is required")
 			return false, nil
 		}
+		return true, element
 	}
-	return true, element
-}
 
-func validateAttributeBoolean(c *gin.Context, element map[string]interface{}, attribute Attribute) (bool, map[string]interface{}) {
-	if attribute.Type == "boolean" {
-		v, ok := element[attribute.Name].(bool)
+	if attribute.MultiValued {
+		items, ok := raw.([]interface{})
 		if !ok {
-			MakeError(c, http.StatusBadRequest, attribute.Name+" should be boolean")
+			MakeTypedError(c, http.StatusBadRequest, "invalidValue",
+				attribute.Name+" is multi-valued and should be an array")
 			return false, nil
 		}
-		element[attribute.Name] = bool(v)
-	}
-	return true, element
-}
-
-func validateAttributeDecimal(c *gin.Context, element map[string]interface{}, attribute Attribute) (bool, map[string]interface{}) {
-	if attribute.Type == "decimal" {
-		if _, ok := element[attribute.Name].(float64); !ok {
-			MakeError(c, http.StatusBadRequest, attribute.Name+" should be decimal")
-			return false, nil
-		}
-	}
-	return true, element
-}
-
-func validateAttributeInteger(c *gin.Context, element map[string]interface{}, attribute Attribute) (bool, map[string]interface{}) {
-	if attribute.Type == "integer" {
-		v, ok := element[attribute.Name].(float64)
-		if ok {
-			intValue := int64(v)
-			if (float64(intValue) - v) != 0 {
-				MakeError(c, http.StatusBadRequest, attribute.Name+" should be integer")
+		values := make([]interface{}, 0, len(items))
+		for i, item := range items {
+			value, ok := validateValue(c, item, attribute, fmt.Sprintf("%s[%d]", attribute.Name, i))
+			if !ok {
 				return false, nil
 			}
-		} else {
-			MakeError(c, http.StatusBadRequest, attribute.Name+" should be integer")
+			values = append(values, value)
+		}
+		if !validateSinglePrimary(c, values, attribute) {
 			return false, nil
 		}
-		element[attribute.Name] = int64(v)
+		element[attribute.Name] = values
+		return true, element
 	}
-	return true, element
-}
 
-func validateAttributeDateTime(c *gin.Context, element map[string]interface{}, attribute Attribute) (bool, map[string]interface{}) {
-	if strings.ToLower(attribute.Type) == "datetime" {
-		v, ok := element[attribute.Name].(string)
-		if !ok {
-			MakeError(c, http.StatusBadRequest, attribute.Name+" should be datetime")
-			return false, nil
-		}
-		_, err := time.Parse(time.RFC3339, string(v))
-		if err != nil {
-			MakeError(c, http.StatusBadRequest, attribute.Name+" should be datetime. "+err.Error())
-			return false, nil
-		}
-		//element[attribute.Name] = t.Unix()
+	value, ok := validateValue(c, raw, attribute, attribute.Name)
+	if !ok {
+		return false, nil
 	}
+	element[attribute.Name] = value
 	return true, element
 }
 
-func validateAttributeBinary(c *gin.Context, element map[string]interface{}, attribute Attribute) (bool, map[string]interface{}) {
-	/*if attribute.Type == "binary" {
-
-	}*/
-	return true, element
-}
-
-func validateAttributeReference(c *gin.Context, element map[string]interface{}, attribute Attribute) (bool, map[string]interface{}) {
-	/*if attribute.Type == "reference" {
-
-	}*/
-	return true, element
-}
-
-func validateAttributeComplex(c *gin.Context, element map[string]interface{}, attribute Attribute) (bool, map[string]interface{}) {
-
-	if attribute.Type == "complex" {
-		subElement, ok := element[attribute.Name].(map[string]interface{})
+// validateValue checks a single value against the attribute's declared type.
+// path names the value being checked for the error message, so an element of a
+// multi-valued attribute is reported as "emails[1]" rather than "emails".
+func validateValue(c *gin.Context, value interface{}, attribute Attribute, path string) (interface{}, bool) {
+	switch strings.ToLower(attribute.Type) {
+	case "string":
+		v, ok := value.(string)
 		if !ok {
-			MakeError(c, http.StatusBadRequest, attribute.Name+" should be complex")
-			return false, nil
+			return invalidValue(c, path+" should be string")
 		}
-		fields := make([]string, 0)
-		for _, attribute := range attribute.SubAttributes {
-			fields = append(fields, attribute.Name)
-			var flag bool
-			flag, subElement = validateAttribute(c, subElement, attribute)
-			if !flag {
-				return flag, nil
+		return v, true
+
+	case "boolean":
+		v, ok := value.(bool)
+		if !ok {
+			return invalidValue(c, path+" should be boolean")
+		}
+		return v, true
+
+	case "decimal":
+		v, ok := value.(float64)
+		if !ok {
+			return invalidValue(c, path+" should be decimal")
+		}
+		return v, true
+
+	case "integer":
+		v, ok := value.(float64)
+		if !ok {
+			return invalidValue(c, path+" should be integer")
+		}
+		if float64(int64(v))-v != 0 {
+			return invalidValue(c, path+" should be integer")
+		}
+		return int64(v), true
+
+	case "datetime":
+		v, ok := value.(string)
+		if !ok {
+			return invalidValue(c, path+" should be datetime")
+		}
+		if _, err := time.Parse(time.RFC3339, v); err != nil {
+			return invalidValue(c, path+" should be datetime. "+err.Error())
+		}
+		return v, true
+
+	case "complex":
+		sub, ok := value.(map[string]interface{})
+		if !ok {
+			return invalidValue(c, path+" should be complex")
+		}
+		fields := make([]string, 0, len(attribute.SubAttributes))
+		for _, subAttribute := range attribute.SubAttributes {
+			fields = append(fields, subAttribute.Name)
+			var ok bool
+			if ok, sub = validateAttribute(c, sub, subAttribute); !ok {
+				return nil, false
 			}
 		}
-
-		for key := range subElement {
-			if ContainsString(fields, key) {
-				continue
+		for key := range sub {
+			if !ContainsString(fields, key) {
+				return invalidValue(c, key+" no exist in attribute "+path)
 			}
-			MakeError(c, http.StatusBadRequest, key+" no exist in attribute "+attribute.Name)
-			return false, nil
 		}
+		return sub, true
 
-		element[attribute.Name] = subElement
+	default:
+		// "binary" and "reference" carry no extra constraint beyond being
+		// JSON strings, and an unknown type is left to the schema author.
+		return value, true
 	}
-	return true, element
+}
+
+// validateSinglePrimary enforces RFC 7643 2.4: at most one value of a
+// multi-valued attribute may be marked primary.
+func validateSinglePrimary(c *gin.Context, values []interface{}, attribute Attribute) bool {
+	if !hasSubAttribute(attribute, "primary") {
+		return true
+	}
+	found := false
+	for _, value := range values {
+		item, ok := value.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if primary, _ := item["primary"].(bool); primary {
+			if found {
+				MakeTypedError(c, http.StatusBadRequest, "invalidValue",
+					attribute.Name+" has more than one value marked primary")
+				return false
+			}
+			found = true
+		}
+	}
+	return true
+}
+
+func hasSubAttribute(attribute Attribute, name string) bool {
+	for _, subAttribute := range attribute.SubAttributes {
+		if subAttribute.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func invalidValue(c *gin.Context, message string) (interface{}, bool) {
+	MakeTypedError(c, http.StatusBadRequest, "invalidValue", message)
+	return nil, false
 }

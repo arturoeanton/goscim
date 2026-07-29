@@ -84,7 +84,7 @@ Fix: escapar el backslash al emitir el contenido de `criteria`, rastreando con `
 
 ---
 
-### B4 · CRÍTICO · Los atributos `multiValued` son inutilizables — no se puede crear un `User` estándar
+### B4 · CRÍTICO · Los atributos `multiValued` son inutilizables — no se puede crear un `User` estándar — CORREGIDO
 `scim/validate.go:105-152`
 
 `validateAttribute` nunca mira `Attribute.MultiValued`. Un atributo declarado `multiValued: true, type: complex` recibe un `[]interface{}` y `validateAttributeComplex` exige `map[string]interface{}`.
