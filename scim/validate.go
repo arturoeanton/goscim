@@ -60,14 +60,25 @@ func ValidateSchemas(c *gin.Context, element map[string]interface{}, schemaNameC
 		return flag, nil
 	}
 	for _, schemaExtension := range schemas {
-		var flag bool
-		schema := Schemas[schemaExtension.Schema]
-		elementExtension, ok := element[schemaExtension.Schema].(map[string]interface{})
+		raw, present := element[schemaExtension.Schema]
+		if !present {
+			// An extension the resource type declares as optional may simply
+			// be absent. Only a required one has to be there.
+			if schemaExtension.Required {
+				MakeTypedError(c, http.StatusBadRequest, "invalidValue",
+					schemaExtension.Schema+" is required")
+				return false, nil
+			}
+			continue
+		}
+		elementExtension, ok := raw.(map[string]interface{})
 		if !ok {
-			MakeError(c, http.StatusBadRequest, schemaExtension.Schema+" the extension should be object")
+			MakeTypedError(c, http.StatusBadRequest, "invalidValue",
+				schemaExtension.Schema+" the extension should be object")
 			return false, nil
 		}
-		flag, elementExtension = validateSchema(c, elementExtension, schema, true)
+		var flag bool
+		flag, elementExtension = validateSchema(c, elementExtension, Schemas[schemaExtension.Schema], true)
 		if !flag {
 			return flag, nil
 		}

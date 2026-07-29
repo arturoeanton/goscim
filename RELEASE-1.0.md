@@ -101,7 +101,7 @@ Fix: en `validateAttribute`, si `attribute.MultiValued` entonces exigir array y 
 
 ---
 
-### B5 · ALTO · Las extensiones opcionales se comportan como obligatorias
+### B5 · ALTO · Las extensiones opcionales se comportan como obligatorias — CORREGIDO
 `scim/validate.go:63-70`
 
 `ValidateSchemas` itera **todas** las `schemaExtensions` del resource type y hace `element[ext.Schema].(map[string]interface{})` sin mirar `ext.Required`. Si la extensión no viene en el payload, el type assert falla y responde 400.
