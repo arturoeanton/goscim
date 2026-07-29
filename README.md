@@ -204,7 +204,7 @@ Special thanks to all our contributors! Every contribution matters, from bug rep
 
 ## 🔧 Tech Stack
 
-- **Language**: Go 1.16+
+- **Language**: Go 1.25+
 - **Database**: Couchbase (NoSQL)
 - **Web Framework**: Gin
 - **Query Parser**: ANTLR v4
