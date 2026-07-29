@@ -30,7 +30,7 @@ func NewRouter(folderConfig string, r *gin.Engine, authenticator Authenticator) 
 	discovery.GET("/Schemas", DiscoverySchemas)
 	discovery.GET("/Schemas/:id", DiscoverySchema)
 
-	scim := r.Group(PREFIX, Authenticate(authenticator))
+	scim := r.Group(PREFIX, LimitBody(DefaultMaxBodyBytes), Authenticate(authenticator))
 	if err := ReadResourceType(folderConfig, scim); err != nil {
 		return nil, err
 	}

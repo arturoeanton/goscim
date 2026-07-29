@@ -1,7 +1,6 @@
 package scim
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"log"
@@ -19,10 +18,12 @@ func Replace(resource string) func(c *gin.Context) {
 			return
 		}
 		resourceType := Resources[resource]
+		raw, ok := readBody(c)
+		if !ok {
+			return
+		}
 		var element map[string]interface{}
-		buf := new(bytes.Buffer)
-		buf.ReadFrom(c.Request.Body)
-		json.Unmarshal(buf.Bytes(), &element)
+		json.Unmarshal(raw, &element)
 		replace(c, resourceType, id, element)
 	}
 }

@@ -1,7 +1,6 @@
 package scim
 
 import (
-	"bytes"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -19,11 +18,13 @@ func Create(resource string) func(c *gin.Context) {
 			return
 		}
 		resourceType := Resources[resource]
+		raw, ok := readBody(c)
+		if !ok {
+			return
+		}
 		var element map[string]interface{}
-		buf := new(bytes.Buffer)
-		buf.ReadFrom(c.Request.Body)
-		json.Unmarshal(buf.Bytes(), &element)
-		ok, _ := ValidateFieldSchemas(c, element, resourceType)
+		json.Unmarshal(raw, &element)
+		ok, _ = ValidateFieldSchemas(c, element, resourceType)
 		if !ok {
 			return
 		}

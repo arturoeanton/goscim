@@ -1,7 +1,6 @@
 package scim
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -30,10 +29,12 @@ func Update(resource string) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		resourceType := Resources[resource]
+		raw, ok := readBody(c)
+		if !ok {
+			return
+		}
 		var patchRequest Patch
-		buf := new(bytes.Buffer)
-		buf.ReadFrom(c.Request.Body)
-		if err := json.Unmarshal(buf.Bytes(), &patchRequest); err != nil {
+		if err := json.Unmarshal(raw, &patchRequest); err != nil {
 			MakeTypedError(c, http.StatusBadRequest, "invalidSyntax", err.Error())
 			return
 		}

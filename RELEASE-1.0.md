@@ -229,7 +229,9 @@ Un release 1.0 no debería publicarse sin esto resuelto.
     **Queda abierto**: migrar `ioutil` a `os`.
 18. **Dockerfile multi-stage + docker-compose** con Couchbase y provisión automática del cluster. El README promete `docker-compose up -d` y el archivo no existe.
 19. **Configuración por entorno, no por CWD**: `SCIM_CONFIG_DIR` en lugar de las rutas relativas `"config"` y `"config/bucketSettings/"`, que obligan a lanzar el binario desde la raíz del repo.
-20. **Arranque y apagado de nivel producción**: `http.Server` con `ReadTimeout`/`WriteTimeout`/`IdleTimeout` (hoy `r.Run` no fija ninguno → slowloris), graceful shutdown por `SIGTERM`, y sustituir los `log.Fatalln` de `CreateBucket`/`InitDB` por errores propagados. Añadir `/healthz` y `/readyz`, logging estructurado con request-id, y métricas Prometheus — las tres cosas que el README ya anuncia.
+20. **Arranque y apagado de nivel producción** — *hecho en parte*. `http.Server` con `ReadHeaderTimeout`, `ReadTimeout`, `WriteTimeout`, `IdleTimeout` y `MaxHeaderBytes`; apagado limpio por `SIGINT`/`SIGTERM` drenando hasta 20 s; `SCIM_CONFIG_DIR` para no depender del directorio de trabajo; y `SCIM_TRUSTED_PROXIES` en vez de tener `127.0.0.1` fijo en el código. Los `log.Fatalln` de la capa de datos ya son errores propagados.
+
+    **Queda abierto**: `/healthz`, `/readyz`, logging estructurado con request-id y métricas Prometheus.
 
 ### Extras de pulido (no bloqueantes, alto retorno)
 
