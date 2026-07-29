@@ -22,16 +22,26 @@ filter=title pr or userType eq "Intern"
 filter=userType eq "Employee" and (emails co "example.com" or emails co "example.org")
 */
 func TestParser(t *testing.T) {
-	query, _, _ := parser.FilterToN1QL("User", "urn:ietf:params:scim:schemas:extension:one:2.0:User.userType eq \"Employee\" and (emails sw \"example.com\" or a.a.emails sw \"example.org\")")
-	if query != "SELECT * FROM `User` WHERE `urn:ietf:params:scim:schemas:extension:one:2.0:User`.`userType` = \"Employee\" and (`emails` LIKE \"example.com%\" or `a`.`a`.`emails` LIKE \"example.org%\")" {
-		t.Errorf("Query is %s", query)
+	query, err := parser.FilterToN1QL("User", "urn:ietf:params:scim:schemas:extension:one:2.0:User.userType eq \"Employee\" and (emails sw \"example.com\" or a.a.emails sw \"example.org\")")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "SELECT * FROM `User` WHERE `urn:ietf:params:scim:schemas:extension:one:2.0:User`.`userType` = $1 and (`emails` LIKE $2 ESCAPE \"\\\\\" or `a`.`a`.`emails` LIKE $3 ESCAPE \"\\\\\")"
+	if query.Page != want {
+		t.Errorf("Query is %s", query.Page)
 	}
 }
 
 func TestParser2(t *testing.T) {
-	query, _, _ := parser.FilterToN1QL("User", "urn:ietf:params:scim:schemas:extension:one:2.0:Element.boolean eq true")
-	if query != "SELECT * FROM `User` WHERE `urn:ietf:params:scim:schemas:extension:one:2.0:Element`.`boolean` = true" {
-		t.Errorf("Query is %s", query)
+	query, err := parser.FilterToN1QL("User", "urn:ietf:params:scim:schemas:extension:one:2.0:Element.boolean eq true")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if query.Page != "SELECT * FROM `User` WHERE `urn:ietf:params:scim:schemas:extension:one:2.0:Element`.`boolean` = $1" {
+		t.Errorf("Query is %s", query.Page)
+	}
+	if len(query.Params) != 1 || query.Params[0] != true {
+		t.Errorf("Params = %#v", query.Params)
 	}
 }
 

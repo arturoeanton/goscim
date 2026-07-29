@@ -28,16 +28,16 @@ func TestMalformedFiltersAreRejected(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			page, count, err := parser.FilterToN1QL("User", tc.filter)
+			query, err := parser.FilterToN1QL("User", tc.filter)
 			if err == nil {
-				t.Fatalf("filter accepted, produced: %s", page)
+				t.Fatalf("filter accepted, produced: %s", query.Page)
 			}
 			var syntaxErr *parser.SyntaxError
 			if !asSyntaxError(err, &syntaxErr) {
 				t.Fatalf("error is %T, want *parser.SyntaxError", err)
 			}
-			if page != "" || count != "" {
-				t.Errorf("a rejected filter must not yield queries: %q / %q", page, count)
+			if query.Page != "" || query.Count != "" || query.Params != nil {
+				t.Errorf("a rejected filter must not yield a query: %#v", query)
 			}
 			if syntaxErr.Filter != tc.filter {
 				t.Errorf("the error should carry the offending filter, carries %q", syntaxErr.Filter)
@@ -72,11 +72,11 @@ func TestWellFormedFiltersAreAccepted(t *testing.T) {
 
 	for _, filter := range cases {
 		t.Run(filter, func(t *testing.T) {
-			page, count, err := parser.FilterToN1QL("User", filter)
+			query, err := parser.FilterToN1QL("User", filter)
 			if err != nil {
 				t.Fatalf("valid filter rejected: %v", err)
 			}
-			if page == "" || count == "" {
+			if query.Page == "" || query.Count == "" {
 				t.Errorf("empty queries for %q", filter)
 			}
 			if err := parser.Validate(filter); err != nil {

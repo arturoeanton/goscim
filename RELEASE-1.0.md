@@ -80,7 +80,7 @@ Además rompe el caso legítimo: buscar un valor con backslash (una ruta Windows
 
 Fix: escapar el backslash al emitir el contenido de `criteria`, rastreando con `EnterCriteria`/`ExitCriteria` cuándo los terminales pertenecen a un valor. Un test de propiedad comprueba que ninguna consulta generada termina dentro de un literal sin cerrar.
 
-**Queda abierto**: dentro de `co`/`sw`/`ew`, los caracteres `%` y `_` del valor se interpretan como comodines LIKE, así que buscar un `%` literal devuelve todo. Se arregla junto con la mejora 4 (parámetros ligados), que elimina toda esta clase de problema de raíz en vez de escapar caso por caso.
+~~**Queda abierto**~~ **Cerrado con la mejora 4**: los valores van como parámetros ligados y los comodines LIKE del cliente se escapan con una cláusula `ESCAPE`.
 
 ---
 
@@ -187,7 +187,11 @@ Un release 1.0 no debería publicarse sin esto resuelto.
 1. **Middleware de autenticación** con estrategias intercambiables: Bearer/JWT (JWKS, validación de `iss`/`aud`/`exp`) y HTTP Basic para desarrollo. Poner los seis verbos detrás del middleware.
 2. **Extraer roles del token** y eliminar los dos arrays hardcodeados; propagar el sujeto por `context` para autorización y auditoría.
 3. **Aplicar `$writer`** en create/replace/update y `$remove` (o `$writer`) en delete — hoy son tres TODO que dejan el modelo de permisos a medias.
-4. **Consultas parametrizadas** con `gocb.QueryOptions{PositionalParameters: ...}` en toda la ruta de búsqueda; ningún literal debe concatenarse en el N1QL.
+4. ~~**Consultas parametrizadas**~~ **Hecho**. `FilterToN1QL` devuelve texto con marcadores `$1, $2...` y la lista de valores; nada del cliente se concatena. Cadenas, números y booleanos van ligados, con el tipo correcto para que la comparación siga siendo numérica o booleana.
+
+    Un test de propiedad comprueba que **ningún valor del filtro aparece en el texto de la consulta**, para cualquier operador y con valores que incluyen backslash, backtick, `;`, `--`, `%` y `_`. Eso convierte la inyección en imposible en vez de en difícil: el escapado se puede equivocar caso a caso, esto no.
+
+    Cierra además el punto que quedaba abierto de B11: los `%` y `_` del valor se escapan y la consulta lleva `ESCAPE "\\"`, verificado contra Couchbase real. Buscar un `%` literal ya no devuelve todo.
 5. **TLS configurable de verdad**: `SCIM_COUCHBASE_TLS_SKIP_VERIFY` (por defecto `false`) y ruta de CA; permitir `couchbase://` para desarrollo local. Añadir TLS al listener HTTP.
 6. **Rate limiting y límite de tamaño de body** (`http.MaxBytesReader`); hoy un POST de 1 GB se lee entero a memoria con `buf.ReadFrom(c.Request.Body)`.
 7. ~~**Unicidad de atributos**~~ **Hecho**. `uniqueness: server|global` se aplica en create, replace y patch, con `409` y `scimType: uniqueness`. Un recurso conserva su propio valor sin colisionar consigo mismo, y borrar libera el valor. Funciona también dentro de extensiones.

@@ -156,7 +156,7 @@ func (s *CouchbaseStore) Remove(bucket, id string) error {
 
 // Search implements Store by translating the SCIM filter to N1QL.
 func (s *CouchbaseStore) Search(q SearchQuery) (int, []map[string]interface{}, error) {
-	queryPage, queryCount, err := parser.FilterToN1QL(q.Bucket, q.Filter)
+	query, err := parser.FilterToN1QL(q.Bucket, q.Filter)
 	if err != nil {
 		return 0, nil, fmt.Errorf("%w: %s", ErrInvalidFilter, err)
 	}
@@ -179,13 +179,17 @@ func (s *CouchbaseStore) Search(q SearchQuery) (int, []map[string]interface{}, e
 		sortOrder = "DESC"
 	}
 
-	queryPage += "\nORDER BY " + sortBy + " " + sortOrder
-	queryPage += "\nOFFSET " + strconv.Itoa(q.Offset)
-	queryPage += "\nLIMIT " + strconv.Itoa(q.Limit)
+	queryPage := query.Page +
+		"\nORDER BY " + sortBy + " " + sortOrder +
+		"\nOFFSET " + strconv.Itoa(q.Offset) +
+		"\nLIMIT " + strconv.Itoa(q.Limit)
 
-	options := &gocb.QueryOptions{ScanConsistency: queryScanConsistency()}
+	options := &gocb.QueryOptions{
+		ScanConsistency:      queryScanConsistency(),
+		PositionalParameters: query.Params,
+	}
 
-	rowsCount, err := s.cluster.Query(queryCount, options)
+	rowsCount, err := s.cluster.Query(query.Count, options)
 	if err != nil {
 		return 0, nil, err
 	}
