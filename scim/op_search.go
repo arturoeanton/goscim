@@ -9,6 +9,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// maxSearchCount bounds how many resources one page may carry, whatever the
+// client asks for. It is also what the ServiceProviderConfig advertises as
+// filter.maxResults.
+const maxSearchCount = 200
+
 // Search is 	GET https://example.com/{v}/{resource}?ﬁlter={attribute}{op}{value}&sortBy={attributeName}&sortOrder={ascending|descending}
 func Search(resource string) func(c *gin.Context) {
 	return func(c *gin.Context) {
@@ -37,11 +42,19 @@ func Search(resource string) func(c *gin.Context) {
 		if result.StartIndex < 1 {
 			result.StartIndex = 1
 		}
-		result.ItemsPerPage, err = strconv.Atoi(count)
+		requestedCount, err := strconv.Atoi(count)
 		if err != nil {
 			MakeError(c, http.StatusBadRequest, err.Error())
 			log.Println(err.Error())
 			return
+		}
+		// A client asking for everything must not be able to make the server
+		// materialise an unbounded page.
+		if requestedCount < 0 {
+			requestedCount = 0
+		}
+		if requestedCount > maxSearchCount {
+			requestedCount = maxSearchCount
 		}
 
 		sortBy, err = NormalizeSortBy(resourceType, sortBy)
@@ -56,7 +69,7 @@ func Search(resource string) func(c *gin.Context) {
 			SortBy:         sortBy,
 			SortDescending: sortOrder == "descending",
 			Offset:         result.StartIndex - 1,
-			Limit:          result.ItemsPerPage,
+			Limit:          requestedCount,
 		})
 		if err != nil {
 			if errors.Is(err, ErrInvalidFilter) {

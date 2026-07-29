@@ -40,6 +40,10 @@ func (p *Principal) HasRole(role string) bool {
 type Authenticator interface {
 	// Challenge is the WWW-Authenticate value sent with a 401.
 	Challenge() string
+	// AuthenticationSchemes describes this scheme for the
+	// ServiceProviderConfig, so discovery reports what is actually in force
+	// rather than a hand-maintained list.
+	AuthenticationSchemes() []AuthenticationScheme
 	Authenticate(r *http.Request) (*Principal, error)
 }
 
@@ -86,6 +90,13 @@ type AnonymousAuthenticator struct {
 
 // Challenge implements Authenticator. There is nothing to challenge for.
 func (a *AnonymousAuthenticator) Challenge() string { return "" }
+
+// AuthenticationSchemes implements Authenticator. An unauthenticated server
+// advertises none, which is the honest answer even though RFC 7643 5 expects
+// the list to be populated.
+func (a *AnonymousAuthenticator) AuthenticationSchemes() []AuthenticationScheme {
+	return []AuthenticationScheme{}
+}
 
 // Authenticate implements Authenticator.
 func (a *AnonymousAuthenticator) Authenticate(*http.Request) (*Principal, error) {

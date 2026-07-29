@@ -237,3 +237,29 @@ func TestEmptySearchStillCarriesTheListFields(t *testing.T) {
 		t.Errorf("Resources = %#v, want an empty array", body["Resources"])
 	}
 }
+
+// A client asking for an unbounded page must not get one: the cap is also what
+// the ServiceProviderConfig advertises as filter.maxResults.
+func TestSearchCountIsCapped(t *testing.T) {
+	r, _ := newTestServer(t)
+	for i := 0; i < 3; i++ {
+		createElement(t, r, string(rune('A'+i)), i)
+	}
+
+	w := do(t, r, http.MethodGet, elementsPath+"?count=100000", "")
+	requireStatus(t, w, http.StatusOK)
+	if got := decode(t, w)["itemsPerPage"]; got != float64(3) {
+		t.Errorf("itemsPerPage = %v", got)
+	}
+
+	// A negative count is treated as zero rather than reaching the query.
+	w = do(t, r, http.MethodGet, elementsPath+"?count=-5", "")
+	requireStatus(t, w, http.StatusOK)
+	body := decode(t, w)
+	if body["itemsPerPage"] != float64(0) {
+		t.Errorf("itemsPerPage = %v for a negative count", body["itemsPerPage"])
+	}
+	if body["totalResults"] != float64(3) {
+		t.Errorf("totalResults = %v, the count must not change the total", body["totalResults"])
+	}
+}

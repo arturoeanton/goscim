@@ -80,6 +80,17 @@ func NewJWTAuthenticatorFromEnv() (*JWTAuthenticator, error) {
 // Challenge implements Authenticator.
 func (a *JWTAuthenticator) Challenge() string { return `Bearer realm="SCIM"` }
 
+// AuthenticationSchemes implements Authenticator.
+func (a *JWTAuthenticator) AuthenticationSchemes() []AuthenticationScheme {
+	return []AuthenticationScheme{{
+		Type:        "oauthbearertoken",
+		Name:        "OAuth Bearer Token",
+		Description: "Authentication scheme using the OAuth Bearer Token Standard",
+		SpecURI:     "http://www.rfc-editor.org/info/rfc6750",
+		Primary:     true,
+	}}
+}
+
 // Authenticate implements Authenticator.
 func (a *JWTAuthenticator) Authenticate(r *http.Request) (*Principal, error) {
 	const prefix = "bearer "

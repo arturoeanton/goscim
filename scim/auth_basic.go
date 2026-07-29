@@ -69,6 +69,17 @@ func NewBasicAuthenticatorFromEnv() (*BasicAuthenticator, error) {
 // Challenge implements Authenticator.
 func (a *BasicAuthenticator) Challenge() string { return `Basic realm="SCIM"` }
 
+// AuthenticationSchemes implements Authenticator.
+func (a *BasicAuthenticator) AuthenticationSchemes() []AuthenticationScheme {
+	return []AuthenticationScheme{{
+		Type:        "httpbasic",
+		Name:        "HTTP Basic",
+		Description: "Authentication scheme using the HTTP Basic Standard",
+		SpecURI:     "http://www.rfc-editor.org/info/rfc2617",
+		Primary:     true,
+	}}
+}
+
 // Authenticate implements Authenticator.
 func (a *BasicAuthenticator) Authenticate(r *http.Request) (*Principal, error) {
 	username, password, ok := r.BasicAuth()

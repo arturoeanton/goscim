@@ -341,16 +341,6 @@ func TestSearchElementsInvalidParameters(t *testing.T) {
 	}
 }
 
-func TestDiscoveryNotImplemented(t *testing.T) {
-	r, _ := newTestServer(t)
-	// TODO(B9/improvement 8): all three must serve the real configuration and
-	// hang off /scim/v2.
-	for _, path := range []string{"/ServiceProviderConfig", "/ResourceTypes", "/Schemas"} {
-		w := do(t, r, http.MethodGet, path, "")
-		requireStatus(t, w, http.StatusNotImplemented)
-	}
-}
-
 func TestRoutesRegisteredForEveryResourceType(t *testing.T) {
 	r, _ := newTestServer(t)
 	routes := make(map[string]bool)

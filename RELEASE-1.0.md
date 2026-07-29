@@ -194,7 +194,11 @@ Un release 1.0 no debería publicarse sin esto resuelto.
 
 ### Cumplimiento SCIM
 
-8. **Implementar los tres endpoints de discovery** bajo `/scim/v2`, sirviendo `config/serviceProviderConfig/sp_config.json` (que ya existe sin usarse) y proyectando `Schemas`/`Resources` en memoria. Es lo primero que consulta cualquier IdP.
+8. ~~**Implementar los tres endpoints de discovery**~~ **Hecho**. `/ServiceProviderConfig`, `/ResourceTypes`, `/ResourceTypes/{id}`, `/Schemas` y `/Schemas/{id}`, bajo `/scim/v2` y sin exigir credenciales (RFC 7644 §2: un cliente los necesita justamente para saber cómo autenticarse).
+
+    El `ServiceProviderConfig` se **deriva del código**, no del fichero. El `sp_config.json` que se distribuía declaraba `bulk.supported: true`, que es falso — y un config que puede desviarse de la implementación es peor que no tenerlo, porque el cliente se lo cree. Del fichero solo queda `documentationUri`. Los `authenticationSchemes` salen del `Authenticator` que esté activo, así que tampoco pueden desviarse.
+
+    `/Schemas` oculta `$reader` y `$writer`: son la extensión de autorización de este proyecto, no algo que un cliente deba consumir.
 9. **Implementar `/Bulk`** (RFC 7644 §3.7) con `failOnErrors`, `bulkId` y resolución de referencias, o retirarlo del README hasta que exista.
 10. **`POST /.search`** en cada resource type y a nivel raíz.
 11. **`attributes` / `excludedAttributes`** en GET y search, más el atributo `returned: never` (hoy `password` se devuelve en las respuestas).
