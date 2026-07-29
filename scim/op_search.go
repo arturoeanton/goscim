@@ -44,6 +44,12 @@ func Search(resource string) func(c *gin.Context) {
 			return
 		}
 
+		sortBy, err = NormalizeSortBy(resourceType, sortBy)
+		if err != nil {
+			MakeTypedError(c, http.StatusBadRequest, "invalidValue", err.Error())
+			return
+		}
+
 		total, resources, err := DB.Search(SearchQuery{
 			Bucket:         resourceType.Name,
 			Filter:         filter,

@@ -45,7 +45,7 @@ Fix: `ErrorListener` que acumule errores; si hay alguno, `FilterToN1QL` devuelve
 
 ---
 
-### B3 · CRÍTICO · Inyección N1QL vía `sortBy` (backtick no escapado)
+### B3 · CRÍTICO · Inyección N1QL vía `sortBy` (backtick no escapado) — CORREGIDO
 `scim/op_search.go:26-37` + `AddQuote`
 
 `AddQuote` envuelve el path en backticks pero no escapa los backticks del input. El saneo posterior solo hace `Trim(" ")` y elimina `;`.

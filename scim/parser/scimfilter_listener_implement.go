@@ -123,13 +123,29 @@ func (l *ScimFilterListenerN1QL) VisitTerminal(node antlr.TerminalNode) {
 	l.query = l.query + value
 }
 
+// AddQuote turns a SCIM attribute path into a backtick-quoted N1QL identifier,
+// splitting off a schema URN prefix when there is one.
+//
+// Every segment is escaped: a backtick inside an identifier is written twice,
+// so a value carrying one cannot close the quoting and append its own N1QL.
+// Callers are still expected to validate the path against the schema before
+// getting here — this is the second line of defence, not the first.
 func AddQuote(value string) string {
 	re := regexp.MustCompile(`^(urn[:\w\.\_]*)(:-*)?(:[\w]*)(\.)(.*)$`)
 	urn := ""
 	if re.MatchString(value) {
-		urn = "`" + re.ReplaceAllString(value, `${1}${2}${3}`) + "`."
+		urn = "`" + escapeIdentifier(re.ReplaceAllString(value, `${1}${2}${3}`)) + "`."
 	}
 	path := re.ReplaceAllString(value, `${5}`)
-	path = urn + "`" + strings.Join(strings.Split(path, "."), "`.`") + "`"
-	return path
+	segments := strings.Split(path, ".")
+	for i, segment := range segments {
+		segments[i] = escapeIdentifier(segment)
+	}
+	return urn + "`" + strings.Join(segments, "`.`") + "`"
+}
+
+// escapeIdentifier doubles backticks so they are literal inside a quoted N1QL
+// identifier.
+func escapeIdentifier(value string) string {
+	return strings.ReplaceAll(value, "`", "``")
 }
