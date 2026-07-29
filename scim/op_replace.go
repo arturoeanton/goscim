@@ -27,13 +27,21 @@ func Replace(resource string) func(c *gin.Context) {
 	}
 }
 func replace(c *gin.Context, resourceType ResoruceType, id string, element map[string]interface{}) {
+	// The previous meta comes from the stored resource, never from the
+	// request: RFC 7644 does not require a client to echo meta back on a PUT,
+	// and meta.created is not the client's to set.
+	stored, err := getElementByID(c, id, resourceType)
+	if err != nil {
+		return
+	}
+	previousMeta, _ := stored["meta"].(map[string]interface{})
+
 	ok, _ := ValidateFieldSchemas(c, element, resourceType)
 	if !ok {
 		return
 	}
 	//TODO: Validate _write of all fields of element
 
-	meta := element["meta"].(map[string]interface{})
 	delete(element, "id")
 	delete(element, "meta")
 	ok, element = ValidateSchemas(c, element, resourceType.Schema, resourceType.SchemaExtensions)
@@ -41,7 +49,7 @@ func replace(c *gin.Context, resourceType ResoruceType, id string, element map[s
 		return
 	}
 	element["id"] = id
-	element["meta"] = updateMeta(meta, element, resourceType)
+	element["meta"] = updateMeta(previousMeta, element, resourceType)
 
 	if err := DB.Replace(resourceType.Name, id, element); err != nil {
 		if errors.Is(err, ErrNotFound) {

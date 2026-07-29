@@ -125,7 +125,7 @@ Fix: `pointValue` devuelve `(lastField, parent, error)`; sin panic. Implementar 
 
 ---
 
-### B7 · ALTO · Panic (500) en PUT sin `meta` en el body
+### B7 · ALTO · Panic (500) en PUT sin `meta` en el body — CORREGIDO
 `scim/op_replace.go:37`
 
 ```go
