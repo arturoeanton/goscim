@@ -25,7 +25,7 @@ Fix: intercambiar los cuatro `value =` y añadir un test de tabla por operador.
 
 ---
 
-### B2 · CRÍTICO · Inyección N1QL vía `filter` (los errores de parseo se ignoran)
+### B2 · CRÍTICO · Inyección N1QL vía `filter` (los errores de parseo se ignoran) — CORREGIDO
 `scim/parser/scimfilter_listener_implement.go:22-30`
 
 `FilterToN1QL` no instala un `ErrorListener` ni consulta `p.GetNumberOfSyntaxErrors()`. ANTLR reporta el error por stderr, se recupera, y el walker **emite igual todos los tokens** concatenándolos en el SQL.

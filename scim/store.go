@@ -7,6 +7,9 @@ var (
 	ErrNotFound = errors.New("scim: resource not found")
 	// ErrFilterUnsupported is returned by a Store that cannot evaluate SCIM filters.
 	ErrFilterUnsupported = errors.New("scim: this store cannot evaluate filters")
+	// ErrInvalidFilter is returned when the client's filter does not parse. It
+	// is a client error, so handlers must map it to 400 and not 500.
+	ErrInvalidFilter = errors.New("scim: invalid filter")
 )
 
 // SearchQuery describes a paginated, sorted search over a single resource bucket.

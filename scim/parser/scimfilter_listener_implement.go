@@ -14,19 +14,24 @@ type ScimFilterListenerN1QL struct {
 	prevOperation string
 }
 
-// FilterToN1QL is ...
-func FilterToN1QL(resourceName string, filter string) (string, string) {
+// FilterToN1QL translates a SCIM filter into the page and count N1QL queries
+// for resourceName. A filter that does not parse is rejected with a
+// *SyntaxError rather than translated: ANTLR recovers from syntax errors and
+// keeps walking, so an unchecked tree lets arbitrary tokens through into the
+// query.
+func FilterToN1QL(resourceName string, filter string) (string, string, error) {
 	query := resourceName + "`"
 	if filter == "" {
-		return "SELECT * FROM `" + resourceName + "`", "SELECT count(*)  as count FROM `" + resourceName + "`"
+		return "SELECT * FROM `" + resourceName + "`", "SELECT count(*)  as count FROM `" + resourceName + "`", nil
 	}
-	is := antlr.NewInputStream(filter)
-	lexer := NewScimFilterLexer(is)
-	stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
-	p := NewScimFilterParser(stream)
+	p, collector := newFilterParser(filter)
+	tree := p.Start()
+	if len(collector.problems) > 0 {
+		return "", "", &SyntaxError{Filter: filter, Problems: collector.problems}
+	}
 	scimFilterListenerN1QL := ScimFilterListenerN1QL{query: query + " WHERE "}
-	antlr.ParseTreeWalkerDefault.Walk(&scimFilterListenerN1QL, p.Start())
-	return "SELECT * FROM `" + scimFilterListenerN1QL.query, "SELECT count(*) as count FROM `" + scimFilterListenerN1QL.query
+	antlr.ParseTreeWalkerDefault.Walk(&scimFilterListenerN1QL, tree)
+	return "SELECT * FROM `" + scimFilterListenerN1QL.query, "SELECT count(*) as count FROM `" + scimFilterListenerN1QL.query, nil
 }
 
 // VisitTerminal is called when a terminal node is visited.

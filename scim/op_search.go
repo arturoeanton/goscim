@@ -1,6 +1,7 @@
 package scim
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
@@ -52,6 +53,10 @@ func Search(resource string) func(c *gin.Context) {
 			Limit:          result.ItemsPerPage,
 		})
 		if err != nil {
+			if errors.Is(err, ErrInvalidFilter) {
+				MakeTypedError(c, http.StatusBadRequest, "invalidFilter", err.Error())
+				return
+			}
 			MakeError(c, http.StatusInternalServerError, err.Error())
 			log.Println(err.Error())
 			return

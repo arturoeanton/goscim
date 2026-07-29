@@ -3,6 +3,7 @@ package scim
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -149,7 +150,10 @@ func (s *CouchbaseStore) Remove(bucket, id string) error {
 
 // Search implements Store by translating the SCIM filter to N1QL.
 func (s *CouchbaseStore) Search(q SearchQuery) (int, []map[string]interface{}, error) {
-	queryPage, queryCount := parser.FilterToN1QL(q.Bucket, q.Filter)
+	queryPage, queryCount, err := parser.FilterToN1QL(q.Bucket, q.Filter)
+	if err != nil {
+		return 0, nil, fmt.Errorf("%w: %s", ErrInvalidFilter, err)
+	}
 
 	sortBy := q.SortBy
 	if sortBy == "" {

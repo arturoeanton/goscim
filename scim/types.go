@@ -66,9 +66,10 @@ type ListResponse struct {
 
 // Error is ..
 type Error struct {
-	Schemas []string `json:"schemas"`
-	Detail  string   `json:"detail"`
-	Status  string   `json:"status"`
+	Schemas  []string `json:"schemas"`
+	ScimType string   `json:"scimType,omitempty"`
+	Detail   string   `json:"detail"`
+	Status   string   `json:"status"`
 }
 
 // Operation ...

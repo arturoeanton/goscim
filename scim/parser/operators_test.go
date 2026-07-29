@@ -25,7 +25,7 @@ func TestComparisonOperators(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.filter, func(t *testing.T) {
-			page, count := parser.FilterToN1QL("User", tc.filter)
+			page, count, _ := parser.FilterToN1QL("User", tc.filter)
 			wantPage := "SELECT * FROM `User` WHERE " + tc.where
 			if page != wantPage {
 				t.Errorf("page query:\n  got:  %s\n  want: %s", page, wantPage)
@@ -42,10 +42,10 @@ func TestComparisonOperators(t *testing.T) {
 // edit that re-crosses them or collapses both onto the same operator, even if
 // the table above were updated without thinking.
 func TestRangeOperatorsStayDistinct(t *testing.T) {
-	gt, _ := parser.FilterToN1QL("User", "age gt 10")
-	ge, _ := parser.FilterToN1QL("User", "age ge 10")
-	lt, _ := parser.FilterToN1QL("User", "age lt 10")
-	le, _ := parser.FilterToN1QL("User", "age le 10")
+	gt, _, _ := parser.FilterToN1QL("User", "age gt 10")
+	ge, _, _ := parser.FilterToN1QL("User", "age ge 10")
+	lt, _, _ := parser.FilterToN1QL("User", "age lt 10")
+	le, _, _ := parser.FilterToN1QL("User", "age le 10")
 
 	if gt == ge {
 		t.Error("gt and ge produce the same query")
@@ -74,7 +74,7 @@ func TestSubstringOperators(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.filter, func(t *testing.T) {
-			page, _ := parser.FilterToN1QL("User", tc.filter)
+			page, _, _ := parser.FilterToN1QL("User", tc.filter)
 			want := "SELECT * FROM `User` WHERE " + tc.where
 			if page != want {
 				t.Errorf("\n  got:  %s\n  want: %s", page, want)
@@ -85,7 +85,7 @@ func TestSubstringOperators(t *testing.T) {
 
 // An empty filter must not produce a WHERE clause.
 func TestEmptyFilter(t *testing.T) {
-	page, count := parser.FilterToN1QL("User", "")
+	page, count, _ := parser.FilterToN1QL("User", "")
 	if page != "SELECT * FROM `User`" {
 		t.Errorf("page = %s", page)
 	}

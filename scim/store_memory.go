@@ -2,8 +2,11 @@ package scim
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
 	"sync"
+
+	"github.com/arturoeanton/goscim/scim/parser"
 )
 
 // MemoryStore is an in-memory Store used by the test suite. Documents are
@@ -91,9 +94,14 @@ func (s *MemoryStore) Remove(bucket, id string) error {
 	return nil
 }
 
-// Search implements Store for the empty filter only.
+// Search implements Store for the empty filter only. A malformed filter is
+// still rejected as such, so the fake exercises the same handler path as the
+// Couchbase store.
 func (s *MemoryStore) Search(q SearchQuery) (int, []map[string]interface{}, error) {
 	if q.Filter != "" {
+		if err := parser.Validate(q.Filter); err != nil {
+			return 0, nil, fmt.Errorf("%w: %s", ErrInvalidFilter, err)
+		}
 		return 0, nil, ErrFilterUnsupported
 	}
 	s.mu.RLock()
