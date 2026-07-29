@@ -137,7 +137,7 @@ Fix: leer el `meta` del documento almacenado (`getElementByID`), no del payload 
 
 ---
 
-### B8 · ALTO · El control de acceso de lectura no cubre arrays ni extensiones
+### B8 · ALTO · El control de acceso de lectura no cubre arrays ni extensiones — CORREGIDO
 `scim/validate_role.go` + `commons/map.go:5-21`
 
 Dos fallos combinados:
@@ -210,7 +210,8 @@ Un release 1.0 no debería publicarse sin esto resuelto.
 - **Higiene del repositorio**: `antlr-4.7-complete.jar` (2 MB) versionado, y `.antlr/` y `.scannerwork/` commiteados. Sacarlos y añadirlos a `.gitignore`; descargar ANTLR desde un `Makefile`.
 - **Alinear README con la realidad**: OAuth 2.0/JWT, Prometheus, health checks, webhooks y la tabla de rendimiento («10.000 req/s») no tienen respaldo en el código. Para un 1.0 «premium», mover eso a un roadmap explícito.
 - **Corregir el typo `ResoruceType`** en un solo commit mecánico antes de congelar la API pública del paquete — después del 1.0 será un breaking change.
-- **Unificar el regex URN duplicado** entre `AddQuote` y `opPathTopathArray` en un único helper.
+- **Unificar el regex URN duplicado** entre `AddQuote`, `opPathTopathArray` y `splitURNPath` en un único helper.
+- **`commons.WalkMap` quedó sin uso** al reescribir el filtrado por rol (no podía expresar «omitir la clave»). El paquete `commons` entero puede borrarse.
 - **`bucket_type: "membase"`** en `config/bucketSettings/*.json` no coincide con ninguno de los valores que acepta `CreateBucket` (`couchbase`/`memcached`/`ephemeral`), así que se ignora en silencio y cae al default. Validar el config al cargarlo y fallar con un mensaje claro.
 
 ---

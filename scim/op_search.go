@@ -71,9 +71,8 @@ func Search(resource string) func(c *gin.Context) {
 		result.Schemas = append(result.Schemas, "urn:ietf:params:scim:api:messages:2.0:ListResponse")
 		result.TotalResults = total
 		result.Resources = make([]interface{}, 0)
+		roles := currentRoles(c)
 		for _, item := range resources {
-			//TODO: Validate _read of all fields of element
-			roles := []string{"user", "admin", "superadmin", "role1"} // TODO: get the user roles from the token
 			result.Resources = append(result.Resources, ValidateReadRole(roles, resourceType, item))
 		}
 		c.JSON(http.StatusOK, result)

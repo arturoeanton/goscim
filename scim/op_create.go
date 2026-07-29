@@ -42,6 +42,6 @@ func Create(resource string) func(c *gin.Context) {
 			log.Println(err.Error())
 			return
 		}
-		c.JSON(http.StatusOK, element)
+		c.JSON(http.StatusOK, ValidateReadRole(currentRoles(c), resourceType, element))
 	}
 }

@@ -17,8 +17,7 @@ func Read(resource string) func(c *gin.Context) {
 		if err != nil {
 			return
 		}
-		roles := []string{"user", "admin", "superadmin", "role1"} // TODO: get the user roles from the token
-		element = ValidateReadRole(roles, resourceType, element)
+		element = ValidateReadRole(currentRoles(c), resourceType, element)
 		c.JSON(http.StatusOK, element)
 	}
 }

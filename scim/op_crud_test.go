@@ -23,9 +23,11 @@ func TestCreateElement(t *testing.T) {
 	if body["name"] != "Element1" {
 		t.Errorf("name = %v", body["name"])
 	}
-	// Create does not apply role filtering, unlike Read and Search.
-	if body["description"] != "description of Element1" {
-		t.Errorf("description = %v", body["description"])
+	// Every response goes through the same read filter, so an attribute the
+	// caller may not read is absent from the create response too. description
+	// declares $reader ["role2","role3"] and no caller role matches.
+	if _, present := body["description"]; present {
+		t.Errorf("description should not be readable: %v", body["description"])
 	}
 
 	meta, ok := body["meta"].(map[string]interface{})
@@ -115,10 +117,9 @@ func TestReadElement(t *testing.T) {
 		t.Errorf("name = %v", body["name"])
 	}
 	// description declares $reader ["role2","role3"]: no role matches, so the
-	// value is masked.
-	// TODO(B8): the key should be omitted, not returned empty.
-	if body["description"] != "" {
-		t.Errorf("description should be masked, got %v", body["description"])
+	// key is omitted entirely rather than returned empty.
+	if _, present := body["description"]; present {
+		t.Errorf("description should have been omitted, got %v", body["description"])
 	}
 	// $ref declares no $reader, so it is not filtered.
 	if body["$ref"] != "/Element1" {
@@ -322,8 +323,11 @@ func TestSearchElementsMasksByRole(t *testing.T) {
 	requireStatus(t, w, http.StatusOK)
 	resources := decode(t, w)["Resources"].([]interface{})
 	first := resources[0].(map[string]interface{})
-	if first["description"] != "" {
-		t.Errorf("description should be masked in search: %v", first["description"])
+	if _, present := first["description"]; present {
+		t.Errorf("description should have been omitted in search: %v", first["description"])
+	}
+	if first["name"] != "AAA" {
+		t.Errorf("a readable attribute was dropped: %v", first)
 	}
 }
 

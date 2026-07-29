@@ -60,5 +60,5 @@ func replace(c *gin.Context, resourceType ResoruceType, id string, element map[s
 		log.Println(err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, element)
+	c.JSON(http.StatusOK, ValidateReadRole(currentRoles(c), resourceType, element))
 }
