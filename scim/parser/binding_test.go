@@ -31,7 +31,7 @@ func TestFilterValuesNeverReachTheQueryText(t *testing.T) {
 		t.Run(value, func(t *testing.T) {
 			for _, operator := range []string{"eq", "ne", "co", "sw", "ew"} {
 				filter := `userName ` + operator + ` "` + value + `"`
-				query, err := parser.FilterToN1QL("User", filter)
+				query, err := parser.FilterToN1QL("User", filter, nil)
 				if err != nil {
 					// Some punctuation is not valid filter syntax outside a
 					// value; a rejection is a fine outcome, silence is not.
@@ -58,7 +58,7 @@ func TestFilterValuesNeverReachTheQueryText(t *testing.T) {
 // The count and page queries must agree on their placeholders, since they are
 // executed with the same parameter list.
 func TestBothQueriesShareTheParameters(t *testing.T) {
-	query, err := parser.FilterToN1QL("User", `a eq "x" and b co "y" and c gt 1`)
+	query, err := parser.FilterToN1QL("User", `a eq "x" and b co "y" and c gt 1`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

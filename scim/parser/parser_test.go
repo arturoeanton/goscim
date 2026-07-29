@@ -22,7 +22,7 @@ filter=title pr or userType eq "Intern"
 filter=userType eq "Employee" and (emails co "example.com" or emails co "example.org")
 */
 func TestParser(t *testing.T) {
-	query, err := parser.FilterToN1QL("User", "urn:ietf:params:scim:schemas:extension:one:2.0:User.userType eq \"Employee\" and (emails sw \"example.com\" or a.a.emails sw \"example.org\")")
+	query, err := parser.FilterToN1QL("User", "urn:ietf:params:scim:schemas:extension:one:2.0:User.userType eq \"Employee\" and (emails sw \"example.com\" or a.a.emails sw \"example.org\")", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +33,7 @@ func TestParser(t *testing.T) {
 }
 
 func TestParser2(t *testing.T) {
-	query, err := parser.FilterToN1QL("User", "urn:ietf:params:scim:schemas:extension:one:2.0:Element.boolean eq true")
+	query, err := parser.FilterToN1QL("User", "urn:ietf:params:scim:schemas:extension:one:2.0:Element.boolean eq true", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

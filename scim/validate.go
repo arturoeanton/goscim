@@ -22,23 +22,36 @@ func ValidateFieldSchemas(c *gin.Context, element map[string]interface{}, resour
 	}
 
 	flagPrincipalSchema := false
+	declared := make([]interface{}, 0)
 	elementSchemas := make([]string, 0)
 	for _, s := range schemas.([]interface{}) {
-		elementSchemas = append(elementSchemas, s.(string))
-		if s.(string) == resourceType.Schema {
+		name, ok := s.(string)
+		if !ok {
+			MakeError(c, http.StatusBadRequest, "schemas is not array string")
+			return false, nil
+		}
+		// Store the URN as the server spells it, whatever case the client
+		// used, so everything downstream can compare it directly.
+		name = canonicalSchemaID(name)
+		declared = append(declared, name)
+		elementSchemas = append(elementSchemas, name)
+
+		if strings.EqualFold(name, resourceType.Schema) {
 			flagPrincipalSchema = true
 			continue
 		}
-		if !ContainsSchemaExtension(resourceType.SchemaExtensions, s.(string)) {
+		if !containsSchemaFold(resourceType.SchemaExtensions, name) {
 			MakeError(c, http.StatusBadRequest, "schema is not contained in schemaExtensions")
 			return false, nil
 		}
 	}
+	element["schemas"] = declared
+
 	for _, se := range resourceType.SchemaExtensions {
 		if !se.Required {
 			continue
 		}
-		if !ContainsString(elementSchemas, se.Schema) {
+		if !containsStringFold(elementSchemas, se.Schema) {
 			MakeError(c, http.StatusBadRequest, se.Schema+" is required true")
 			return false, nil
 		}
@@ -53,14 +66,22 @@ func ValidateFieldSchemas(c *gin.Context, element map[string]interface{}, resour
 
 // ValidateSchemas is
 func ValidateSchemas(c *gin.Context, element map[string]interface{}, schemaNameCore string, schemas []SchemaExtension) (bool, map[string]interface{}) {
+	// Extension objects hang off the resource under their schema URN. Rename
+	// those keys to the declared spelling first: the core schema's
+	// unknown-attribute check runs next and recognises an extension key by
+	// comparing it against the canonicalised "schemas" list.
+	for _, schemaExtension := range schemas {
+		canonicaliseKey(element, schemaExtension.Schema)
+	}
+
 	var flag bool
-	schema := Schemas[schemaNameCore]
+	schema, _ := LookupSchema(schemaNameCore)
 	flag, element = validateSchema(c, element, schema, false)
 	if !flag {
 		return flag, nil
 	}
 	for _, schemaExtension := range schemas {
-		raw, present := element[schemaExtension.Schema]
+		raw, present := canonicaliseKey(element, schemaExtension.Schema)
 		if !present {
 			// An extension the resource type declares as optional may simply
 			// be absent. Only a required one has to be there.
@@ -78,7 +99,8 @@ func ValidateSchemas(c *gin.Context, element map[string]interface{}, schemaNameC
 			return false, nil
 		}
 		var flag bool
-		flag, elementExtension = validateSchema(c, elementExtension, Schemas[schemaExtension.Schema], true)
+		extensionSchema, _ := LookupSchema(schemaExtension.Schema)
+		flag, elementExtension = validateSchema(c, elementExtension, extensionSchema, true)
 		if !flag {
 			return flag, nil
 		}
@@ -99,13 +121,17 @@ func validateSchema(c *gin.Context, element map[string]interface{}, schema Schem
 	}
 	for key := range element {
 		if !isExtension {
-			if key == "schemas" {
+			if strings.EqualFold(key, "schemas") {
 				continue
 			}
-			if ContainsStringInArrayInterfase(element["schemas"].([]interface{}), key) {
+			// An extension object hangs off the resource under its own URN.
+			if declaredSchemas, ok := element["schemas"].([]interface{}); ok &&
+				ContainsStringInArrayInterfase(declaredSchemas, key) {
 				continue
 			}
 		}
+		// Keys were renamed to the declared spelling as each attribute was
+		// validated, so anything left over really is undeclared.
 		if ContainsString(fields, key) {
 			continue
 		}
@@ -152,7 +178,7 @@ func validateSchema(c *gin.Context, element map[string]interface{}, schema Schem
 // value with the normalised form (integers become int64, complex values are
 // validated recursively).
 func validateAttribute(c *gin.Context, element map[string]interface{}, attribute Attribute) (bool, map[string]interface{}) {
-	raw, present := element[attribute.Name]
+	raw, present := canonicaliseKey(element, attribute.Name)
 	if !present {
 		if attribute.Required {
 			MakeTypedError(c, http.StatusBadRequest, "invalidValue", attribute.Name+" is required")

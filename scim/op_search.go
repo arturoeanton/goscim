@@ -64,8 +64,11 @@ func Search(resource string) func(c *gin.Context) {
 		}
 
 		total, resources, err := DB.Search(SearchQuery{
-			Bucket:         resourceType.Name,
-			Filter:         filter,
+			Bucket: resourceType.Name,
+			Filter: filter,
+			ResolveName: func(path string) string {
+				return CanonicalAttributePath(resourceType, path)
+			},
 			SortBy:         sortBy,
 			SortDescending: sortOrder == "descending",
 			Offset:         result.StartIndex - 1,

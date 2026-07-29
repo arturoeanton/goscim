@@ -30,7 +30,7 @@ func TestComparisonOperators(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.filter, func(t *testing.T) {
-			query, err := parser.FilterToN1QL("User", tc.filter)
+			query, err := parser.FilterToN1QL("User", tc.filter, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -51,7 +51,7 @@ func TestComparisonOperators(t *testing.T) {
 // edit that re-crosses them or collapses both onto the same operator.
 func TestRangeOperatorsStayDistinct(t *testing.T) {
 	page := func(filter string) string {
-		query, err := parser.FilterToN1QL("User", filter)
+		query, err := parser.FilterToN1QL("User", filter, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -87,7 +87,7 @@ func TestSubstringOperators(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.filter, func(t *testing.T) {
-			query, err := parser.FilterToN1QL("User", tc.filter)
+			query, err := parser.FilterToN1QL("User", tc.filter, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -104,7 +104,7 @@ func TestSubstringOperators(t *testing.T) {
 
 // An empty filter must not produce a WHERE clause or any parameters.
 func TestEmptyFilter(t *testing.T) {
-	query, err := parser.FilterToN1QL("User", "")
+	query, err := parser.FilterToN1QL("User", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestEmptyFilter(t *testing.T) {
 // same list.
 func TestParameterNumbering(t *testing.T) {
 	query, err := parser.FilterToN1QL("User",
-		`userName eq "a" and (age gt 3 or title co "b")`)
+		`userName eq "a" and (age gt 3 or title co "b")`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

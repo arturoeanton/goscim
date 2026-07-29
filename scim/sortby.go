@@ -9,13 +9,14 @@ import (
 
 // commonAttributes are the RFC 7643 3.1 attributes every resource carries and
 // that no schema declares, so they must be accepted without being found in one.
+// Keys are lower-cased: RFC 7643 2.1 makes attribute names case-insensitive.
 var commonAttributes = map[string]bool{
 	"id":                true,
-	"externalId":        true,
+	"externalid":        true,
 	"meta":              true,
-	"meta.resourceType": true,
+	"meta.resourcetype": true,
 	"meta.created":      true,
-	"meta.lastModified": true,
+	"meta.lastmodified": true,
 	"meta.location":     true,
 	"meta.version":      true,
 }
@@ -43,9 +44,42 @@ func NormalizeSortBy(resourceType ResourceType, sortBy string) (string, error) {
 		if !attributeIsDeclared(resourceType, path) {
 			return "", fmt.Errorf("sortBy: %q is not an attribute of %s", path, resourceType.Name)
 		}
-		cleaned = append(cleaned, path)
+		cleaned = append(cleaned, CanonicalAttributePath(resourceType, path))
 	}
 	return strings.Join(cleaned, ","), nil
+}
+
+// CanonicalAttributePath rewrites an attribute path with the spelling the
+// schema declares, leaving it untouched when nothing matches.
+//
+// Attribute names are case-insensitive to a SCIM client but not to N1QL, so a
+// filter or sort naming "USERNAME" has to become `userName` before it reaches
+// the query, or it names a key no stored document has.
+func CanonicalAttributePath(resourceType ResourceType, path string) string {
+	urn, attrPath := parser.SplitURNPath(path)
+
+	schemaID := resourceType.Schema
+	prefix := ""
+	if urn != "" {
+		schemaID = urn
+		prefix = canonicalSchemaID(urn) + "."
+	}
+	schema, ok := LookupSchema(schemaID)
+	if !ok {
+		return path
+	}
+
+	segments := strings.Split(attrPath, ".")
+	attributes := schema.Attributes
+	for i, segment := range segments {
+		attribute, found := FindAttribute(attributes, segment)
+		if !found {
+			return path
+		}
+		segments[i] = attribute.Name
+		attributes = attribute.SubAttributes
+	}
+	return prefix + strings.Join(segments, ".")
 }
 
 // attributeIsDeclared reports whether path names an attribute of the resource
@@ -56,21 +90,21 @@ func attributeIsDeclared(resourceType ResourceType, path string) bool {
 		return false
 	}
 	if urn == "" {
-		if commonAttributes[attrPath] {
+		if commonAttributes[strings.ToLower(attrPath)] {
 			return true
 		}
 		return declaresAttribute(resourceType.Schema, attrPath)
 	}
 	// A URN prefix is only acceptable if the resource type actually uses that
 	// schema; otherwise a client could name any schema loaded on the server.
-	if urn != resourceType.Schema && !ContainsSchemaExtension(resourceType.SchemaExtensions, urn) {
+	if !strings.EqualFold(urn, resourceType.Schema) && !containsSchemaFold(resourceType.SchemaExtensions, urn) {
 		return false
 	}
 	return declaresAttribute(urn, attrPath)
 }
 
 func declaresAttribute(schemaID, attrPath string) bool {
-	schema, ok := Schemas[schemaID]
+	schema, ok := LookupSchema(schemaID)
 	if !ok {
 		return false
 	}

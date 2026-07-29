@@ -16,8 +16,11 @@ var (
 // SortBy is a raw SCIM attribute path (optionally URN-prefixed), not a
 // storage-specific expression: translating it is the Store's job.
 type SearchQuery struct {
-	Bucket         string
-	Filter         string
+	Bucket string
+	Filter string
+	// ResolveName maps an attribute path to the spelling its schema declares.
+	// Optional: without it the filter is translated verbatim.
+	ResolveName    func(path string) string
 	SortBy         string
 	SortDescending bool
 	Offset         int

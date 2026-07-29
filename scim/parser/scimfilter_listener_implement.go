@@ -21,16 +21,22 @@ type Query struct {
 	Params []interface{}
 }
 
+// NameResolver maps an attribute path to the spelling its schema declares.
+// RFC 7643 2.1 makes attribute names case-insensitive, but N1QL identifiers are
+// not, so a filter naming "USERNAME" has to become `userName` or it matches a
+// key no document has.
+type NameResolver func(path string) string
+
 // ScimFilterListenerN1QL walks the parse tree building the N1QL text.
 type ScimFilterListenerN1QL struct {
 	*BaseScimFilterListener
 	query         strings.Builder
 	params        []interface{}
 	prevOperation string
+	resolve       NameResolver
 
-	inCriteria  bool
-	criteria    strings.Builder
-	pendingLike bool
+	inCriteria bool
+	criteria   strings.Builder
 }
 
 // EnterCriteria starts collecting the text of a quoted value. Its terminals are
@@ -87,7 +93,7 @@ func (l *ScimFilterListenerN1QL) bind(value interface{}) {
 // A filter that does not parse is rejected rather than translated: ANTLR
 // recovers from syntax errors and keeps walking, so an unchecked tree lets
 // arbitrary tokens through into the query.
-func FilterToN1QL(resourceName string, filter string) (Query, error) {
+func FilterToN1QL(resourceName string, filter string, resolve NameResolver) (Query, error) {
 	from := "FROM `" + escapeIdentifier(resourceName) + "`"
 	if filter == "" {
 		return Query{
@@ -102,7 +108,7 @@ func FilterToN1QL(resourceName string, filter string) (Query, error) {
 		return Query{}, &SyntaxError{Filter: filter, Problems: collector.problems}
 	}
 
-	listener := &ScimFilterListenerN1QL{}
+	listener := &ScimFilterListenerN1QL{resolve: resolve}
 	antlr.ParseTreeWalkerDefault.Walk(listener, tree)
 
 	where := " WHERE " + listener.query.String()
@@ -128,6 +134,9 @@ func (l *ScimFilterListenerN1QL) VisitTerminal(node antlr.TerminalNode) {
 
 	switch node.GetSymbol().GetTokenType() {
 	case ScimFilterParserATTRNAME:
+		if l.resolve != nil {
+			value = l.resolve(value)
+		}
 		value = AddQuote(value)
 		l.prevOperation = ""
 
@@ -185,7 +194,12 @@ func (l *ScimFilterListenerN1QL) VisitTerminal(node antlr.TerminalNode) {
 
 // urnPathPattern splits "urn:...:Schema.attr.sub" into its schema URN and the
 // attribute path that follows it. Compiled once: it sits on the request path.
-var urnPathPattern = regexp.MustCompile(`^(urn[:\w\.\_]*)(:-*)?(:[\w]*)(\.)(.*)$`)
+//
+// Matched case-insensitively, because RFC 7643 2.1 makes schema URNs
+// case-insensitive and a client writing "URN:IETF:..." is entitled to be
+// understood. The captured text keeps the client's spelling; canonicalising it
+// is the scim package's job.
+var urnPathPattern = regexp.MustCompile(`(?i)^(urn[:\w\.\_]*)(:-*)?(:[\w]*)(\.)(.*)$`)
 
 // SplitURNPath separates the schema URN prefix, when there is one, from the
 // attribute path. It lives here because both the N1QL translation and the scim

@@ -28,7 +28,7 @@ func TestMalformedFiltersAreRejected(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			query, err := parser.FilterToN1QL("User", tc.filter)
+			query, err := parser.FilterToN1QL("User", tc.filter, nil)
 			if err == nil {
 				t.Fatalf("filter accepted, produced: %s", query.Page)
 			}
@@ -72,7 +72,7 @@ func TestWellFormedFiltersAreAccepted(t *testing.T) {
 
 	for _, filter := range cases {
 		t.Run(filter, func(t *testing.T) {
-			query, err := parser.FilterToN1QL("User", filter)
+			query, err := parser.FilterToN1QL("User", filter, nil)
 			if err != nil {
 				t.Fatalf("valid filter rejected: %v", err)
 			}

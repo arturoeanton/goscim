@@ -18,7 +18,8 @@ import (
 func EnforceWriteAccess(c *gin.Context, resourceType ResourceType, incoming, existing map[string]interface{}) bool {
 	roles := currentRoles(c)
 
-	if !enforceAttributeWrites(c, roles, Schemas[resourceType.Schema].Attributes, incoming, existing) {
+	coreSchema, _ := LookupSchema(resourceType.Schema)
+	if !enforceAttributeWrites(c, roles, coreSchema.Attributes, incoming, existing) {
 		return false
 	}
 	for _, extension := range resourceType.SchemaExtensions {
@@ -27,7 +28,8 @@ func EnforceWriteAccess(c *gin.Context, resourceType ResourceType, incoming, exi
 			continue
 		}
 		storedValues, _ := existing[extension.Schema].(map[string]interface{})
-		if !enforceAttributeWrites(c, roles, Schemas[extension.Schema].Attributes, values, storedValues) {
+		extensionSchema, _ := LookupSchema(extension.Schema)
+		if !enforceAttributeWrites(c, roles, extensionSchema.Attributes, values, storedValues) {
 			return false
 		}
 	}

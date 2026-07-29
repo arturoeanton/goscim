@@ -25,24 +25,18 @@ var (
 	Schemas map[string]Schema
 )
 
+// GetAttribute resolves a dotted attribute path against a schema's attributes.
+// Names are matched ignoring case, as RFC 7643 2.1 requires.
 func GetAttribute(attributes []Attribute, path string) Attribute {
 	fields := strings.Split(path, ".")
 	finalName := fields[len(fields)-1]
 	for i := 0; i < len(fields)-1; i++ {
-		name := fields[i]
-		for _, attribute := range attributes {
-			if attribute.Name == name {
-				attributes = attribute.SubAttributes
-				break
-			}
+		if attribute, ok := FindAttribute(attributes, fields[i]); ok {
+			attributes = attribute.SubAttributes
 		}
 	}
-	for _, attribute := range attributes {
-		if attribute.Name == finalName {
-			return attribute
-		}
-	}
-	return Attribute{}
+	attribute, _ := FindAttribute(attributes, finalName)
+	return attribute
 }
 
 // ReadResourceType loads every schema and resource type under folderConfig,

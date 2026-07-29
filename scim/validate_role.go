@@ -26,7 +26,8 @@ func ValidateReadRole(roles []string, resourceType ResourceType, element map[str
 	if element == nil {
 		return nil
 	}
-	filtered := filterAttributes(roles, Schemas[resourceType.Schema].Attributes, element)
+	coreSchema, _ := LookupSchema(resourceType.Schema)
+	filtered := filterAttributes(roles, coreSchema.Attributes, element)
 
 	// Extension attributes live in an object keyed by the extension's URN, so
 	// they have to be resolved against that schema rather than the core one.
@@ -39,7 +40,8 @@ func ValidateReadRole(roles []string, resourceType ResourceType, element map[str
 		if !ok {
 			continue
 		}
-		filtered[extension.Schema] = filterAttributes(roles, Schemas[extension.Schema].Attributes, values)
+		extensionSchema, _ := LookupSchema(extension.Schema)
+		filtered[extension.Schema] = filterAttributes(roles, extensionSchema.Attributes, values)
 	}
 	return filtered
 }
@@ -50,7 +52,7 @@ func ValidateReadRole(roles []string, resourceType ResourceType, element map[str
 func filterAttributes(roles []string, attributes []Attribute, element map[string]interface{}) map[string]interface{} {
 	filtered := make(map[string]interface{}, len(element))
 	for key, value := range element {
-		attribute, declared := findAttribute(attributes, key)
+		attribute, declared := FindAttribute(attributes, key)
 		if !declared {
 			filtered[key] = value
 			continue
@@ -98,13 +100,4 @@ func canRead(roles []string, attribute Attribute) bool {
 		}
 	}
 	return false
-}
-
-func findAttribute(attributes []Attribute, name string) (Attribute, bool) {
-	for _, attribute := range attributes {
-		if attribute.Name == name {
-			return attribute, true
-		}
-	}
-	return Attribute{}, false
 }

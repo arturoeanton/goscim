@@ -21,7 +21,8 @@ import (
 // It reports whether the caller may proceed; when it returns false the
 // response has already been written.
 func EnforceUniqueness(c *gin.Context, resourceType ResourceType, element map[string]interface{}, currentID string) bool {
-	if !checkUniqueAttributes(c, resourceType, Schemas[resourceType.Schema].Attributes, element, "", currentID) {
+	coreSchema, _ := LookupSchema(resourceType.Schema)
+	if !checkUniqueAttributes(c, resourceType, coreSchema.Attributes, element, "", currentID) {
 		return false
 	}
 	for _, extension := range resourceType.SchemaExtensions {
@@ -29,7 +30,8 @@ func EnforceUniqueness(c *gin.Context, resourceType ResourceType, element map[st
 		if !ok {
 			continue
 		}
-		if !checkUniqueAttributes(c, resourceType, Schemas[extension.Schema].Attributes, values, extension.Schema+".", currentID) {
+		extensionSchema, _ := LookupSchema(extension.Schema)
+		if !checkUniqueAttributes(c, resourceType, extensionSchema.Attributes, values, extension.Schema+".", currentID) {
 			return false
 		}
 	}
