@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main, release-1.0]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.25"
+
+jobs:
+  build:
+    name: build, vet and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Formatting
+        run: |
+          # The generated parser is excluded: it is gofmt'd by `make generate`
+          # but is not ours to police.
+          unformatted="$(gofmt -l . | grep -v '^scim/parser/scimfilter_' || true)"
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: Build
+        run: make build
+
+      - name: Vet
+        run: make vet
+
+      - name: Test with the race detector
+        run: make race
+
+      - name: Coverage
+        run: make cover
+
+  vulnerabilities:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      # Fails only on vulnerabilities reachable from this code. Findings in
+      # dependencies we never call are reported by Dependabot instead of
+      # blocking every pull request.
+      - name: Scan
+        run: |
+          go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  tidy:
+    name: go.mod is tidy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Check
+        run: |
+          go mod tidy
+          if ! git diff --quiet go.mod go.sum; then
+            echo "go.mod or go.sum is not tidy; run 'go mod tidy'"
+            git diff go.mod go.sum
+            exit 1
+          fi
