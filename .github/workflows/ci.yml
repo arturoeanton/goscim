@@ -95,8 +95,9 @@ jobs:
       - name: Check
         run: |
           go mod tidy
-          if ! git diff --quiet go.mod go.sum; then
-            echo "go.mod or go.sum is not tidy; run 'go mod tidy'"
-            git diff go.mod go.sum
+          (cd test/integration && go mod tidy)
+          if ! git diff --quiet '*go.mod' '*go.sum'; then
+            echo "a go.mod or go.sum is not tidy; run 'go mod tidy'"
+            git diff '*go.mod' '*go.sum'
             exit 1
           fi

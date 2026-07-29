@@ -21,7 +21,6 @@ node_modules
 .DS_Store
 .bash_history
 .vscode/
-test/
 
 
 # Build artefacts and downloaded tooling

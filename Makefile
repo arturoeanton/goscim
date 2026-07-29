@@ -28,8 +28,12 @@ race:
 # Runs the suite against a real Couchbase started in a container. Slow: the
 # image is large and the cluster takes a couple of minutes to become healthy,
 # which is why it is behind a build tag rather than part of `make test`.
+#
+# It is a separate Go module so that testcontainers and the Docker client tree
+# it depends on stay out of the main module's dependency graph, and out of the
+# graph of anyone importing goscim.
 integration:
-	go test -tags integration -timeout 20m -count=1 -v ./test/integration
+	cd test/integration && go test -tags integration -timeout 20m -count=1 -v ./...
 
 cover:
 	@mkdir -p build
