@@ -137,7 +137,7 @@ func TestUpdateMetaToleratesAMissingCreated(t *testing.T) {
 			if meta.Version == "" || meta.LastModified == "" {
 				t.Errorf("meta = %+v", meta)
 			}
-			if meta.Location != "/Elements/abc" {
+			if meta.Location != PREFIX+"/Elements/abc" {
 				t.Errorf("location = %s", meta.Location)
 			}
 		})

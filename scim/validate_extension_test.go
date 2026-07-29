@@ -15,7 +15,7 @@ func TestOptionalExtensionMayBeOmitted(t *testing.T) {
 
 	body := `{"schemas":["` + schemaUser + `"],"userName":"jane.doe"}`
 	w := do(t, r, http.MethodPost, usersPath, body)
-	requireStatus(t, w, http.StatusOK) // TODO(B9): must become 201
+	requireStatus(t, w, http.StatusCreated)
 
 	out := decode(t, w)
 	if out["userName"] != "jane.doe" {
@@ -34,8 +34,8 @@ func TestOptionalExtensionIsValidatedWhenPresent(t *testing.T) {
 		ext  interface{}
 		want int
 	}{
-		{"valid extension", map[string]interface{}{"department": "Engineering"}, http.StatusOK},
-		{"empty extension", map[string]interface{}{}, http.StatusOK},
+		{"valid extension", map[string]interface{}{"department": "Engineering"}, http.StatusCreated},
+		{"empty extension", map[string]interface{}{}, http.StatusCreated},
 		{"attribute of the wrong type", map[string]interface{}{"department": 42}, http.StatusBadRequest},
 		{"undeclared attribute", map[string]interface{}{"nope": "x"}, http.StatusBadRequest},
 		{"not an object", "not-an-object", http.StatusBadRequest},
@@ -78,7 +78,7 @@ func TestOptionalExtensionMayBeOmittedOnReplace(t *testing.T) {
 	r, _ := newTestServer(t)
 
 	w := do(t, r, http.MethodPost, usersPath, `{"schemas":["`+schemaUser+`"],"userName":"jane.doe"}`)
-	requireStatus(t, w, http.StatusOK)
+	requireStatus(t, w, http.StatusCreated)
 	created := decode(t, w)
 
 	payload := map[string]interface{}{

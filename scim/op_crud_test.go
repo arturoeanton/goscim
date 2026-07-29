@@ -43,8 +43,7 @@ func TestCreateElement(t *testing.T) {
 	if meta["version"] == "" {
 		t.Error("meta.version is empty")
 	}
-	// TODO(B9): location must be absolute and carry the /scim/v2 prefix.
-	if meta["location"] != "/Elements/"+id {
+	if meta["location"] != PREFIX+"/Elements/"+id {
 		t.Errorf("meta.location = %v", meta["location"])
 	}
 

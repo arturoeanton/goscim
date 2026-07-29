@@ -38,7 +38,7 @@ func TestCreateUserWithMultiValuedAttributes(t *testing.T) {
 	raw, _ := json.Marshal(body)
 
 	w := do(t, r, http.MethodPost, usersPath, string(raw))
-	requireStatus(t, w, http.StatusOK) // TODO(B9): must become 201
+	requireStatus(t, w, http.StatusCreated)
 	out := decode(t, w)
 
 	emails, ok := out["emails"].([]interface{})
@@ -73,7 +73,7 @@ func TestMultiValuedElementsAreValidated(t *testing.T) {
 				map[string]interface{}{"data": 1, "$ref": "/a"},
 				map[string]interface{}{"data": 2, "$ref": "/b"},
 			},
-			http.StatusOK,
+			http.StatusCreated,
 		},
 		{
 			"an element missing a required sub-attribute",
@@ -98,7 +98,7 @@ func TestMultiValuedElementsAreValidated(t *testing.T) {
 		{
 			"an empty array",
 			[]interface{}{},
-			http.StatusOK,
+			http.StatusCreated,
 		},
 	}
 
@@ -128,7 +128,7 @@ func TestMultiValuedRequiresAnArray(t *testing.T) {
 	// The declared array of integers works, and the elements keep their type.
 	w = do(t, r, http.MethodPost, elementsPath,
 		elementWithExtra(t, multiScalarInt, []interface{}{1, 2, 3}))
-	requireStatus(t, w, http.StatusOK)
+	requireStatus(t, w, http.StatusCreated)
 
 	// An array of integers must reject a non-integer element.
 	w = do(t, r, http.MethodPost, elementsPath,
@@ -165,7 +165,7 @@ func TestAtMostOnePrimaryValue(t *testing.T) {
 	}
 	raw, _ = json.Marshal(onePrimary)
 	w = do(t, r, http.MethodPost, usersPath, string(raw))
-	requireStatus(t, w, http.StatusOK)
+	requireStatus(t, w, http.StatusCreated)
 }
 
 // elementWithExtra builds a valid Element payload with one extra attribute set

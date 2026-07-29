@@ -25,14 +25,24 @@ func newTestServer(t *testing.T) (*gin.Engine, *MemoryStore) {
 	return r, store
 }
 
-// do issues a request against the router and returns the recorder.
-func do(t *testing.T, r http.Handler, method, target, body string) *httptest.ResponseRecorder {
-	t.Helper()
+// newRequest builds a SCIM request, for the cases that need extra headers.
+func newRequest(method, target, body string) *http.Request {
 	req := httptest.NewRequest(method, target, strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/scim+json")
+	return req
+}
+
+// serve runs a prepared request through the router.
+func serve(r http.Handler, req *http.Request) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	return w
+}
+
+// do issues a request against the router and returns the recorder.
+func do(t *testing.T, r http.Handler, method, target, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	return serve(r, newRequest(method, target, body))
 }
 
 // decode unmarshals a JSON response body, failing the test if it is not JSON.
@@ -93,6 +103,6 @@ func validElement(name string, required int) string {
 func createElement(t *testing.T, r http.Handler, name string, required int) map[string]interface{} {
 	t.Helper()
 	w := do(t, r, http.MethodPost, elementsPath, validElement(name, required))
-	requireStatus(t, w, http.StatusOK) // TODO(B9): must become 201 Created
+	requireStatus(t, w, http.StatusCreated)
 	return decode(t, w)
 }

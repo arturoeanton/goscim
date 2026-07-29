@@ -75,6 +75,9 @@ func Search(resource string) func(c *gin.Context) {
 		for _, item := range resources {
 			result.Resources = append(result.Resources, ValidateReadRole(roles, resourceType, item))
 		}
-		c.JSON(http.StatusOK, result)
+		// RFC 7644 3.4.2.4: itemsPerPage is how many resources this page
+		// carries, not how many were asked for.
+		result.ItemsPerPage = len(result.Resources)
+		writeSCIM(c, http.StatusOK, result)
 	}
 }

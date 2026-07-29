@@ -34,6 +34,9 @@ func replace(c *gin.Context, resourceType ResoruceType, id string, element map[s
 	if err != nil {
 		return
 	}
+	if !checkPrecondition(c, stored) {
+		return
+	}
 	previousMeta, _ := stored["meta"].(map[string]interface{})
 
 	ok, _ := ValidateFieldSchemas(c, element, resourceType)
@@ -49,7 +52,8 @@ func replace(c *gin.Context, resourceType ResoruceType, id string, element map[s
 		return
 	}
 	element["id"] = id
-	element["meta"] = updateMeta(previousMeta, element, resourceType)
+	meta := updateMeta(previousMeta, element, resourceType)
+	element["meta"] = meta
 
 	if err := DB.Replace(resourceType.Name, id, element); err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -60,5 +64,7 @@ func replace(c *gin.Context, resourceType ResoruceType, id string, element map[s
 		log.Println(err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, ValidateReadRole(currentRoles(c), resourceType, element))
+	c.Header("Location", absoluteLocation(c, resourceType, id))
+	setVersionHeader(c, meta)
+	writeSCIM(c, http.StatusOK, ValidateReadRole(currentRoles(c), resourceType, element))
 }

@@ -156,12 +156,14 @@ Fix: recursar en arrays, resolver el atributo contra el schema correcto según e
 
 ---
 
-### B9 · MEDIO · Desviaciones de RFC 7644 en las respuestas
+### B9 · MEDIO · Desviaciones de RFC 7644 en las respuestas — CORREGIDO
 - `scim/op_create.go:49` devuelve `200 OK`; debe ser `201 Created` con cabecera `Location`.
 - Content-Type es `application/json`; debe ser `application/scim+json`.
 - `scim/meta.go:16,29` genera `meta.location` como `/Elements/<id>` — sin el prefijo `/scim/v2` y sin URI absoluta, por lo que el valor no es navegable.
 - `meta.version` es un UUID nuevo por escritura, pero no se emite como `ETag` ni se soporta `If-Match`, así que no hay control de concurrencia: dos PUT simultáneos se pisan sin aviso.
 - `op_search.go` fija `itemsPerPage` al `count` solicitado, no al número de recursos devueltos.
+
+**Queda abierto**: `meta.location` es ahora una ruta absoluta del servidor (`/scim/v2/Elements/<id>`), no un URI absoluto. Para emitir un URI absoluto correcto hace falta una URL pública configurable, porque derivarla de la conexión da un valor equivocado detrás de un proxy que termina el TLS. La cabecera `Location` sí es absoluta.
 
 ---
 

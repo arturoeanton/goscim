@@ -101,7 +101,7 @@ The caller's roles are hardcoded as `[]string{"user","admin","superadmin","role1
 - `ResoruceType` is misspelled in the source and is the real exported type name.
 - The struct field for `$reader` is `Attribute.Read`; for `$writer` it is `Attribute.Writer`.
 - Handlers return `func(c *gin.Context)` closures, not plain handlers.
-- Errors go through `MakeError(c, status, msg)`, which writes a SCIM error object and returns it; several call sites do not `return` after calling it.
+- Responses go through `scim/response.go`: `writeSCIM` sets the `application/scim+json` media type (gin only fills in `Content-Type` when it is unset, so setting it first wins), and `entityTag`/`checkPrecondition` implement `ETag`, `If-Match` and `If-None-Match` over `meta.version`. Errors go through `MakeError` / `MakeTypedError`, the latter carrying the RFC 7644 3.12 `scimType` keyword.
 - Config folder paths are hardcoded relative (`"config"`, `FolderBucketSetting = "config/bucketSettings/"`), so the process must start from the repo root.
 - Manual API testing lives in `httpexamples/*.http` (REST Client format).
 - Docs exist in `docs/{en,es,fr,gr,it,jp,pr,ch}/`; only `en` and `es` are complete.

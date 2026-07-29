@@ -21,6 +21,6 @@ func MakeTypedError(c *gin.Context, status int, scimType string, message string)
 		Status:   strconv.Itoa(status),
 		Detail:   message,
 	}
-	c.JSON(status, scimError)
+	writeSCIM(c, status, scimError)
 	return scimError
 }

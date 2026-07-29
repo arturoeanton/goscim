@@ -20,6 +20,15 @@ func Delete(resource string) func(c *gin.Context) {
 			return
 		}
 		resourceType := Resources[resource]
+		if c.GetHeader("If-Match") != "" {
+			stored, err := getElementByID(c, id, resourceType)
+			if err != nil {
+				return
+			}
+			if !checkPrecondition(c, stored) {
+				return
+			}
+		}
 		if err := DB.Remove(resourceType.Name, id); err != nil {
 			if errors.Is(err, ErrNotFound) {
 				MakeError(c, http.StatusNotFound, "Resource "+id+" not found")

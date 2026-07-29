@@ -138,7 +138,7 @@ func TestPatchOperations(t *testing.T) {
 		}
 		raw, _ := json.Marshal(body)
 		w := do(t, r, http.MethodPost, usersPath, string(raw))
-		requireStatus(t, w, http.StatusOK)
+		requireStatus(t, w, http.StatusCreated)
 		id := decode(t, w)["id"].(string)
 
 		w = do(t, r, http.MethodPatch, usersPath+"/"+id, patchBody(map[string]interface{}{

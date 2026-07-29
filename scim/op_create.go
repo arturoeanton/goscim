@@ -34,14 +34,21 @@ func Create(resource string) func(c *gin.Context) {
 		}
 		//TODO: Validate _write of all fields of element
 
-		element["id"] = uuid.New().String()
-		element["meta"] = generateMeta(element, resourceType)
+		id := uuid.New().String()
+		element["id"] = id
+		meta := generateMeta(element, resourceType)
+		element["meta"] = meta
 
-		if err := DB.Upsert(resourceType.Name, element["id"].(string), element); err != nil {
+		if err := DB.Upsert(resourceType.Name, id, element); err != nil {
 			MakeError(c, http.StatusInternalServerError, err.Error())
 			log.Println(err.Error())
 			return
 		}
-		c.JSON(http.StatusOK, ValidateReadRole(currentRoles(c), resourceType, element))
+
+		// RFC 7644 3.3: a successful create answers 201 with the URI of the
+		// new resource in Location.
+		c.Header("Location", absoluteLocation(c, resourceType, id))
+		setVersionHeader(c, meta)
+		writeSCIM(c, http.StatusCreated, ValidateReadRole(currentRoles(c), resourceType, element))
 	}
 }

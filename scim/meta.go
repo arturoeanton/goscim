@@ -40,5 +40,5 @@ func updateMeta(metaOld map[string]interface{}, element map[string]interface{}, 
 
 func resourceLocation(resourceType ResoruceType, element map[string]interface{}) string {
 	id, _ := element["id"].(string)
-	return resourceType.Endpoint + "/" + id
+	return resourcePath(resourceType, id)
 }

@@ -17,8 +17,15 @@ func Read(resource string) func(c *gin.Context) {
 		if err != nil {
 			return
 		}
-		element = ValidateReadRole(currentRoles(c), resourceType, element)
-		c.JSON(http.StatusOK, element)
+		version := versionOf(element)
+		if ifNoneMatch := c.GetHeader("If-None-Match"); ifNoneMatch != "" && etagMatches(ifNoneMatch, version) {
+			c.Status(http.StatusNotModified)
+			return
+		}
+		if tag := entityTag(version); tag != "" {
+			c.Header("ETag", tag)
+		}
+		writeSCIM(c, http.StatusOK, ValidateReadRole(currentRoles(c), resourceType, element))
 	}
 }
 
