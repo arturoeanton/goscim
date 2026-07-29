@@ -14,18 +14,18 @@
 
 > **A blazingly fast, lightweight SCIM 2.0 server built in Go that makes identity management simple and scalable** 🔥
 
-GoSCIM is the **fastest** and **most flexible** open-source implementation of the SCIM 2.0 protocol. Built with Go's performance and simplicity in mind, it's designed to handle anything from small startups to enterprise-scale identity management.
+GoSCIM is a small, config-driven implementation of the SCIM 2.0 protocol backed by Couchbase. Resource types, schemas and per-attribute permissions are JSON files, so adding one takes no code.
 
 ## ✨ Why GoSCIM?
 
-- 🚀 **Blazing Fast**: Built in Go for maximum performance and minimal resource usage
-- 🔧 **Plug & Play**: Works out of the box with dynamic schema loading
-- 🌐 **Universal**: Integrates with Active Directory, LDAP, Salesforce, Slack, and more
-- 📈 **Scalable**: From 10 users to 100,000+ with horizontal scaling
-- 🛡️ **Secure**: Enterprise-grade security with OAuth 2.0 and role-based access control
-- 🎯 **SCIM 2.0 Compliant**: Full RFC 7643/7644 implementation
-- 🔍 **Smart Filtering**: Advanced ANTLR-based filter parser for complex queries
-- 📊 **Observable**: Built-in metrics, logging, and health checks
+- 🔧 **Dynamic schemas**: add a resource type by dropping in two JSON files
+- 🛡️ **Authentication**: OAuth 2.0 access tokens (RFC 9068) or HTTP Basic
+- 🔐 **Per-attribute authorization**: role lists plus SCIM's own `mutability`
+- 🎯 **RFC 7643/7644**: CRUD, filtering, sorting, pagination, ETags
+- 🔍 **Filter parser**: ANTLR grammar translated to N1QL with bound parameters
+- 🧪 **Tested**: unit suite plus an integration suite against a real Couchbase
+
+See [what is not implemented](CHANGELOG.md#not-implemented) before choosing it.
 
 ## 🎯 Perfect For
 
@@ -40,16 +40,26 @@ GoSCIM is the **fastest** and **most flexible** open-source implementation of th
 Get GoSCIM running in under 2 minutes:
 
 ```bash
-# Clone and run with Docker
 git clone https://github.com/arturoeanton/goscim.git
 cd goscim
-docker-compose up -d
 
-# Or build from source
-go run main.go
+# A Couchbase to talk to
+docker run -d --name db -p 8091-8094:8091-8094 -p 11210:11210 couchbase:community-7.1.1
+# then create the cluster at http://localhost:8091 with the credentials below
+
+export SCIM_AUTH=basic
+export SCIM_BASIC_USERS='admin:secret:admin'
+export SCIM_ADMIN_USER=Administrator      # Couchbase, not the SCIM API
+export SCIM_ADMIN_PASSWORD='password'
+export SCIM_COUCHBASE_TLS=false           # a local cluster without certificates
+
+go run .
 ```
 
-Visit `http://localhost:8080/ServiceProviderConfig` to see your SCIM server in action! 🎉
+Then `curl -u admin:secret http://localhost:8080/scim/v2/ServiceProviderConfig`.
+
+`SCIM_AUTH` has no default: the server refuses to start until you choose
+`jwt`, `basic`, or `none` for an unauthenticated deployment.
 
 ## 🌟 Features That Make Developers Happy
 
@@ -97,8 +107,13 @@ func (c *CustomConnector) SyncUsers() error {
 ## 🛠️ Real-World Examples
 
 ### Create a User
+
+Answers `201 Created` with the new resource in the body and its URI in
+`Location`.
+
 ```bash
 curl -X POST https://your-scim-server.com/scim/v2/Users \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
@@ -145,21 +160,14 @@ curl -X PATCH https://your-scim-server.com/scim/v2/Users/123 \
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
-- **Stateless Design**: Scale horizontally with ease
-- **Couchbase Backend**: NoSQL flexibility with ACID compliance
-- **Microservices Ready**: Deploy as containers or serverless functions
-- **Event-Driven**: Webhooks and real-time notifications
+- **Stateless**: no per-process state, so instances scale horizontally
+- **Couchbase backend**: one bucket per resource type, N1QL for search
 
-## 🚀 Performance That Scales
+## 📈 Scale
 
-| Metric | Small Team | Growing Company | Enterprise |
-|--------|------------|-----------------|------------|
-| **Users** | < 1,000 | < 10,000 | 100,000+ |
-| **Requests/sec** | 500+ | 2,000+ | 10,000+ |
-| **Response Time** | < 50ms | < 100ms | < 200ms |
-| **Memory Usage** | 256MB | 1GB | 4GB+ |
-
-*All measurements on standard cloud instances*
+No benchmarks have been published for this project, so this section used to
+contain numbers that were not measured. If you run any, a pull request adding
+them with the method alongside would be welcome.
 
 ## 🤝 Join Our Amazing Community
 
@@ -175,12 +183,14 @@ We're building something special, and we'd love your help!
 - 💬 [Join discussions](https://github.com/arturoeanton/goscim/discussions)
 
 ### 🎯 **Quick Contribution Ideas**
-- Add new identity provider connectors
-- Improve the web UI (coming soon!)
-- Write tutorials and blog posts
-- Create Docker images and Helm charts
-- Add support for additional databases
-- Implement advanced monitoring features
+- Implement `/Bulk` (RFC 7644 3.7)
+- Implement value paths in filters and patch paths
+- Implement `attributes` / `excludedAttributes`
+- Add a Dockerfile and a compose file
+- Add health, readiness and metrics endpoints
+- Complete the translations under `docs/`
+
+`RELEASE-1.0.md` lists what is open and why.
 
 ### 🏆 **Hall of Fame**
 Special thanks to all our contributors! Every contribution matters, from bug reports to major features.
@@ -191,37 +201,69 @@ Special thanks to all our contributors! Every contribution matters, from bug rep
 |-------|------|
 | 🚀 **Getting Started** | [docs/en/getting-started.md](docs/en/getting-started.md) |
 | 🔧 **Installation Guide** | [docs/en/installation.md](docs/en/installation.md) |
-| 📖 **API Reference** | [docs/en/api-reference.md](docs/en/api-reference.md) |
-| 🏗️ **Architecture** | [docs/en/architecture.md](docs/en/architecture.md) |
+| 📋 **Changelog** | [CHANGELOG.md](CHANGELOG.md) |
+| 🔎 **1.0 audit and open items** | [RELEASE-1.0.md](RELEASE-1.0.md) |
 | 🛡️ **Security Guide** | [docs/en/security.md](docs/en/security.md) |
-| 🔌 **Integrations** | [docs/en/integrations.md](docs/en/integrations.md) |
-| 👩‍💻 **Developer Guide** | [docs/en/development.md](docs/en/development.md) |
-| 🚀 **Operations** | [docs/en/operations.md](docs/en/operations.md) |
+| 👩‍💻 **Working on the code** | [CLAUDE.md](CLAUDE.md) |
 
 ### 🌍 **Multi-Language Docs**
 - 🇺🇸 [English](docs/en/)
 - 🇪🇸 [Español](docs/es/)
 
+## ⚙️ Configuration
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `SCIM_AUTH` | *(none — required)* | `jwt`, `basic` or `none` |
+| `SCIM_PORT` | `:8080` | Listen address |
+| `SCIM_CONFIG_DIR` | `config` | Where schemas and resource types live |
+| `SCIM_TRUSTED_PROXIES` | `127.0.0.1` | Comma-separated, or `none` |
+| `SCIM_JWT_JWKS_URL` | — | Required for `SCIM_AUTH=jwt` |
+| `SCIM_JWT_ISSUER` | — | Required for `jwt`; the token's `iss` |
+| `SCIM_JWT_AUDIENCE` | — | Required for `jwt`; the token's `aud` |
+| `SCIM_JWT_ROLES_CLAIM` | — | An extra claim to read roles from |
+| `SCIM_BASIC_USERS` | — | `user:password:role1,role2;...` |
+| `SCIM_ANONYMOUS_ROLES` | *(empty)* | Roles for `SCIM_AUTH=none` |
+| `SCIM_ADMIN_USER` | `Administrator` | Couchbase user |
+| `SCIM_ADMIN_PASSWORD` | — | Couchbase password |
+| `SCIM_COUCHBASE_URL` | `localhost` | Couchbase host, `host:port` |
+| `SCIM_COUCHBASE_TLS` | `true` | `false` for a plain local cluster |
+| `SCIM_COUCHBASE_CA_CERT` | — | PEM that signed the cluster certificate |
+| `SCIM_COUCHBASE_TLS_SKIP_VERIFY` | `false` | Accept any certificate |
+| `SCIM_QUERY_CONSISTENCY` | `request_plus` | `not_bounded` trades freshness for latency |
+
+Roles for `jwt` come from the token: RFC 9068 §2.2.3.1 reuses SCIM's own
+`roles`, `groups` and `entitlements` claims, and `scope` is read too.
+
+## 🛠️ Working on it
+
+```bash
+make check        # build, vet, and the unit suite with the race detector
+make integration  # the suite against a real Couchbase, in a container
+make cover        # coverage
+make generate     # regenerate the filter parser (needs Docker)
+```
+
 ## 🔧 Tech Stack
 
 - **Language**: Go 1.25+
-- **Database**: Couchbase (NoSQL)
-- **Web Framework**: Gin
-- **Query Parser**: ANTLR v4
-- **Monitoring**: Prometheus & Grafana
-- **Auth**: OAuth 2.0 / JWT
-- **Deployment**: Docker, Kubernetes
+- **Database**: Couchbase 7.x (Community or Enterprise)
+- **Web framework**: Gin
+- **Query parser**: ANTLR 4.13
+- **Auth**: OAuth 2.0 access tokens (RFC 9068) via JWKS, or HTTP Basic
 
 ## 📊 Project Status
 
-- ✅ **Core SCIM Operations**: CREATE, READ, UPDATE, DELETE, SEARCH
-- ✅ **Advanced Filtering**: Full SCIM filter expression support
-- ✅ **Schema Extensions**: Custom attributes and resource types
-- ✅ **Role-Based Access**: Granular permission system
-- 🚧 **Bulk Operations**: In development
-- 🚧 **Web UI**: Coming soon
-- 📋 **GraphQL API**: Planned
-- 📋 **Event Streaming**: Planned
+- ✅ **Core operations**: create, read, replace, patch, delete, search
+- ✅ **Discovery**: ServiceProviderConfig, ResourceTypes, Schemas
+- ✅ **Filtering**: all RFC 7644 operators, with bound parameters
+- ✅ **Schema extensions**: custom attributes and resource types
+- ✅ **Authorization**: per-attribute roles, `mutability`, `returned`
+- ✅ **Concurrency**: ETag with If-Match / If-None-Match
+- ❌ **Bulk operations**: not implemented
+- ❌ **Value paths** (`emails[type eq "work"]`): not implemented
+- ❌ **`attributes` / `excludedAttributes`**: not implemented
+- ❌ **Health, readiness, metrics endpoints**: not implemented
 
 ## 💡 Use Cases
 
