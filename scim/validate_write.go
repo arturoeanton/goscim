@@ -15,7 +15,7 @@ import (
 // existing is the stored resource on an update and nil on a create. It reports
 // whether the caller may proceed; when it returns false the response has
 // already been written.
-func EnforceWriteAccess(c *gin.Context, resourceType ResoruceType, incoming, existing map[string]interface{}) bool {
+func EnforceWriteAccess(c *gin.Context, resourceType ResourceType, incoming, existing map[string]interface{}) bool {
 	roles := currentRoles(c)
 
 	if !enforceAttributeWrites(c, roles, Schemas[resourceType.Schema].Attributes, incoming, existing) {

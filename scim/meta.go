@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func generateMeta(element map[string]interface{}, resourceType ResoruceType) Meta {
+func generateMeta(element map[string]interface{}, resourceType ResourceType) Meta {
 	now := time.Now()
 	meta := Meta{}
 	meta.ResourceType = resourceType.Name
@@ -21,7 +21,7 @@ func generateMeta(element map[string]interface{}, resourceType ResoruceType) Met
 // created forward. metaOld is whatever the stored resource had, which may be
 // missing or malformed on a document written by an older version, so it is read
 // defensively rather than asserted.
-func updateMeta(metaOld map[string]interface{}, element map[string]interface{}, resourceType ResoruceType) Meta {
+func updateMeta(metaOld map[string]interface{}, element map[string]interface{}, resourceType ResourceType) Meta {
 	now := time.Now()
 	meta := Meta{}
 	meta.LastModified = now.Format(time.RFC3339)
@@ -38,7 +38,7 @@ func updateMeta(metaOld map[string]interface{}, element map[string]interface{}, 
 	return meta
 }
 
-func resourceLocation(resourceType ResoruceType, element map[string]interface{}) string {
+func resourceLocation(resourceType ResourceType, element map[string]interface{}) string {
 	id, _ := element["id"].(string)
 	return resourcePath(resourceType, id)
 }

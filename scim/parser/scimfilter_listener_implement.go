@@ -144,6 +144,22 @@ func (l *ScimFilterListenerN1QL) VisitTerminal(node antlr.TerminalNode) {
 	l.query = l.query + value
 }
 
+// urnPathPattern splits "urn:...:Schema.attr.sub" into its schema URN and the
+// attribute path that follows it. Compiled once: it sits on the request path.
+var urnPathPattern = regexp.MustCompile(`^(urn[:\w\.\_]*)(:-*)?(:[\w]*)(\.)(.*)$`)
+
+// SplitURNPath separates the schema URN prefix, when there is one, from the
+// attribute path. It lives here because both the N1QL translation and the
+// scim package's path handling need exactly this split, and scim already
+// imports this package.
+func SplitURNPath(path string) (urn string, attrPath string) {
+	if urnPathPattern.MatchString(path) {
+		return urnPathPattern.ReplaceAllString(path, `${1}${2}${3}`),
+			urnPathPattern.ReplaceAllString(path, `${5}`)
+	}
+	return "", path
+}
+
 // AddQuote turns a SCIM attribute path into a backtick-quoted N1QL identifier,
 // splitting off a schema URN prefix when there is one.
 //
@@ -152,12 +168,11 @@ func (l *ScimFilterListenerN1QL) VisitTerminal(node antlr.TerminalNode) {
 // Callers are still expected to validate the path against the schema before
 // getting here — this is the second line of defence, not the first.
 func AddQuote(value string) string {
-	re := regexp.MustCompile(`^(urn[:\w\.\_]*)(:-*)?(:[\w]*)(\.)(.*)$`)
+	schemaURN, path := SplitURNPath(value)
 	urn := ""
-	if re.MatchString(value) {
-		urn = "`" + escapeIdentifier(re.ReplaceAllString(value, `${1}${2}${3}`)) + "`."
+	if schemaURN != "" {
+		urn = "`" + escapeIdentifier(schemaURN) + "`."
 	}
-	path := re.ReplaceAllString(value, `${5}`)
 	segments := strings.Split(path, ".")
 	for i, segment := range segments {
 		segments[i] = escapeIdentifier(segment)

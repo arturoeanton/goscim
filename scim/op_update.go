@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/arturoeanton/goscim/scim/parser"
 	"github.com/gin-gonic/gin"
 )
 
@@ -148,17 +148,13 @@ func addPatchValue(current interface{}, value interface{}) interface{} {
 	return append(existing, value)
 }
 
+// opPathTopathArray splits a patch path into its segments, keeping a schema URN
+// prefix whole as the first one.
 func opPathTopathArray(value string) []string {
-	re := regexp.MustCompile(`^(urn[:\w\.\_]*)(:-*)?(:[\w]*)(\.)(.*)$`)
-	urn := ""
-	if re.MatchString(value) {
-		urn = re.ReplaceAllString(value, `${1}${2}${3}`)
-	}
-	path := re.ReplaceAllString(value, `${5}`)
+	urn, path := parser.SplitURNPath(value)
 	pathArray := make([]string, 0)
 	if urn != "" {
 		pathArray = append(pathArray, urn)
 	}
-	pathArray = append(pathArray, strings.Split(path, ".")...)
-	return pathArray
+	return append(pathArray, strings.Split(path, ".")...)
 }

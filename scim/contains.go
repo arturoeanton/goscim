@@ -1,6 +1,6 @@
 package scim
 
-//ContainsString is
+// ContainsString is
 func ContainsString(slice []string, item string) bool {
 	set := make(map[string]struct{}, len(slice))
 	for _, s := range slice {
@@ -11,7 +11,7 @@ func ContainsString(slice []string, item string) bool {
 	return ok
 }
 
-//ContainsSchemaExtension is
+// ContainsSchemaExtension is
 func ContainsSchemaExtension(slice []SchemaExtension, item string) bool {
 	set := make(map[string]struct{}, len(slice))
 	for _, s := range slice {

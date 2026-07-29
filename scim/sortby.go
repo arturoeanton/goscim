@@ -2,20 +2,10 @@ package scim
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
+
+	"github.com/arturoeanton/goscim/scim/parser"
 )
-
-// urnPathRe splits "urn:...:Schema.attr.sub" into its URN and attribute path.
-var urnPathRe = regexp.MustCompile(`^(urn[:\w\.\_]*)(:-*)?(:[\w]*)(\.)(.*)$`)
-
-// splitURNPath separates the schema URN prefix, if any, from the attribute path.
-func splitURNPath(path string) (urn string, attrPath string) {
-	if urnPathRe.MatchString(path) {
-		return urnPathRe.ReplaceAllString(path, `${1}${2}${3}`), urnPathRe.ReplaceAllString(path, `${5}`)
-	}
-	return "", path
-}
 
 // commonAttributes are the RFC 7643 3.1 attributes every resource carries and
 // that no schema declares, so they must be accepted without being found in one.
@@ -39,7 +29,7 @@ var commonAttributes = map[string]bool{
 // identifier and append arbitrary N1QL. Restricting the value to declared
 // attribute names removes the vector at the source instead of trying to
 // sanitise it.
-func NormalizeSortBy(resourceType ResoruceType, sortBy string) (string, error) {
+func NormalizeSortBy(resourceType ResourceType, sortBy string) (string, error) {
 	if strings.TrimSpace(sortBy) == "" {
 		return "", nil
 	}
@@ -60,8 +50,8 @@ func NormalizeSortBy(resourceType ResoruceType, sortBy string) (string, error) {
 
 // attributeIsDeclared reports whether path names an attribute of the resource
 // type's core schema, of one of its declared extensions, or a common attribute.
-func attributeIsDeclared(resourceType ResoruceType, path string) bool {
-	urn, attrPath := splitURNPath(path)
+func attributeIsDeclared(resourceType ResourceType, path string) bool {
+	urn, attrPath := parser.SplitURNPath(path)
 	if attrPath == "" {
 		return false
 	}

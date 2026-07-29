@@ -53,6 +53,9 @@ generate: $(ANTLR_JAR)
 	   build/antlr-out/ScimFilterLexer.tokens \
 	   scim/parser/
 	gofmt -w scim/parser
+	@# The generated copies must not linger: ./... would pick them up as a
+	@# second package with the same contents.
+	rm -rf build/antlr-out build/ScimFilter.g4
 	@echo "Parser regenerated. Run 'make check'."
 
 $(ANTLR_JAR):

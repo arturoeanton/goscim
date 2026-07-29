@@ -29,7 +29,7 @@ func Read(resource string) func(c *gin.Context) {
 	}
 }
 
-func getElementByID(c *gin.Context, id string, resourceType ResoruceType) (map[string]interface{}, error) {
+func getElementByID(c *gin.Context, id string, resourceType ResourceType) (map[string]interface{}, error) {
 	element, err := DB.Get(resourceType.Name, id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {

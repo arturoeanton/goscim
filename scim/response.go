@@ -88,7 +88,7 @@ func setVersionHeader(c *gin.Context, meta Meta) {
 // The scheme is taken from the connection, so a deployment behind a
 // TLS-terminating proxy needs the public base URL to be configurable; that is
 // still open.
-func absoluteLocation(c *gin.Context, resourceType ResoruceType, id string) string {
+func absoluteLocation(c *gin.Context, resourceType ResourceType, id string) string {
 	scheme := "http"
 	if c.Request.TLS != nil {
 		scheme = "https"
@@ -98,6 +98,6 @@ func absoluteLocation(c *gin.Context, resourceType ResoruceType, id string) stri
 
 // resourcePath is the server-relative path of a resource, which is what
 // meta.location carries.
-func resourcePath(resourceType ResoruceType, id string) string {
+func resourcePath(resourceType ResourceType, id string) string {
 	return PREFIX + resourceType.Endpoint + "/" + id
 }

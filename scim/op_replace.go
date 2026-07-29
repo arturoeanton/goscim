@@ -26,7 +26,7 @@ func Replace(resource string) func(c *gin.Context) {
 		replace(c, resourceType, id, element)
 	}
 }
-func replace(c *gin.Context, resourceType ResoruceType, id string, element map[string]interface{}) {
+func replace(c *gin.Context, resourceType ResourceType, id string, element map[string]interface{}) {
 	// The previous meta comes from the stored resource, never from the
 	// request: RFC 7644 does not require a client to echo meta back on a PUT,
 	// and meta.created is not the client's to set.

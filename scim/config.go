@@ -2,8 +2,8 @@ package scim
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -13,14 +13,14 @@ const (
 
 	// FolderSchema is ..
 	FolderSchema = "/schemas/"
-	// FolderResoruceType is ..
-	FolderResoruceType = "/resourceType/"
+	// FolderResourceType is ..
+	FolderResourceType = "/resourceType/"
 	PREFIX             = "/scim/v2"
 )
 
 var (
 	// Resources ...
-	Resources map[string]ResoruceType
+	Resources map[string]ResourceType
 	// Schemas ...
 	Schemas map[string]Schema
 )
@@ -50,14 +50,14 @@ func GetAttribute(attributes []Attribute, path string) Attribute {
 // given router, which is expected to already carry the authentication
 // middleware and the /scim/v2 prefix.
 func ReadResourceType(folderConfig string, r gin.IRouter) error {
-	Resources = make(map[string]ResoruceType)
+	Resources = make(map[string]ResourceType)
 	Schemas = make(map[string]Schema)
 
 	if err := ReadSchemas(folderConfig); err != nil {
 		return err
 	}
 
-	files, err := ioutil.ReadDir(folderConfig + FolderResoruceType)
+	files, err := os.ReadDir(folderConfig + FolderResourceType)
 	if err != nil {
 		return err
 	}
@@ -65,11 +65,11 @@ func ReadResourceType(folderConfig string, r gin.IRouter) error {
 		if !strings.HasSuffix(f.Name(), ".json") {
 			continue
 		}
-		file, err := ioutil.ReadFile(folderConfig + FolderResoruceType + f.Name())
+		file, err := os.ReadFile(folderConfig + FolderResourceType + f.Name())
 		if err != nil {
 			return err
 		}
-		resourceType := ResoruceType{}
+		resourceType := ResourceType{}
 		if err := json.Unmarshal(file, &resourceType); err != nil {
 			return err
 		}
@@ -93,7 +93,7 @@ func ReadSchemas(folderConfig string) error {
 	if Schemas == nil {
 		Schemas = make(map[string]Schema)
 	}
-	files, err := ioutil.ReadDir(folderConfig + FolderSchema)
+	files, err := os.ReadDir(folderConfig + FolderSchema)
 	if err != nil {
 		return err
 	}
@@ -110,7 +110,7 @@ func ReadSchemas(folderConfig string) error {
 
 // add schema if no exist in schemas
 func addSchema(folderConfig string, schemaName string) error {
-	file, err := ioutil.ReadFile(folderConfig + FolderSchema + schemaName)
+	file, err := os.ReadFile(folderConfig + FolderSchema + schemaName)
 	if err != nil {
 		return err
 	}

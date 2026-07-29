@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
-//Create is  POST https://example.com/{v}/{resource}
+// Create is  POST https://example.com/{v}/{resource}
 func Create(resource string) func(c *gin.Context) {
 	return func(c *gin.Context) {
 

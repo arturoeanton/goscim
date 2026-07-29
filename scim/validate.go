@@ -10,7 +10,7 @@ import (
 )
 
 // ValidateFieldSchemas is ..
-func ValidateFieldSchemas(c *gin.Context, element map[string]interface{}, resourceType ResoruceType) (bool, []string) {
+func ValidateFieldSchemas(c *gin.Context, element map[string]interface{}, resourceType ResourceType) (bool, []string) {
 	schemas, ok := element["schemas"]
 	if !ok {
 		MakeError(c, http.StatusBadRequest, "schemas no exist")

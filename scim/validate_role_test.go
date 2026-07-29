@@ -112,7 +112,7 @@ func TestReadFilterAppliesToExtensionAttributes(t *testing.T) {
 			{Name: "restricted", Type: "string", Read: strs("privileged")},
 		},
 	}
-	resourceType := ResoruceType{
+	resourceType := ResourceType{
 		Name:             "Thing",
 		Schema:           "urn:test:core",
 		SchemaExtensions: []SchemaExtension{{Schema: extension}},
@@ -162,7 +162,7 @@ func TestReadFilterDoesNotMutateItsInput(t *testing.T) {
 }
 
 func TestReadFilterHandlesNil(t *testing.T) {
-	if got := ValidateReadRole(nil, ResoruceType{}, nil); got != nil {
+	if got := ValidateReadRole(nil, ResourceType{}, nil); got != nil {
 		t.Errorf("ValidateReadRole(nil) = %v", got)
 	}
 }

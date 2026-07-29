@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"strconv"
@@ -234,7 +233,7 @@ func (s *CouchbaseStore) EnsureBucket(name string) error {
 
 	if _, err := os.Stat(FolderBucketSetting + name + ".json"); err == nil {
 		var config ConfigBucket
-		file, err := ioutil.ReadFile(FolderBucketSetting + name + ".json")
+		file, err := os.ReadFile(FolderBucketSetting + name + ".json")
 		if err != nil {
 			return err
 		}

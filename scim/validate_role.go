@@ -22,7 +22,7 @@ func (p *Principal) rolesOrNone() []string {
 // An attribute the caller cannot read is omitted rather than blanked: an empty
 // string is indistinguishable from a legitimately empty value, and it is not
 // even a valid value for a non-string attribute.
-func ValidateReadRole(roles []string, resourceType ResoruceType, element map[string]interface{}) map[string]interface{} {
+func ValidateReadRole(roles []string, resourceType ResourceType, element map[string]interface{}) map[string]interface{} {
 	if element == nil {
 		return nil
 	}

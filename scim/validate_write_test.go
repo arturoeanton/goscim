@@ -107,7 +107,7 @@ func TestReadOnlyAttributesSurviveAnUpdate(t *testing.T) {
 
 // --- $writer, the mirror of $reader ------------------------------------
 
-func writerSchemas(t *testing.T) ResoruceType {
+func writerSchemas(t *testing.T) ResourceType {
 	t.Helper()
 	const core = "urn:test:write:core"
 	Schemas[core] = Schema{
@@ -123,7 +123,7 @@ func writerSchemas(t *testing.T) ResoruceType {
 			}},
 		},
 	}
-	return ResoruceType{Name: "Thing", Schema: core}
+	return ResourceType{Name: "Thing", Schema: core}
 }
 
 func TestWriterRolesGateWrites(t *testing.T) {

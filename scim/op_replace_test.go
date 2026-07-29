@@ -115,7 +115,7 @@ func TestReplaceValidatesTheBody(t *testing.T) {
 // updateMeta used to assert metaOld["created"].(string), so a resource stored
 // without meta -- written by an earlier version, say -- panicked on update.
 func TestUpdateMetaToleratesAMissingCreated(t *testing.T) {
-	resourceType := ResoruceType{Name: "Element", Endpoint: "/Elements"}
+	resourceType := ResourceType{Name: "Element", Endpoint: "/Elements"}
 	element := map[string]interface{}{"id": "abc"}
 
 	cases := []struct {

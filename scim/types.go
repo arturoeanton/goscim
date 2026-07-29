@@ -15,8 +15,8 @@ type SchemaExtension struct {
 	Required bool   `json:"required"`
 }
 
-// ResoruceType is of SCIM
-type ResoruceType struct {
+// ResourceType is of SCIM
+type ResourceType struct {
 	Schemas          []string          `json:"schemas"`
 	ID               string            `json:"id"`
 	Name             string            `json:"name"`
