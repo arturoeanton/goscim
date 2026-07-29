@@ -15,11 +15,21 @@ import (
 // path: routing, validation, meta generation and role filtering all run.
 func newTestServer(t *testing.T) (*gin.Engine, *MemoryStore) {
 	t.Helper()
+	return newTestServerAs(t, &AnonymousAuthenticator{Roles: testRoles})
+}
+
+// testRoles are the roles most tests run as. role1 appears in the shipped
+// Element schema's $reader list, so it exercises both sides of the check.
+var testRoles = []string{"user", "admin", "superadmin", "role1"}
+
+// newTestServerAs builds the router behind a specific Authenticator.
+func newTestServerAs(t *testing.T, authenticator Authenticator) (*gin.Engine, *MemoryStore) {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 	store := NewMemoryStore()
 	DB = store
 	r := gin.New()
-	if _, err := NewRouter("../config", r); err != nil {
+	if _, err := NewRouter("../config", r, authenticator); err != nil {
 		t.Fatalf("NewRouter: %v", err)
 	}
 	return r, store

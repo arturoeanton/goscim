@@ -167,7 +167,7 @@ Fix: recursar en arrays, resolver el atributo contra el schema correcto según e
 
 ---
 
-### B10 · CRÍTICO · No existe autenticación, y la conexión a Couchbase no valida el certificado
+### B10 · CRÍTICO · No existe autenticación, y la conexión a Couchbase no valida el certificado — AUTENTICACIÓN Y TLS CORREGIDOS; `$writer` PENDIENTE
 `main.go` no registra ningún middleware de auth: los seis verbos de cada resource type son públicos. Los roles están hardcodeados en `op_read.go:21` y `op_search.go:107`, y `$writer` no se aplica en ningún punto (tres `//TODO: Validate _write`).
 
 En paralelo, `scim/couchbase.go:52` fija `TLSSkipVerify: true` sobre un esquema `couchbases://`, lo que anula la protección del TLS que se está pidiendo (MITM entre servidor y base).

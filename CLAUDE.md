@@ -32,7 +32,9 @@ docker run -d --name db -p 8091-8094:8091-8094 -p 11210:11210 couchbase
 # then create the cluster at http://localhost:8091 with the same credentials
 ```
 
-`SCIM_ADMIN_USER` / `SCIM_ADMIN_PASSWORD` are **Couchbase credentials only** — they do not protect the HTTP API. There is no authentication middleware anywhere; every SCIM endpoint is public.
+`SCIM_ADMIN_USER` / `SCIM_ADMIN_PASSWORD` are **Couchbase credentials only** — they never protect the HTTP API.
+
+The HTTP API is protected by `SCIM_AUTH`, which is **required**: `jwt` (RFC 9068 access tokens validated against `SCIM_JWT_JWKS_URL` / `SCIM_JWT_ISSUER` / `SCIM_JWT_AUDIENCE`), `basic` (`SCIM_BASIC_USERS=user:password:role1,role2;...`, development only), or `none` (`SCIM_ANONYMOUS_ROLES=...`). An unset `SCIM_AUTH` is a startup error rather than an open server.
 
 A live Couchbase is only needed to *run* the server. Tests wire a `MemoryStore` into `scim.DB` instead — see "Storage" below.
 
@@ -85,6 +87,12 @@ Create/Replace share one shape: unmarshal body → `ValidateFieldSchemas` (check
 `scim/validate.go` is a **strict whitelist**: any key present in the payload that is not declared in the schema is a 400. It dispatches per SCIM type (`string`/`boolean`/`decimal`/`integer`/`dateTime`/`binary`/`reference`/`complex`); `binary` and `reference` are no-ops. It also **ignores the `multiValued` flag entirely**, so an attribute declared `multiValued: true` is still validated as if it were scalar.
 
 Update (PATCH) applies `add`/`replace`/`remove` operations by pointer-walking the stored document (`pointValue`), then funnels into the same `replace()` as PUT, so patched documents are re-validated.
+
+### Authentication
+
+`scim/auth.go` defines the `Authenticator` interface and the gin middleware that publishes a `Principal` (subject plus roles) into the request context. `NewRouter` puts every resource endpoint behind it; the discovery endpoints stay outside, which RFC 7644 §2 allows. Implementations live in `auth_jwt.go` (JWKS-backed, RSA only, algorithms restricted to RS256/384/512 so a symmetric or unexpected algorithm cannot be substituted), `auth_basic.go` and the `AnonymousAuthenticator` in `auth.go`.
+
+Roles come from the token via `auth_claims.go`: RFC 9068 §2.2.3.1 reuses SCIM's own `roles`, `groups` and `entitlements` claims from RFC 7643 §4.1.2, and each may be a list of strings, a list of `{"value": ...}` objects, or a space-delimited string. `scope` is read too, plus an optional deployment-specific claim.
 
 ### Role-based access control
 

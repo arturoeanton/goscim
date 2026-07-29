@@ -2,13 +2,18 @@ package scim
 
 import "github.com/gin-gonic/gin"
 
-// currentRoles returns the roles of the caller.
-//
-// TODO(B10): these are hardcoded until there is an authentication middleware to
-// take them from the authenticated principal. Keeping the placeholder in one
-// place means the handlers already ask the right question.
+// currentRoles returns the roles of the authenticated caller. A request that
+// never went through the authentication middleware has none, so every
+// restricted attribute stays hidden rather than being exposed by accident.
 func currentRoles(c *gin.Context) []string {
-	return []string{"user", "admin", "superadmin", "role1"}
+	return PrincipalOf(c).rolesOrNone()
+}
+
+func (p *Principal) rolesOrNone() []string {
+	if p == nil {
+		return nil
+	}
+	return p.Roles
 }
 
 // ValidateReadRole returns a copy of element holding only what the caller may

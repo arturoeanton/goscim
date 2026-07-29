@@ -57,15 +57,22 @@ func InitDB() error {
 	if endpoint == "" {
 		endpoint = "localhost"
 	}
+
+	connectionString, security, err := couchbaseConnection(endpoint)
+	if err != nil {
+		return err
+	}
+	if security.TLSSkipVerify {
+		log.Println("WARNING: SCIM_COUCHBASE_TLS_SKIP_VERIFY is set - the Couchbase certificate is not verified")
+	}
+
 	// Initialize the Connection
-	cluster, err := gocb.Connect("couchbases://"+endpoint, gocb.ClusterOptions{
+	cluster, err := gocb.Connect(connectionString, gocb.ClusterOptions{
 		Authenticator: gocb.PasswordAuthenticator{
 			Username: username,
 			Password: password,
 		},
-		SecurityConfig: gocb.SecurityConfig{
-			TLSSkipVerify: true,
-		},
+		SecurityConfig: security,
 	})
 	if err != nil {
 		return err
