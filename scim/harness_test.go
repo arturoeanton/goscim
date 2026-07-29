@@ -55,6 +55,17 @@ func do(t *testing.T, r http.Handler, method, target, body string) *httptest.Res
 	return serve(r, newRequest(method, target, body))
 }
 
+// testContext builds a gin context carrying a principal with the given roles,
+// for exercising the authorization helpers directly.
+func testContext(roles []string) (*gin.Context, *httptest.ResponseRecorder) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", strings.NewReader(""))
+	c.Set(principalContextKey, &Principal{Subject: "test", Roles: roles})
+	return c, w
+}
+
 // decode unmarshals a JSON response body, failing the test if it is not JSON.
 func decode(t *testing.T, w *httptest.ResponseRecorder) map[string]interface{} {
 	t.Helper()

@@ -58,8 +58,6 @@ func Update(resource string) func(c *gin.Context) {
 			}
 		}
 
-		//TODO: Validate _write of all fields of element
-
 		replace(c, resourceType, id, element)
 	}
 }

@@ -12,8 +12,6 @@ import (
 func Delete(resource string) func(c *gin.Context) {
 	return func(c *gin.Context) {
 
-		//TODO: Validate _remove of all fields of element
-
 		id := c.Param("id")
 		if resource == "Bulk" {
 			Bulk(c)

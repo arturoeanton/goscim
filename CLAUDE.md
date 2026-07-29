@@ -96,9 +96,12 @@ Roles come from the token via `auth_claims.go`: RFC 9068 §2.2.3.1 reuses SCIM's
 
 ### Role-based access control
 
-`$reader` / `$writer` string arrays on schema attributes (see `config/schemas/...core+2.0+Element.json`). Only **read** filtering exists: `ValidateReadRole` (`scim/validate_role.go`) uses `commons.WalkMap` to walk the document and blanks out any attribute whose `$reader` list does not intersect the caller's roles. `$writer` is unenforced (`//TODO: Validate _write` in create/replace/update).
+Two mechanisms, both applied per attribute and both recursing into complex and multi-valued values:
 
-The caller's roles are hardcoded as `[]string{"user","admin","superadmin","role1"}` in `op_read.go:21` and `op_search.go:107`, pending token extraction. `commons.WalkMap` recurses into `map[string]interface{}` only, not into arrays.
+- **Reading** — `scim/validate_role.go`. `ValidateReadRole` drops any attribute whose `$reader` list does not intersect the caller's roles, and any attribute that is `returned: never` or `writeOnly` (`isReturnable`). Dropped means the key is absent, not empty. Every resource response goes through it, not only read and search.
+- **Writing** — `scim/validate_write.go`. `EnforceWriteAccess` runs before validation on create and replace (and therefore on patch, which funnels into replace). `$writer` denies with 403; `mutability: readOnly` silently drops the client's value and restores the stored one, because read-modify-write clients echo whole resources back on a PUT; `mutability: immutable` refuses a change with 400 `scimType: mutability`.
+
+`"*"` in either list means any role. Roles come from the authenticated principal via `currentRoles(c)`; a request with no principal has none, so restricted attributes stay hidden.
 
 ### Not implemented
 

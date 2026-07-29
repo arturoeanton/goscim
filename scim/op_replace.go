@@ -43,10 +43,12 @@ func replace(c *gin.Context, resourceType ResoruceType, id string, element map[s
 	if !ok {
 		return
 	}
-	//TODO: Validate _write of all fields of element
 
 	delete(element, "id")
 	delete(element, "meta")
+	if !EnforceWriteAccess(c, resourceType, element, stored) {
+		return
+	}
 	ok, element = ValidateSchemas(c, element, resourceType.Schema, resourceType.SchemaExtensions)
 	if !ok {
 		return

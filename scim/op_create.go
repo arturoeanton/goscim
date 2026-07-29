@@ -28,11 +28,13 @@ func Create(resource string) func(c *gin.Context) {
 			return
 		}
 		delete(element, "id")
+		if !EnforceWriteAccess(c, resourceType, element, nil) {
+			return
+		}
 		ok, element = ValidateSchemas(c, element, resourceType.Schema, resourceType.SchemaExtensions)
 		if !ok {
 			return
 		}
-		//TODO: Validate _write of all fields of element
 
 		id := uuid.New().String()
 		element["id"] = id

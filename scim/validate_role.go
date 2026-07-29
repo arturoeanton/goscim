@@ -55,7 +55,7 @@ func filterAttributes(roles []string, attributes []Attribute, element map[string
 			filtered[key] = value
 			continue
 		}
-		if !canRead(roles, attribute) {
+		if !isReturnable(attribute) || !canRead(roles, attribute) {
 			continue
 		}
 		filtered[key] = filterValue(roles, attribute, value)
