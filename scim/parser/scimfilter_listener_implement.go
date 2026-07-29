@@ -12,6 +12,24 @@ type ScimFilterListenerN1QL struct {
 	*BaseScimFilterListener
 	query         string
 	prevOperation string
+	inCriteria    bool
+}
+
+// EnterCriteria and ExitCriteria track whether the terminals being visited are
+// the contents of a quoted value, which have to be escaped rather than emitted
+// verbatim.
+func (l *ScimFilterListenerN1QL) EnterCriteria(c *CriteriaContext) { l.inCriteria = true }
+
+// ExitCriteria is called when the parser exits a quoted value.
+func (l *ScimFilterListenerN1QL) ExitCriteria(c *CriteriaContext) { l.inCriteria = false }
+
+// escapeStringLiteral makes a value safe to sit inside a double-quoted N1QL
+// string literal. Only the backslash needs handling: the grammar's ANY token
+// excludes the double quote so a value cannot contain one, but a trailing
+// backslash would escape the literal's own closing quote and swallow the
+// ORDER BY / OFFSET / LIMIT that gets appended after the filter.
+func escapeStringLiteral(value string) string {
+	return strings.ReplaceAll(value, `\`, `\\`)
 }
 
 // FilterToN1QL translates a SCIM filter into the page and count N1QL queries
@@ -37,6 +55,9 @@ func FilterToN1QL(resourceName string, filter string) (string, string, error) {
 // VisitTerminal is called when a terminal node is visited.
 func (l *ScimFilterListenerN1QL) VisitTerminal(node antlr.TerminalNode) {
 	value := node.GetText()
+	if l.inCriteria && value != `"` {
+		value = escapeStringLiteral(value)
+	}
 	switch node.GetSymbol().GetTokenType() {
 	case ScimFilterParserATTRNAME:
 		{

@@ -6,7 +6,7 @@ Estado de partida: `go build ./...`, `go vet ./...` y `go test ./...` pasan (3 t
 
 ---
 
-## Parte 1 — 10 bugs
+## Parte 1 — 11 bugs (10 de la auditoría inicial + 1 hallado durante las correcciones)
 
 ### B1 · CRÍTICO · Operadores `gt`/`ge`/`lt`/`le` invertidos — CORREGIDO
 `scim/parser/scimfilter_listener_implement.go:82-101`
@@ -58,6 +58,29 @@ AddQuote("id` , (SELECT * FROM `User`) x")  =>  `id` , (SELECT * FROM `User`) x`
 El atacante sale del quoting y controla la cláusula `ORDER BY`.
 
 Fix: validar `sortBy` contra los atributos declarados del schema (whitelist) y rechazar cualquier cosa fuera de `[-_.:a-zA-Z0-9]`; duplicar los backticks internos.
+
+---
+
+### B11 · CRÍTICO · Un valor del filtro puede romper su propio literal de cadena — CORREGIDO
+
+*Hallazgo posterior a la auditoría inicial, encontrado mientras se corregía B3.*
+
+Los valores del filtro se concatenan en el N1QL como literales entre comillas dobles. La regla `criteria` de la gramática acepta cualquier carácter salvo `"`, `(`, `)`, `[`, `]` — incluido el backslash. Un valor terminado en backslash escapa la comilla de cierre del propio literal.
+
+Verificado:
+```
+filter=name eq "a\"
+  => SELECT * FROM `Element` WHERE `name` = "a\"
+     ORDER BY `name` ASC        <- todo esto queda DENTRO del literal
+     OFFSET 0
+     LIMIT 100
+```
+
+Además rompe el caso legítimo: buscar un valor con backslash (una ruta Windows, `DOMAIN\usuario`) generaba SQL inválido.
+
+Fix: escapar el backslash al emitir el contenido de `criteria`, rastreando con `EnterCriteria`/`ExitCriteria` cuándo los terminales pertenecen a un valor. Un test de propiedad comprueba que ninguna consulta generada termina dentro de un literal sin cerrar.
+
+**Queda abierto**: dentro de `co`/`sw`/`ew`, los caracteres `%` y `_` del valor se interpretan como comodines LIKE, así que buscar un `%` literal devuelve todo. Se arregla junto con la mejora 4 (parámetros ligados), que elimina toda esta clase de problema de raíz en vez de escapar caso por caso.
 
 ---
 
