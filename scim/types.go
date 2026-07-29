@@ -55,13 +55,18 @@ type Schema struct {
 // Resource is of SCIM
 type Resource map[string]interface{}
 
-// ListResponse is of SCIM
+// ListResponse is of SCIM.
+//
+// None of these fields is omitempty: RFC 7644 3.4.2 makes totalResults
+// required, and a search that matched nothing was answering without it, so a
+// client could not tell an empty result from a malformed response. The same
+// goes for an empty Resources array.
 type ListResponse struct {
 	Schemas      []string      `json:"schemas"`
-	TotalResults int           `json:"totalResults,omitempty"`
-	ItemsPerPage int           `json:"itemsPerPage,omitempty"`
-	StartIndex   int           `json:"startIndex,omitempty"`
-	Resources    []interface{} `json:"Resources,omitempty"`
+	TotalResults int           `json:"totalResults"`
+	ItemsPerPage int           `json:"itemsPerPage"`
+	StartIndex   int           `json:"startIndex"`
+	Resources    []interface{} `json:"Resources"`
 }
 
 // Error is ..

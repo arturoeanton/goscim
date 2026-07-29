@@ -183,7 +183,9 @@ func (s *CouchbaseStore) Search(q SearchQuery) (int, []map[string]interface{}, e
 	queryPage += "\nOFFSET " + strconv.Itoa(q.Offset)
 	queryPage += "\nLIMIT " + strconv.Itoa(q.Limit)
 
-	rowsCount, err := s.cluster.Query(queryCount, nil)
+	options := &gocb.QueryOptions{ScanConsistency: queryScanConsistency()}
+
+	rowsCount, err := s.cluster.Query(queryCount, options)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -195,7 +197,7 @@ func (s *CouchbaseStore) Search(q SearchQuery) (int, []map[string]interface{}, e
 		return 0, nil, err
 	}
 
-	rows, err := s.cluster.Query(queryPage, nil)
+	rows, err := s.cluster.Query(queryPage, options)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -301,16 +303,61 @@ func (s *CouchbaseStore) EnsureBucket(name string) error {
 	}
 
 	if _, err := s.cluster.Buckets().GetBucket(name, nil); err != nil {
-		gocb.SetLogger(gocb.VerboseStdioLogger())
 		if err := s.cluster.Buckets().CreateBucket(defaultConfig, nil); err != nil {
-			return err
+			return fmt.Errorf("creating bucket %q: %w "+
+				"(note that compression_mode and some other bucket settings are Enterprise Edition only)", name, err)
 		}
 		log.Println("Create Bucket -> " + name)
 	}
 	bucket := s.cluster.Bucket(name)
-	if err := bucket.WaitUntilReady(20*time.Second, nil); err != nil {
-		return err
+	if err := bucket.WaitUntilReady(bucketReadyTimeout, nil); err != nil {
+		return fmt.Errorf("waiting for bucket %q: %w", name, err)
 	}
 	log.Println("Ready Bucket -> " + name)
-	return s.cluster.QueryIndexes().CreatePrimaryIndex(name, &gocb.CreatePrimaryQueryIndexOptions{IgnoreIfExists: true})
+	return s.createPrimaryIndex(name)
+}
+
+const (
+	bucketReadyTimeout = 20 * time.Second
+	indexReadyTimeout  = 60 * time.Second
+	indexRetryInterval = time.Second
+)
+
+// queryScanConsistency decides how fresh a search has to be.
+//
+// N1QL defaults to "not bounded": the query runs against whatever the index
+// happens to hold, so a resource that was just created is not found. That is
+// the wrong default for a provisioning API, where a client creating a user and
+// then searching for it is the ordinary flow, not an edge case. Request-plus
+// makes the query wait for every mutation accepted before it was issued.
+//
+// SCIM_QUERY_CONSISTENCY=not_bounded trades that correctness back for latency,
+// for deployments that would rather have the speed.
+func queryScanConsistency() gocb.QueryScanConsistency {
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("SCIM_QUERY_CONSISTENCY")), "not_bounded") {
+		return gocb.QueryScanConsistencyNotBounded
+	}
+	return gocb.QueryScanConsistencyRequestPlus
+}
+
+// createPrimaryIndex asks for the bucket's primary index, retrying while the
+// query service catches up.
+//
+// A bucket that has just been created is not immediately visible to the query
+// service, which answers "service not available" until it is. Asking once meant
+// the very first startup against a fresh cluster failed, so this waits instead
+// of giving up.
+func (s *CouchbaseStore) createPrimaryIndex(name string) error {
+	deadline := time.Now().Add(indexReadyTimeout)
+	for attempt := 1; ; attempt++ {
+		err := s.cluster.QueryIndexes().CreatePrimaryIndex(name,
+			&gocb.CreatePrimaryQueryIndexOptions{IgnoreIfExists: true})
+		if err == nil {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("creating the primary index on %q after %d attempts: %w", name, attempt, err)
+		}
+		time.Sleep(indexRetryInterval)
+	}
 }

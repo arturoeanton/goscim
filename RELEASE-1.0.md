@@ -204,7 +204,13 @@ Un release 1.0 no debería publicarse sin esto resuelto.
 
 ### Ingeniería y operación
 
-15. **Cobertura de tests**: hoy hay 3 tests, todos del parser, y `scim/` está a 0 %. Mínimo para un 1.0: tabla de casos por operador y por tipo en el parser, tests de `validate.go` con `httptest`, y tests de integración de los seis verbos contra Couchbase con `testcontainers-go`. Objetivo razonable: 70 % en `scim/`.
+15. ~~**Cobertura de tests**~~ **Hecho**. La suite unitaria cubre el 76 % de `scim/`, y `make integration` levanta una Couchbase real con `testcontainers-go` para cubrir lo que el fake no puede: arranque, creación de buckets e índices, y la traducción a N1QL completa.
+
+    Los tests de integración encontraron **cuatro bugs de producción** en su primera ejecución:
+    - `EnsureBucket` enviaba siempre `compression_mode`, que **Couchbase Community rechaza**: el servidor no arrancaba contra la edición gratuita que indica el propio README.
+    - `CREATE PRIMARY INDEX` se pedía inmediatamente después de crear el bucket, antes de que el servicio de consultas lo viera. El primer arranque contra un cluster nuevo fallaba con *service not available*.
+    - Las búsquedas usaban la consistencia por defecto de N1QL (`not_bounded`), así que **un recurso recién creado no aparecía al buscarlo**. Para una API de aprovisionamiento eso no es un caso límite: es el flujo normal. Ahora es `request_plus`, configurable con `SCIM_QUERY_CONSISTENCY`.
+    - `totalResults` e `itemsPerPage` llevaban `omitempty`, así que una búsqueda sin resultados respondía sin ellos. RFC 7644 §3.4.2 los exige.
 16. **CI en GitHub Actions**: `build`, `vet`, `staticcheck`, `go test -race -cover`, `govulncheck` y `gosec` en cada PR. `.github/` hoy solo tiene plantillas.
 17. **Actualizar dependencias y toolchain** — *hecho en parte*. `go` subió de 1.16 a 1.25; gin 1.7.7 → 1.12.0, gocb 2.3.5 → 2.12.4, gocbcore 10.0.7 → 10.9.3, uuid 1.3.0 → 1.6.0, y grpc/quic-go/otel (transitivas de gocb y gin) a versiones sin vulnerabilidades alcanzables. `govulncheck` pasa de 25 vulnerabilidades en módulos requeridos a **0 alcanzables desde nuestro código**.
 

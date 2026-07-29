@@ -212,3 +212,28 @@ func TestItemsPerPageReflectsThePage(t *testing.T) {
 		})
 	}
 }
+
+// RFC 7644 3.4.2 makes totalResults required. A search that matched nothing
+// used to answer without it, and without Resources, because both fields were
+// omitempty -- leaving a client unable to tell an empty result from a
+// malformed response.
+func TestEmptySearchStillCarriesTheListFields(t *testing.T) {
+	r, _ := newTestServer(t)
+
+	w := do(t, r, http.MethodGet, elementsPath, "")
+	requireStatus(t, w, http.StatusOK)
+	body := decode(t, w)
+
+	for _, field := range []string{"schemas", "totalResults", "itemsPerPage", "startIndex", "Resources"} {
+		if _, present := body[field]; !present {
+			t.Errorf("%s is missing from an empty ListResponse: %s", field, w.Body.String())
+		}
+	}
+	if body["totalResults"] != float64(0) {
+		t.Errorf("totalResults = %v", body["totalResults"])
+	}
+	resources, ok := body["Resources"].([]interface{})
+	if !ok || len(resources) != 0 {
+		t.Errorf("Resources = %#v, want an empty array", body["Resources"])
+	}
+}

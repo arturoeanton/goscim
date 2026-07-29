@@ -44,6 +44,25 @@ jobs:
       - name: Coverage
         run: make cover
 
+  integration:
+    name: integration against a real Couchbase
+    runs-on: ubuntu-latest
+    # The container image is large and the cluster takes a couple of minutes to
+    # become healthy, so this job is slower than the rest by design. It is the
+    # only thing that exercises the N1QL translation, bucket creation and index
+    # creation end to end.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run
+        run: make integration
+
   vulnerabilities:
     name: govulncheck
     runs-on: ubuntu-latest

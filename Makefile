@@ -25,6 +25,12 @@ test:
 race:
 	go test ./... -count=1 -race
 
+# Runs the suite against a real Couchbase started in a container. Slow: the
+# image is large and the cluster takes a couple of minutes to become healthy,
+# which is why it is behind a build tag rather than part of `make test`.
+integration:
+	go test -tags integration -timeout 20m -count=1 -v ./test/integration
+
 cover:
 	@mkdir -p build
 	go test ./... -count=1 -coverprofile=build/coverage.out

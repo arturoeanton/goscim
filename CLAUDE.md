@@ -64,6 +64,8 @@ Handlers never touch Couchbase directly. They go through the `Store` interface i
 
 ### Tests
 
+There are two suites. `make test` / `make race` run the unit suite; `make integration` runs `test/integration` against a real Couchbase started with testcontainers (build tag `integration`, several minutes). The integration tests live in their own package deliberately: sharing a binary with the unit suite would let `newTestServer` swap the global `scim.DB` for the fake, and they would silently pass against it.
+
 `scim/harness_test.go` builds the **real** router over a `MemoryStore` via `newTestServer(t)`, so routing, validation, meta generation and role filtering all execute. `scim/op_crud_test.go` drives it end to end with `httptest`. Tests that pin behavior known to violate the RFC are marked `TODO(Bn)` referencing `RELEASE-1.0.md` — when you fix bug *n*, those assertions are expected to change.
 
 ### Filter parser (`scim/parser/`)
