@@ -3,7 +3,6 @@ package scim
 import (
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -23,11 +22,23 @@ func Replace(resource string) func(c *gin.Context) {
 			return
 		}
 		var element map[string]interface{}
-		json.Unmarshal(raw, &element)
-		replace(c, resourceType, id, element)
+		if err := json.Unmarshal(raw, &element); err != nil || element == nil {
+			// Still answer 404 when the target resource does not exist.
+			if _, getErr := getElementByID(c, id, resourceType); getErr != nil {
+				return
+			}
+			MakeTypedError(c, http.StatusBadRequest, "invalidSyntax", "request body must be a JSON object")
+			return
+		}
+		replaceWithMode(c, resourceType, id, element, false)
 	}
 }
+
 func replace(c *gin.Context, resourceType ResourceType, id string, element map[string]interface{}) {
+	replaceWithMode(c, resourceType, id, element, false)
+}
+
+func replaceWithMode(c *gin.Context, resourceType ResourceType, id string, element map[string]interface{}, isPatch bool) {
 	// The previous meta comes from the stored resource, never from the
 	// request: RFC 7644 does not require a client to echo meta back on a PUT,
 	// and meta.created is not the client's to set.
@@ -45,9 +56,9 @@ func replace(c *gin.Context, resourceType ResourceType, id string, element map[s
 		return
 	}
 
-	delete(element, "id")
-	delete(element, "meta")
-	if !EnforceWriteAccess(c, resourceType, element, stored) {
+	deleteKeyFold(element, "id")
+	deleteKeyFold(element, "meta")
+	if !enforceWriteAccess(c, resourceType, element, stored, isPatch) {
 		return
 	}
 	ok, element = ValidateSchemas(c, element, resourceType.Schema, resourceType.SchemaExtensions)
@@ -66,8 +77,7 @@ func replace(c *gin.Context, resourceType ResourceType, id string, element map[s
 			MakeError(c, http.StatusNotFound, "Resource "+id+" not found")
 			return
 		}
-		MakeError(c, http.StatusInternalServerError, err.Error())
-		log.Println(err.Error())
+		internalError(c, err)
 		return
 	}
 	c.Header("Location", absoluteLocation(c, resourceType, id))

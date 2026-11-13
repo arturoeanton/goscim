@@ -137,7 +137,7 @@ text; a filter that fails to parse is refused rather than translated.
 
 ## Requirements
 
-Go 1.25+ to build. Couchbase 7.x, Community or Enterprise, with the data,
+Go 1.26+ (toolchain 1.27.4+) to build. Couchbase 7.x, Community or Enterprise, with the data,
 query and index services.
 
 ## Development
@@ -155,7 +155,7 @@ Contributions are welcome — see [CONTRIBUTING](CONTRIBUTING.md), and
 
 ## Status
 
-1.0.0. The test suite covers the request path end to end, and the integration
+1.0.1. The test suite covers the request path end to end, and the integration
 suite exercises it against a real Couchbase. It has not yet been run against a
 production identity provider such as Okta or Entra ID; if you do, reports are
 welcome — that is where the remaining interoperability gaps will show up.

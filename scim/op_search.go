@@ -62,6 +62,11 @@ func Search(resource string) func(c *gin.Context) {
 			MakeTypedError(c, http.StatusBadRequest, "invalidValue", err.Error())
 			return
 		}
+		roles := currentRoles(c)
+		if err := ValidateFilterAttributes(resourceType, roles, filter); err != nil {
+			MakeTypedError(c, http.StatusBadRequest, "invalidFilter", err.Error())
+			return
+		}
 
 		total, resources, err := DB.Search(SearchQuery{
 			Bucket: resourceType.Name,
@@ -79,15 +84,13 @@ func Search(resource string) func(c *gin.Context) {
 				MakeTypedError(c, http.StatusBadRequest, "invalidFilter", err.Error())
 				return
 			}
-			MakeError(c, http.StatusInternalServerError, err.Error())
-			log.Println(err.Error())
+			internalError(c, err)
 			return
 		}
 
 		result.Schemas = append(result.Schemas, "urn:ietf:params:scim:api:messages:2.0:ListResponse")
 		result.TotalResults = total
 		result.Resources = make([]interface{}, 0)
-		roles := currentRoles(c)
 		for _, item := range resources {
 			result.Resources = append(result.Resources, ValidateReadRole(roles, resourceType, item))
 		}

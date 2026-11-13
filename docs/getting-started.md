@@ -1,6 +1,6 @@
 # Getting started
 
-A running server and your first user. Ten minutes, assuming Docker and Go 1.25
+A running server and your first user. Ten minutes, assuming Docker and Go 1.26
 or later.
 
 ## 1. Start Couchbase

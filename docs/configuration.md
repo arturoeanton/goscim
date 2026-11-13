@@ -35,6 +35,7 @@ so every attribute with a `$reader` list is filtered out of responses.
 | `SCIM_PORT` | `:8080` | Listen address, in `host:port` form |
 | `SCIM_CONFIG_DIR` | `config` | Directory holding `schemas/`, `resourceType/`, `bucketSettings/`, `serviceProviderConfig/` |
 | `SCIM_TRUSTED_PROXIES` | `127.0.0.1` | Comma-separated addresses whose `X-Forwarded-For` is believed, or `none` to trust nobody |
+| `SCIM_PUBLIC_URL` | *(empty)* | Externally reachable base URL (e.g. `https://scim.example.com`) used to build `Location` headers |
 
 Fixed in code rather than configurable, because no deployment has asked yet:
 read header timeout 10s, read and write timeouts 30s, idle timeout 120s,

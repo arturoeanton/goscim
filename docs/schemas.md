@@ -58,8 +58,8 @@ Standard, from RFC 7643 §7.
 |---|---|---|
 | `readWrite` | Accepted | Accepted |
 | `readOnly` | Ignored | Ignored; the stored value is kept |
-| `immutable` | Accepted | `400` with `scimType: mutability` if it differs |
-| `writeOnly` | Accepted | Accepted; never returned |
+| `immutable` | Accepted | `400` with `scimType: mutability` if changed or removed |
+| `writeOnly` | Accepted | Accepted; never returned, filterable, or sortable |
 
 A `readOnly` value from a client is dropped rather than refused. Read-modify-
 write clients echo the whole resource back on a `PUT`, including attributes
@@ -105,8 +105,10 @@ not part of a schema a client should consume.
 
 An attribute the caller cannot read is **omitted** from the response, not
 returned empty: an empty string is indistinguishable from a legitimately empty
-value, and is not a valid value for a non-string attribute at all. Writing one
-without the role is `403`.
+value, and is not a valid value for a non-string attribute at all. Filtering on
+an attribute without `$reader` is `400` (`invalidFilter`). Writing, removing, or
+deleting a resource holding a `$writer`-restricted attribute without the role is
+`403`.
 
 Both apply at every depth — inside complex values and inside the elements of
 multi-valued ones — and inside schema extensions, which are resolved against

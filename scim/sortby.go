@@ -44,6 +44,9 @@ func NormalizeSortBy(resourceType ResourceType, sortBy string) (string, error) {
 		if !attributeIsDeclared(resourceType, path) {
 			return "", fmt.Errorf("sortBy: %q is not an attribute of %s", path, resourceType.Name)
 		}
+		if !attributeIsSortable(resourceType, path) {
+			return "", fmt.Errorf("sortBy: %q cannot be used for sorting", path)
+		}
 		cleaned = append(cleaned, CanonicalAttributePath(resourceType, path))
 	}
 	return strings.Join(cleaned, ","), nil
@@ -109,4 +112,74 @@ func declaresAttribute(schemaID, attrPath string) bool {
 		return false
 	}
 	return GetAttribute(schema.Attributes, attrPath).Name != ""
+}
+
+// attributeIsSortable refuses writeOnly and returned:"never" attributes (such
+// as User.password), whose ordering would otherwise disclose secret values.
+func attributeIsSortable(resourceType ResourceType, path string) bool {
+	for _, attr := range resolveAttributeChain(resourceType, path) {
+		if !isReturnable(attr) {
+			return false
+		}
+	}
+	return true
+}
+
+// ValidateFilterAttributes ensures a SCIM filter cannot be used as a blind
+// oracle against writeOnly / returned:"never" secrets (like password) or
+// attributes hidden from the caller by $reader.
+func ValidateFilterAttributes(resourceType ResourceType, roles []string, filter string) error {
+	if filter == "" {
+		return nil
+	}
+	paths, err := parser.ReferencedAttributes(filter)
+	if err != nil {
+		return err
+	}
+	for _, path := range paths {
+		urn, attrPath := parser.SplitURNPath(path)
+		if attrPath == "" {
+			return fmt.Errorf("invalid attribute path %q in filter", path)
+		}
+		if urn != "" && !strings.EqualFold(urn, resourceType.Schema) &&
+			!containsSchemaFold(resourceType.SchemaExtensions, urn) {
+			return fmt.Errorf("schema %q is not part of %s", urn, resourceType.Name)
+		}
+		for _, attr := range resolveAttributeChain(resourceType, path) {
+			if !isReturnable(attr) {
+				return fmt.Errorf("attribute %q cannot be filtered", attr.Name)
+			}
+			if !canRead(roles, attr) {
+				return fmt.Errorf("the caller is not allowed to filter by %q", attr.Name)
+			}
+		}
+	}
+	return nil
+}
+
+func resolveAttributeChain(resourceType ResourceType, path string) []Attribute {
+	urn, attrPath := parser.SplitURNPath(path)
+	if urn == "" && commonAttributes[strings.ToLower(attrPath)] {
+		return nil
+	}
+	schemaID := resourceType.Schema
+	if urn != "" {
+		schemaID = urn
+	}
+	schema, ok := LookupSchema(schemaID)
+	if !ok {
+		return nil
+	}
+	segments := strings.Split(attrPath, ".")
+	attributes := schema.Attributes
+	chain := make([]Attribute, 0, len(segments))
+	for _, segment := range segments {
+		attr, found := FindAttribute(attributes, segment)
+		if !found {
+			break
+		}
+		chain = append(chain, attr)
+		attributes = attr.SubAttributes
+	}
+	return chain
 }

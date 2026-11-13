@@ -74,6 +74,47 @@ func canonicaliseKey(element map[string]interface{}, name string) (interface{}, 
 	return value, true
 }
 
+// lookupValueFold reads the entry matching name ignoring case without mutating
+// element. A nil map simply holds nothing.
+func lookupValueFold(element map[string]interface{}, name string) (interface{}, bool) {
+	if element == nil {
+		return nil, false
+	}
+	key, present := lookupKey(element, name)
+	if !present {
+		return nil, false
+	}
+	return element[key], true
+}
+
+// deleteKeyFold removes every entry whose key matches name ignoring case.
+func deleteKeyFold(element map[string]interface{}, name string) {
+	for key := range element {
+		if strings.EqualFold(key, name) {
+			delete(element, key)
+		}
+	}
+}
+
+// hasDuplicateCaseKeys reports whether element holds two distinct keys that
+// name the same case-insensitive SCIM attribute (e.g. "groups" and "GROUPS").
+// Allowing both lets one spelling pass an access check while the other
+// survives to canonicalisation.
+func hasDuplicateCaseKeys(element map[string]interface{}) (string, bool) {
+	if len(element) < 2 {
+		return "", false
+	}
+	seen := make(map[string]struct{}, len(element))
+	for key := range element {
+		folded := strings.ToLower(key)
+		if _, exists := seen[folded]; exists {
+			return key, true
+		}
+		seen[folded] = struct{}{}
+	}
+	return "", false
+}
+
 // containsSchemaFold reports whether the resource type declares this extension,
 // ignoring case.
 func containsSchemaFold(extensions []SchemaExtension, id string) bool {

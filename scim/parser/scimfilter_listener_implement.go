@@ -102,10 +102,9 @@ func FilterToN1QL(resourceName string, filter string, resolve NameResolver) (Que
 		}, nil
 	}
 
-	p, collector := newFilterParser(filter)
-	tree := p.Start_()
-	if len(collector.problems) > 0 {
-		return Query{}, &SyntaxError{Filter: filter, Problems: collector.problems}
+	tree, _, err := parseFilter(filter)
+	if err != nil {
+		return Query{}, err
 	}
 
 	listener := &ScimFilterListenerN1QL{resolve: resolve}
@@ -141,11 +140,13 @@ func (l *ScimFilterListenerN1QL) VisitTerminal(node antlr.TerminalNode) {
 		l.prevOperation = ""
 
 	case ScimFilterParserNUMBERS:
-		// Bound as a number, so the comparison stays numeric.
-		if number, err := strconv.ParseFloat(value, 64); err == nil {
+		// Bound as a number, so the comparison stays numeric. parseFilter has
+		// already verified that the token parses as a finite float64.
+		number, err := strconv.ParseFloat(value, 64)
+		if err == nil {
 			l.bind(number)
-			return
 		}
+		return
 
 	case ScimFilterParserBOOLEAN:
 		l.bind(value == "true")

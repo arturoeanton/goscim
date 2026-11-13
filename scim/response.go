@@ -2,6 +2,7 @@ package scim
 
 import (
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -15,6 +16,7 @@ const scimContentType = "application/scim+json"
 // wins over the application/json it would otherwise write.
 func writeSCIM(c *gin.Context, status int, body interface{}) {
 	c.Header("Content-Type", scimContentType)
+	c.Header("X-Content-Type-Options", "nosniff")
 	c.JSON(status, body)
 }
 
@@ -85,15 +87,36 @@ func setVersionHeader(c *gin.Context, meta Meta) {
 
 // absoluteLocation builds the URI of a resource for the Location header.
 //
-// The scheme is taken from the connection, so a deployment behind a
-// TLS-terminating proxy needs the public base URL to be configurable; that is
-// still open.
+// When SCIM_PUBLIC_URL is set (for deployments behind a TLS-terminating proxy),
+// it supplies the scheme and authority; otherwise they are derived from the
+// request after rejecting host values carrying path, userinfo or control
+// characters.
 func absoluteLocation(c *gin.Context, resourceType ResourceType, id string) string {
+	path := resourcePath(resourceType, id)
+	if base := strings.TrimRight(strings.TrimSpace(os.Getenv("SCIM_PUBLIC_URL")), "/"); base != "" {
+		return base + path
+	}
 	scheme := "http"
 	if c.Request.TLS != nil {
 		scheme = "https"
 	}
-	return scheme + "://" + c.Request.Host + resourcePath(resourceType, id)
+	host := safeHost(c.Request.Host)
+	if host == "" {
+		return path
+	}
+	return scheme + "://" + host + path
+}
+
+func safeHost(host string) string {
+	if host == "" || strings.ContainsAny(host, "/\\@ \t\r\n") {
+		return ""
+	}
+	for i := 0; i < len(host); i++ {
+		if host[i] < 0x20 || host[i] == 0x7f {
+			return ""
+		}
+	}
+	return host
 }
 
 // resourcePath is the server-relative path of a resource, which is what

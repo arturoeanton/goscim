@@ -47,6 +47,12 @@ func Update(resource string) func(c *gin.Context) {
 			return
 		}
 		for _, op := range patchRequest.Operations {
+			if op.Path != "" && !strings.ContainsAny(op.Path, "[]") {
+				op.Path = CanonicalAttributePath(resourceType, op.Path)
+			}
+			if !enforcePatchOperationWriteAccess(c, resourceType, op) {
+				return
+			}
 			element, err = applyPatchOperation(op, element)
 			if err != nil {
 				var failure *patchError
@@ -59,7 +65,7 @@ func Update(resource string) func(c *gin.Context) {
 			}
 		}
 
-		replace(c, resourceType, id, element)
+		replaceWithMode(c, resourceType, id, element, true)
 	}
 }
 
@@ -79,7 +85,13 @@ func applyPatchOperation(op Operation, element map[string]interface{}) (map[stri
 				return nil, patchFailure("invalidSyntax",
 					`an "`+operation+`" operation without a path must carry an object value`)
 			}
+			if dup, hasDup := hasDuplicateCaseKeys(values); hasDup {
+				return nil, patchFailure("invalidSyntax", "duplicate attribute "+strconv.Quote(dup))
+			}
 			for key, value := range values {
+				if existingKey, found := lookupKey(element, key); found && existingKey != key {
+					delete(element, existingKey)
+				}
 				element[key] = value
 			}
 			return element, nil
@@ -122,6 +134,9 @@ func resolvePatchPath(path string, element map[string]interface{}) (string, map[
 	for i, field := range segments {
 		if field == "" {
 			return "", nil, patchFailure("invalidPath", "empty segment in path "+strconv.Quote(path))
+		}
+		if existingKey, found := lookupKey(element, field); found {
+			field = existingKey
 		}
 		if i == len(segments)-1 {
 			return field, element, nil

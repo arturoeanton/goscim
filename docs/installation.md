@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Go | 1.25 or later, to build |
+| Go | 1.26 or later (1.27.4+ recommended), to build |
 | Couchbase | 7.x, Community or Enterprise |
 | Services | Data, Query, Index |
 | Memory | 200 MB of cluster quota per resource type, by default |
@@ -66,7 +66,7 @@ There is no Dockerfile in the repository yet — it is an
 [open item](../RELEASE-1.0.md). A minimal one:
 
 ```dockerfile
-FROM golang:1.25 AS build
+FROM golang:1.27 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -148,7 +148,7 @@ The first run creates one bucket per resource type and a primary index on
 each. Expect log lines like:
 
 ```
-GoSCIM 1.0.0 starting
+GoSCIM 1.0.1 starting
 urn:ietf:params:scim:schemas:core:2.0:User
 ...
 Create Bucket -> User

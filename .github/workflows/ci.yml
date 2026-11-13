@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  GO_VERSION: "1.25"
+  GO_VERSION: "1.27.4"
 
 jobs:
   build:
@@ -80,6 +80,7 @@ jobs:
       - name: Scan
         run: |
           go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+          (cd test/integration && go run golang.org/x/vuln/cmd/govulncheck@latest -tags integration ./...)
 
   tidy:
     name: go.mod is tidy

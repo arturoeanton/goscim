@@ -42,8 +42,10 @@ export SCIM_JWT_AUDIENCE=scim-api
 What is checked, and why each matters:
 
 - **Signature**, against a key fetched from the JWKS and cached. An unknown key
-  id triggers one refetch, rate limited so a stream of tokens naming keys that
-  do not exist cannot be turned into load on the issuer.
+  id triggers one refetch, serialized and rate limited so a stream of tokens
+  naming keys that do not exist cannot be turned into load on the issuer.
+- **Key parameters**, requiring RSA keys of at least 2048 bits (`RFC 7518 §3.3`)
+  whose `use` (if set) is `"sig"` and `key_ops` (if set) includes `"verify"`.
 - **Algorithm**, restricted to `RS256`, `RS384`, `RS512`. Without an
   allow-list, a token signed with an algorithm that happens to verify against
   the same RSA key is accepted; `HS256` with the public key as the secret is
@@ -97,10 +99,13 @@ failure mode of a routing mistake is that restricted attributes stay hidden.
 Per attribute, not per endpoint. See
 [schemas and permissions](schemas.md#role-based-permissions).
 
-Enforced on the way in by `$writer` and `mutability`, and on the way out by
-`$reader`, `returned: never` and `writeOnly`. Both walk the schema, so complex
-values, the elements of multi-valued attributes, and extension objects are all
-covered.
+Enforced on the way in by `$writer` and `mutability` (including `DELETE`,
+case-insensitive attribute keys, and removal attempts on `PUT` or `PATCH`), and
+on the way out by `$reader`, `returned: never` and `writeOnly`. Search `filter`
+and `sortBy` also refuse `writeOnly` / `returned: never` attributes (and
+`filter` refuses attributes outside the caller's `$reader` roles) so secrets
+cannot be probed via blind queries. Both walk the schema, so complex values,
+the elements of multi-valued attributes, and extension objects are all covered.
 
 Denied reads **omit** the attribute rather than blanking it: an empty string
 cannot be told apart from a legitimately empty value.
@@ -177,9 +182,9 @@ Be explicit about these before deploying:
 - **The uniqueness check is read-then-write.** Two concurrent creates of the
   same `userName` can both pass. Closing that needs a unique index or a
   sentinel document.
-- **`meta.location` is a server-relative path**, not an absolute URI. Deriving
-  the host from the connection is wrong behind a TLS-terminating proxy, so a
-  configurable public base URL is still needed.
+- **`meta.location` is a server-relative path** unless mapped upstream; set
+  `SCIM_PUBLIC_URL` so HTTP `Location` headers use your public origin rather
+  than client-supplied `Host` headers.
 
 ## Checklist
 

@@ -91,9 +91,9 @@ func InitDB() error {
 
 func hidepassword(password string) string {
 	if len(password) == 0 {
-		return "?"
+		return "(empty)"
 	}
-	return password[:1] + "*" + password[len(password)-1:]
+	return "[REDACTED]"
 }
 
 // Close releases the cluster connection.

@@ -1,11 +1,13 @@
 package scim
 
 import (
+	"bytes"
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"net/http"
 	"os"
@@ -15,6 +17,13 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 )
+
+// maxJWKSBytes caps how much of a JWKS response is read into memory.
+const maxJWKSBytes = 1 << 20 // 1 MiB
+
+// minRSAModulusBits is the minimum RSA key size RFC 7518 3.3 permits for
+// RS256, RS384 and RS512.
+const minRSAModulusBits = 2048
 
 // JWTAuthenticator validates OAuth 2.0 access tokens as described by RFC 9068,
 // with signing keys fetched from the issuer's JWKS endpoint.
@@ -120,9 +129,10 @@ type jwksCache struct {
 	client     *http.Client
 	minRefresh time.Duration
 
+	refreshMu   sync.Mutex
 	mu          sync.RWMutex
 	keys        map[string]*rsa.PublicKey
-	lastFetched time.Time
+	lastAttempt time.Time
 }
 
 // key returns the signing key with the given id, refreshing the cache once if
@@ -157,12 +167,21 @@ func (c *jwksCache) cached(kid string) *rsa.PublicKey {
 }
 
 func (c *jwksCache) refresh() error {
-	c.mu.Lock()
-	fetchedRecently := time.Since(c.lastFetched) < c.minRefresh
-	c.mu.Unlock()
-	if fetchedRecently {
+	// Serialise refreshes so a burst of tokens carrying an unknown kid does not
+	// turn into an equal burst of concurrent outbound fetches, and record the
+	// attempt before calling out so a failing JWKS endpoint is rate limited too.
+	c.refreshMu.Lock()
+	defer c.refreshMu.Unlock()
+
+	c.mu.RLock()
+	attemptedRecently := time.Since(c.lastAttempt) < c.minRefresh
+	c.mu.RUnlock()
+	if attemptedRecently {
 		return nil
 	}
+	c.mu.Lock()
+	c.lastAttempt = time.Now()
+	c.mu.Unlock()
 
 	response, err := c.client.Get(c.url)
 	if err != nil {
@@ -175,21 +194,30 @@ func (c *jwksCache) refresh() error {
 
 	var document struct {
 		Keys []struct {
-			Kty string `json:"kty"`
-			Kid string `json:"kid"`
-			N   string `json:"n"`
-			E   string `json:"e"`
+			Kty    string   `json:"kty"`
+			Use    string   `json:"use"`
+			KeyOps []string `json:"key_ops"`
+			Kid    string   `json:"kid"`
+			N      string   `json:"n"`
+			E      string   `json:"e"`
 		} `json:"keys"`
 	}
-	if err := json.NewDecoder(response.Body).Decode(&document); err != nil {
+	if err := json.NewDecoder(io.LimitReader(response.Body, maxJWKSBytes)).Decode(&document); err != nil {
 		return fmt.Errorf("parsing the JWKS: %w", err)
 	}
 
 	keys := make(map[string]*rsa.PublicKey)
 	for _, entry := range document.Keys {
-		// Only RSA keys are understood, matching the signing algorithms the
-		// parser accepts. Anything else is skipped rather than guessed at.
+		// Only RSA signing keys are understood, matching the algorithms the
+		// parser accepts. Encryption keys ("use": "enc") and keys restricted to
+		// non-verification operations must never verify tokens (RFC 7517 4.2-4.3).
 		if entry.Kty != "RSA" {
+			continue
+		}
+		if entry.Use != "" && entry.Use != "sig" {
+			continue
+		}
+		if len(entry.KeyOps) > 0 && !containsOp(entry.KeyOps, "verify") {
 			continue
 		}
 		key, err := rsaPublicKey(entry.N, entry.E)
@@ -204,32 +232,45 @@ func (c *jwksCache) refresh() error {
 
 	c.mu.Lock()
 	c.keys = keys
-	c.lastFetched = time.Now()
 	c.mu.Unlock()
 	return nil
 }
 
+func containsOp(ops []string, wanted string) bool {
+	for _, op := range ops {
+		if op == wanted {
+			return true
+		}
+	}
+	return false
+}
+
 // rsaPublicKey rebuilds a public key from the base64url modulus and exponent
-// of a JWK (RFC 7518 6.3.1).
+// of a JWK (RFC 7518 6.3.1), rejecting keys weaker than RFC 7518 3.3 permits.
 func rsaPublicKey(modulus, exponent string) (*rsa.PublicKey, error) {
-	n, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(modulus, "="))
+	nBytes, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(modulus, "="))
 	if err != nil {
 		return nil, fmt.Errorf("decoding the modulus: %w", err)
 	}
-	e, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(exponent, "="))
+	eBytes, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(exponent, "="))
 	if err != nil {
 		return nil, fmt.Errorf("decoding the exponent: %w", err)
 	}
-	if len(n) == 0 || len(e) == 0 || len(e) > 8 {
+	eBytes = bytes.TrimLeft(eBytes, "\x00")
+	if len(nBytes) == 0 || len(eBytes) == 0 || len(eBytes) > 4 {
 		return nil, errors.New("malformed RSA key material")
 	}
 
 	value := 0
-	for _, b := range e {
+	for _, b := range eBytes {
 		value = value<<8 | int(b)
 	}
-	if value <= 0 {
+	if value < 3 || value%2 == 0 {
 		return nil, errors.New("malformed RSA exponent")
 	}
-	return &rsa.PublicKey{N: new(big.Int).SetBytes(n), E: value}, nil
+	n := new(big.Int).SetBytes(nBytes)
+	if n.BitLen() < minRSAModulusBits {
+		return nil, errors.New("RSA modulus shorter than 2048 bits")
+	}
+	return &rsa.PublicKey{N: n, E: value}, nil
 }

@@ -1,6 +1,8 @@
 package scim
 
 import (
+	"log"
+	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -9,6 +11,14 @@ import (
 // MakeError ...
 func MakeError(c *gin.Context, status int, message string) Error {
 	return MakeTypedError(c, status, "", message)
+}
+
+// internalError logs the underlying failure and sends a generic 500 to the
+// client, keeping driver errors, bucket names and cluster addresses out of
+// responses.
+func internalError(c *gin.Context, err error) {
+	log.Println(err.Error())
+	MakeError(c, http.StatusInternalServerError, "internal server error")
 }
 
 // MakeTypedError writes a SCIM error carrying the scimType keyword defined in

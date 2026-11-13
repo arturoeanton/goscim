@@ -2,7 +2,6 @@ package scim
 
 import (
 	"errors"
-	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -36,8 +35,7 @@ func getElementByID(c *gin.Context, id string, resourceType ResourceType) (map[s
 			MakeError(c, http.StatusNotFound, "Resource "+id+" not found")
 			return nil, err
 		}
-		MakeError(c, http.StatusInternalServerError, err.Error())
-		log.Println(err.Error())
+		internalError(c, err)
 		return nil, err
 	}
 	return element, nil

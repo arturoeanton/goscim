@@ -1,7 +1,6 @@
 package scim
 
 import (
-	"log"
 	"net/http"
 	"strings"
 
@@ -57,8 +56,7 @@ func checkUniqueAttributes(c *gin.Context, resourceType ResourceType, attributes
 		path := prefix + attribute.Name
 		existingID, err := DB.FindIDByAttribute(resourceType.Name, path, value)
 		if err != nil {
-			MakeError(c, http.StatusInternalServerError, err.Error())
-			log.Println(err.Error())
+			internalError(c, err)
 			return false
 		}
 		if existingID != "" && existingID != currentID {

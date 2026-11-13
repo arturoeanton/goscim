@@ -2,7 +2,6 @@ package scim
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -23,12 +22,16 @@ func Create(resource string) func(c *gin.Context) {
 			return
 		}
 		var element map[string]interface{}
-		json.Unmarshal(raw, &element)
+		if err := json.Unmarshal(raw, &element); err != nil || element == nil {
+			MakeTypedError(c, http.StatusBadRequest, "invalidSyntax", "request body must be a JSON object")
+			return
+		}
 		ok, _ = ValidateFieldSchemas(c, element, resourceType)
 		if !ok {
 			return
 		}
-		delete(element, "id")
+		deleteKeyFold(element, "id")
+		deleteKeyFold(element, "meta")
 		if !EnforceWriteAccess(c, resourceType, element, nil) {
 			return
 		}
@@ -46,8 +49,7 @@ func Create(resource string) func(c *gin.Context) {
 		element["meta"] = meta
 
 		if err := DB.Upsert(resourceType.Name, id, element); err != nil {
-			MakeError(c, http.StatusInternalServerError, err.Error())
-			log.Println(err.Error())
+			internalError(c, err)
 			return
 		}
 

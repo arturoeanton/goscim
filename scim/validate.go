@@ -2,7 +2,9 @@ package scim
 
 import (
 	"fmt"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -11,7 +13,12 @@ import (
 
 // ValidateFieldSchemas is ..
 func ValidateFieldSchemas(c *gin.Context, element map[string]interface{}, resourceType ResourceType) (bool, []string) {
-	schemas, ok := element["schemas"]
+	if dup, ok := hasDuplicateCaseKeys(element); ok {
+		MakeTypedError(c, http.StatusBadRequest, "invalidSyntax",
+			"duplicate attribute "+strconv.Quote(dup))
+		return false, nil
+	}
+	schemas, ok := canonicaliseKey(element, "schemas")
 	if !ok {
 		MakeError(c, http.StatusBadRequest, "schemas no exist")
 		return false, nil
@@ -110,6 +117,11 @@ func ValidateSchemas(c *gin.Context, element map[string]interface{}, schemaNameC
 }
 
 func validateSchema(c *gin.Context, element map[string]interface{}, schema Schema, isExtension bool) (bool, map[string]interface{}) {
+	if dup, ok := hasDuplicateCaseKeys(element); ok {
+		MakeTypedError(c, http.StatusBadRequest, "invalidSyntax",
+			"duplicate attribute "+strconv.Quote(dup))
+		return false, nil
+	}
 	fields := make([]string, 0)
 	for _, attribute := range schema.Attributes {
 		fields = append(fields, attribute.Name)
@@ -244,14 +256,18 @@ func validateValue(c *gin.Context, value interface{}, attribute Attribute, path 
 		return v, true
 
 	case "integer":
-		v, ok := value.(float64)
-		if !ok {
+		switch v := value.(type) {
+		case int64:
+			return v, true
+		case float64:
+			if math.IsNaN(v) || math.IsInf(v, 0) || math.Trunc(v) != v ||
+				v < -9223372036854775808.0 || v >= 9223372036854775808.0 {
+				return invalidValue(c, path+" should be integer")
+			}
+			return int64(v), true
+		default:
 			return invalidValue(c, path+" should be integer")
 		}
-		if float64(int64(v))-v != 0 {
-			return invalidValue(c, path+" should be integer")
-		}
-		return int64(v), true
 
 	case "datetime":
 		v, ok := value.(string)
@@ -267,6 +283,11 @@ func validateValue(c *gin.Context, value interface{}, attribute Attribute, path 
 		sub, ok := value.(map[string]interface{})
 		if !ok {
 			return invalidValue(c, path+" should be complex")
+		}
+		if dup, ok := hasDuplicateCaseKeys(sub); ok {
+			MakeTypedError(c, http.StatusBadRequest, "invalidSyntax",
+				"duplicate attribute "+strconv.Quote(dup)+" in "+path)
+			return nil, false
 		}
 		fields := make([]string, 0, len(attribute.SubAttributes))
 		for _, subAttribute := range attribute.SubAttributes {

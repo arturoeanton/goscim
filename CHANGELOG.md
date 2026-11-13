@@ -1,5 +1,56 @@
 # Changelog
 
+## 1.0.1
+
+Security and dependency maintenance release. Details of every finding and fix
+are recorded in `FIX.SECURITY.md`.
+
+### Fixed
+
+- `$writer`, `mutability: readOnly` and `mutability: immutable` could be
+  bypassed by sending attribute names or extension URNs in a different case, or
+  by sending duplicate JSON keys that differed only in case. `EnforceWriteAccess`
+  now resolves keys case-insensitively and rejects case-colliding keys before
+  validation.
+- Omitting an attribute on `PUT` or targeting it with `PATCH remove` bypassed
+  `immutable` and `$writer` checks. Removing an `immutable` attribute is now
+  refused with `400` (`scimType: mutability`); `PATCH` checks `$writer` on the
+  attributes each operation touches while preserving untouched ones; `PUT`
+  preserves non-readable `$writer` attributes without exposing a `200`-vs-`403`
+  value oracle.
+- `DELETE` did not check `$writer` permissions on the target resource.
+- `writeOnly` and `returned: never` attributes (such as `User.password`) could
+  be probed through `filter` and `sortBy`, and callers could filter on
+  attributes outside their `$reader` roles. Both are now refused.
+- Permissive rules in `ScimFilter.g4` accepted `--` and `1.2.3` under `NUMBERS`
+  (emitting raw tokens when `strconv.ParseFloat` failed), adjacent expressions
+  without `and`/`or`, expression-to-expression comparisons, and unsupported
+  bracketed value filters (`emails[type eq "work"]`, which reached Couchbase and
+  failed with `500` instead of `400 invalidFilter`). The parse tree is now
+  validated before translation.
+- JWKS refreshes are serialized and rate-limited across failures too, response
+  bodies are capped at 1 MiB, JWK `use` / `key_ops` are enforced, and RSA keys
+  shorter than 2048 bits are rejected.
+- Malformed or `null` JSON bodies on `POST` and `PUT` now return `400`
+  (`scimType: invalidSyntax`); `500` responses no longer echo raw driver errors
+  to clients; `hidepassword` no longer logs the first and last character of the
+  Couchbase password; `int64` range checks in `validateValue` no longer pass
+  `2^63` on `arm64`; `X-Content-Type-Options: nosniff` is set on responses.
+
+### Added
+
+- `SCIM_PUBLIC_URL` to build `Location` headers from a configured public origin
+  rather than the incoming `Host` header, plus `Host` validation when unset.
+
+### Changed
+
+- Toolchain moved to Go 1.26 (`go1.27.4`), resolving `GO-2026-6859` in
+  `net/http.MaxBytesReader`.
+- Updated `golang.org/x/net` (`v0.62.0`), `golang.org/x/crypto` (`v0.59.0`),
+  `golang.org/x/text` (`v0.44.0`), `google.golang.org/grpc` (`v1.85.0`) and
+  `go.opentelemetry.io/otel` (`v1.47.0`), plus `klauspost/compress`,
+  `moby/go-archive` and `moby/sys/user` in `test/integration`.
+
 ## 1.0.0
 
 First release intended for use. Everything before this was `v0.1` and, as the
