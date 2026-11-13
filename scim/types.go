@@ -95,3 +95,15 @@ type Patch struct {
 	Schemas    []string    `json:"schemas"`
 	Operations []Operation `json:"Operations"`
 }
+
+// SearchRequest is the RFC 7644 3.4.3 payload for POST /.search.
+type SearchRequest struct {
+	Schemas            []string `json:"schemas"`
+	Attributes         []string `json:"attributes"`
+	ExcludedAttributes []string `json:"excludedAttributes"`
+	Filter             string   `json:"filter"`
+	SortBy             string   `json:"sortBy"`
+	SortOrder          string   `json:"sortOrder"`
+	StartIndex         *int     `json:"startIndex"`
+	Count              *int     `json:"count"`
+}

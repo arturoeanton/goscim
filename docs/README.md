@@ -33,13 +33,9 @@ is worse than none: it tells a reader something the server no longer does.
 
 ## What GoSCIM does not do
 
-Worth knowing before you invest time. None of these is implemented:
+Worth knowing before you invest time. Neither of these is implemented:
 
 - `POST /Bulk` (RFC 7644 §3.7)
-- Value paths — `emails[type eq "work"]` — in filters or PATCH paths
-- The `attributes` and `excludedAttributes` query parameters
-- `POST /.search`
-- Health, readiness or metrics endpoints
-- Password hashing: `password` is stored exactly as sent
+- Prometheus metrics endpoint
 
 The [1.0 audit](../RELEASE-1.0.md) records why, and roughly what each would take.

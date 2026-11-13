@@ -26,6 +26,8 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -481,4 +483,222 @@ func TestSortingAndPaginationAgainstCouchbase(t *testing.T) {
 func TestUnknownSortByIsRefused(t *testing.T) {
 	w := do(t, http.MethodGet, usersPath+"?sortBy="+url.QueryEscape("id` , (SELECT 1) x"), "")
 	requireStatus(t, w, http.StatusBadRequest)
+}
+
+func TestHealthReadyAndHashedPasswordAgainstCouchbase(t *testing.T) {
+	requireStatus(t, do(t, http.MethodGet, "/healthz", ""), http.StatusOK)
+	requireStatus(t, do(t, http.MethodGet, "/readyz", ""), http.StatusOK)
+
+	userName := "pw-" + fmt.Sprint(time.Now().UnixNano())
+	id := createUser(t, userName, map[string]interface{}{"password": "s3cr3t-password"})
+
+	stored, err := scim.DB.Get("User", id)
+	if err != nil {
+		t.Fatalf("DB.Get: %v", err)
+	}
+	hash, _ := stored["password"].(string)
+	if !strings.HasPrefix(hash, "$argon2id$") {
+		t.Fatalf("stored password = %q, want argon2id hash", hash)
+	}
+	if ok, err := scim.VerifyPasswordHash(hash, "s3cr3t-password"); err != nil || !ok {
+		t.Fatalf("VerifyPasswordHash failed: %v, %v", ok, err)
+	}
+}
+
+func TestPostSearchAndProjectionAgainstCouchbase(t *testing.T) {
+	prefix := "postsearch-" + fmt.Sprint(time.Now().UnixNano())
+	id1 := createUser(t, prefix+"-1", map[string]interface{}{
+		"displayName": "One",
+		"emails":      []map[string]interface{}{{"value": "one@example.com", "type": "work"}},
+	})
+	createUser(t, prefix+"-2", map[string]interface{}{
+		"displayName": "Two",
+		"emails":      []map[string]interface{}{{"value": "two@example.com", "type": "home"}},
+	})
+
+	// Resource-level POST /.search with filter, descending sort and sub-attribute projection.
+	searchBody := `{
+		"schemas": ["urn:ietf:params:scim:api:messages:2.0:SearchRequest"],
+		"filter": "userName sw \"` + prefix + `\"",
+		"sortBy": "userName",
+		"sortOrder": "descending",
+		"attributes": ["userName", "emails.value"]
+	}`
+	w := do(t, http.MethodPost, usersPath+"/.search", searchBody)
+	requireStatus(t, w, http.StatusOK)
+	list := decode(t, w)
+	if int(list["totalResults"].(float64)) != 2 {
+		t.Fatalf("totalResults = %v, want 2", list["totalResults"])
+	}
+	first := list["Resources"].([]interface{})[0].(map[string]interface{})
+	if first["userName"] != prefix+"-2" {
+		t.Errorf("first userName = %v, want %s-2", first["userName"], prefix)
+	}
+	if _, present := first["displayName"]; present {
+		t.Errorf("displayName leaked despite attributes projection: %v", first)
+	}
+	firstEmail := first["emails"].([]interface{})[0].(map[string]interface{})
+	if firstEmail["value"] != "two@example.com" || firstEmail["type"] != nil {
+		t.Errorf("projected email = %v, want value only", firstEmail)
+	}
+
+	// Root-level POST /scim/v2/.search with a User attribute filter against all Couchbase buckets.
+	w = do(t, http.MethodPost, scim.PREFIX+"/.search", searchBody)
+	requireStatus(t, w, http.StatusOK)
+	rootList := decode(t, w)
+	if int(rootList["totalResults"].(float64)) != 2 {
+		t.Fatalf("root totalResults = %v, want 2", rootList["totalResults"])
+	}
+
+	// GET /{id}?excludedAttributes=displayName,emails.type
+	w = do(t, http.MethodGet, usersPath+"/"+id1+"?excludedAttributes=displayName,emails.type", "")
+	requireStatus(t, w, http.StatusOK)
+	readOne := decode(t, w)
+	if _, present := readOne["displayName"]; present {
+		t.Errorf("excluded displayName survived: %v", readOne)
+	}
+	readEmail := readOne["emails"].([]interface{})[0].(map[string]interface{})
+	if readEmail["value"] != "one@example.com" || readEmail["type"] != nil {
+		t.Errorf("excluded emails.type failed: %v", readEmail)
+	}
+}
+
+func TestConcurrentUniquenessAgainstCouchbase(t *testing.T) {
+	baseName := fmt.Sprintf("atomic-cb-%d", time.Now().UnixNano())
+	spellings := []string{baseName, strings.ToUpper(baseName), "Atomic-Cb-" + baseName[len("atomic-cb-"):]}
+
+	const workers = 20
+	var (
+		start     = make(chan struct{})
+		wg        sync.WaitGroup
+		created   atomic.Int32
+		conflicts atomic.Int32
+		winnerID  atomic.Value
+	)
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		candidate := spellings[i%len(spellings)]
+		go func(u string) {
+			defer wg.Done()
+			<-start
+			payload := fmt.Sprintf(`{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],"userName":%q}`, u)
+			w := do(t, http.MethodPost, usersPath, payload)
+			switch w.Code {
+			case http.StatusCreated:
+				created.Add(1)
+				winnerID.Store(decode(t, w)["id"].(string))
+			case http.StatusConflict:
+				conflicts.Add(1)
+			default:
+				t.Errorf("unexpected status %d: %s", w.Code, w.Body.String())
+			}
+		}(candidate)
+	}
+	close(start)
+	wg.Wait()
+
+	if created.Load() != 1 || conflicts.Load() != workers-1 {
+		t.Fatalf("concurrent Couchbase POST: created=%d conflicts=%d, want 1 and %d",
+			created.Load(), conflicts.Load(), workers-1)
+	}
+
+	// Unfiltered search on User must never leak _default.scim_unique sentinel documents.
+	allList := search(t, "count=500")
+	for _, raw := range allList["Resources"].([]interface{}) {
+		doc := raw.(map[string]interface{})
+		if doc["id"] == nil || doc["userName"] == nil {
+			t.Fatalf("sentinel or malformed document leaked into ListResponse: %v", doc)
+		}
+	}
+
+	// PUT rename releases the old sentinel immediately, and DELETE releases the renamed sentinel.
+	id := winnerID.Load().(string)
+	renamed := baseName + "-renamed"
+	w := do(t, http.MethodPut, usersPath+"/"+id,
+		fmt.Sprintf(`{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],"userName":%q}`, renamed))
+	requireStatus(t, w, http.StatusOK)
+
+	// Old userName is now available again.
+	id2 := createUser(t, baseName, nil)
+	requireStatus(t, do(t, http.MethodDelete, usersPath+"/"+id2, ""), http.StatusNoContent)
+	requireStatus(t, do(t, http.MethodDelete, usersPath+"/"+id, ""), http.StatusNoContent)
+
+	// Renamed userName is also available after DELETE.
+	id3 := createUser(t, renamed, nil)
+	requireStatus(t, do(t, http.MethodDelete, usersPath+"/"+id3, ""), http.StatusNoContent)
+}
+
+func TestArrayValueFiltersInSearchAndPatchAgainstCouchbase(t *testing.T) {
+	prefix := fmt.Sprintf("arrfilter-%d", time.Now().UnixNano())
+	corpID := createUser(t, prefix+"-corp", map[string]interface{}{
+		"emails": []map[string]interface{}{
+			{"type": "work", "value": prefix + "@corp.example.com", "primary": true},
+			{"type": "home", "value": prefix + "@gmail.example.com"},
+		},
+	})
+	homeOnlyID := createUser(t, prefix+"-home", map[string]interface{}{
+		"emails": []map[string]interface{}{
+			{"type": "home", "value": prefix + "-only@gmail.example.com"},
+		},
+	})
+	t.Cleanup(func() {
+		do(t, http.MethodDelete, usersPath+"/"+corpID, "")
+		do(t, http.MethodDelete, usersPath+"/"+homeOnlyID, "")
+	})
+
+	// 1. GET filter using compound LBRAC_EXPR_RBRAC -> N1QL ANY ... SATISFIES ... END.
+	f1 := fmt.Sprintf(`userName sw %q and emails[type eq "work" and value ew "@corp.example.com"]`, prefix)
+	got1 := userNamesIn(t, search(t, "filter="+url.QueryEscape(f1)))
+	if len(got1) != 1 || got1[0] != prefix+"-corp" {
+		t.Fatalf("compound bracket search = %v, want [%s-corp]", got1, prefix)
+	}
+
+	// 2. POST /.search with RFC 7644 3.4.2.2 trailing sub-attribute path emails[...].value co ...
+	postPayload, _ := json.Marshal(map[string]interface{}{
+		"schemas": []string{"urn:ietf:params:scim:api:messages:2.0:SearchRequest"},
+		"filter":  fmt.Sprintf(`userName sw %q and emails[type eq "work"].value co "@corp."`, prefix),
+	})
+	w := do(t, http.MethodPost, usersPath+"/.search", string(postPayload))
+	requireStatus(t, w, http.StatusOK)
+	if w.Header().Get("X-Request-Id") == "" {
+		t.Errorf("expected X-Request-Id response header to be set")
+	}
+	got2 := userNamesIn(t, decode(t, w))
+	if len(got2) != 1 || got2[0] != prefix+"-corp" {
+		t.Fatalf("trailing sub-path POST /.search = %v, want [%s-corp]", got2, prefix)
+	}
+
+	// 3. Negated array filter: not emails[type eq "work"].
+	f3 := fmt.Sprintf(`userName sw %q and not emails[type eq "work"]`, prefix)
+	got3 := userNamesIn(t, search(t, "filter="+url.QueryEscape(f3)))
+	if len(got3) != 1 || got3[0] != prefix+"-home" {
+		t.Fatalf("negated bracket search = %v, want [%s-home]", got3, prefix)
+	}
+
+	// 4. Entra ID style PATCH against Couchbase: replace matching work email,
+	// synthesize unmatched mobile phone via add, and set enterprise department via colon URN.
+	patchPayload := `{
+		"schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+		"Operations": [
+			{"op": "replace", "path": "emails[type eq \"work\"].value", "value": "` + prefix + `-updated@corp.example.com"},
+			{"op": "add", "path": "phoneNumbers[type eq \"mobile\"].value", "value": "+54-11-5555-0199"},
+			{"op": "replace", "path": "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department", "value": "Identity"}
+		]
+	}`
+	req := httptest.NewRequest(http.MethodPatch, usersPath+"/"+corpID, strings.NewReader(patchPayload))
+	req.Header.Set("Content-Type", "application/scim+json")
+	req.Header.Set("X-Request-Id", "req-entra-patch-01")
+	rec := httptest.NewRecorder()
+	testRouter.ServeHTTP(rec, req)
+	requireStatus(t, rec, http.StatusOK)
+	if gotReqID := rec.Header().Get("X-Request-Id"); gotReqID != "req-entra-patch-01" {
+		t.Errorf("X-Request-Id = %q, want req-entra-patch-01", gotReqID)
+	}
+
+	// Verify persisted state in Couchbase via N1QL search on the newly patched work email.
+	f4 := fmt.Sprintf(`emails[type eq "work" and value eq "%s-updated@corp.example.com"]`, prefix)
+	got4 := userNamesIn(t, search(t, "filter="+url.QueryEscape(f4)))
+	if len(got4) != 1 || got4[0] != prefix+"-corp" {
+		t.Fatalf("post-PATCH N1QL search = %v, want [%s-corp]", got4, prefix)
+	}
 }

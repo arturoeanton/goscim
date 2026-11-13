@@ -4,7 +4,8 @@
 
 | Version | Supported |
 |---|---|
-| 1.0.x | ✅ |
+| 1.1.x | ✅ |
+| 1.0.x | ❌ |
 | < 1.0 | ❌ |
 
 Anything before 1.0 was development code. It served every endpoint without
@@ -40,13 +41,14 @@ callers, and remote crashes.
 Out of scope, because they are documented behaviour rather than accidents —
 see the [security guide](docs/security.md):
 
-- **Passwords are stored as sent.** There is no hashing.
+- **`SCIM_PASSWORD_MODE=plain` stores passwords unhashed.** Opt-in, and logs a
+  warning; the default is `argon2id`.
 - **`SCIM_AUTH=none` serves every request.** Opt-in, and logs a warning.
 - **`SCIM_COUCHBASE_TLS_SKIP_VERIFY=true` accepts any certificate.** Opt-in,
   and logs a warning.
+- **`SCIM_AUDIT_LOG=off` disables structured audit logging.** Opt-in; the
+  default is `json`.
 - **There is no rate limiting.** Put it in the proxy.
-- **The uniqueness check is read-then-write**, so two concurrent creates of the
-  same value can both pass.
 
 If you think one of those is worse than the documentation claims, report it
 anyway — the classification is a judgement, not a rule.

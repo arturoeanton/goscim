@@ -1,9 +1,11 @@
 package scim
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/arturoeanton/goscim/scim/parser"
@@ -22,11 +24,15 @@ import (
 type MemoryStore struct {
 	mu      sync.RWMutex
 	buckets map[string]map[string]map[string]interface{}
+	unique  map[string]map[string]string
 }
 
 // NewMemoryStore returns an empty in-memory store.
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{buckets: make(map[string]map[string]map[string]interface{})}
+	return &MemoryStore{
+		buckets: make(map[string]map[string]map[string]interface{}),
+		unique:  make(map[string]map[string]string),
+	}
 }
 
 // EnsureBucket implements Store.
@@ -36,8 +42,14 @@ func (s *MemoryStore) EnsureBucket(name string) error {
 	if _, ok := s.buckets[name]; !ok {
 		s.buckets[name] = make(map[string]map[string]interface{})
 	}
+	if _, ok := s.unique[name]; !ok {
+		s.unique[name] = make(map[string]string)
+	}
 	return nil
 }
+
+// Ping implements Store.
+func (s *MemoryStore) Ping(context.Context) error { return nil }
 
 // Close implements Store.
 func (s *MemoryStore) Close() error { return nil }
@@ -57,9 +69,7 @@ func (s *MemoryStore) Get(bucket, id string) (map[string]interface{}, error) {
 func (s *MemoryStore) Upsert(bucket, id string, doc map[string]interface{}) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, ok := s.buckets[bucket]; !ok {
-		s.buckets[bucket] = make(map[string]map[string]interface{})
-	}
+	s.ensureLocked(bucket)
 	stored, err := cloneDoc(doc)
 	if err != nil {
 		return err
@@ -91,6 +101,134 @@ func (s *MemoryStore) Remove(bucket, id string) error {
 		return ErrNotFound
 	}
 	delete(s.buckets[bucket], id)
+	s.releaseOwnerLocksLocked(bucket, id)
+	return nil
+}
+
+// CreateUnique implements Store.
+func (s *MemoryStore) CreateUnique(bucket, id string, doc map[string]interface{}, claims []UniqueClaim) error {
+	stored, err := cloneDoc(doc)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ensureLocked(bucket)
+	if _, exists := s.buckets[bucket][id]; exists {
+		return &UniqueConflictError{Attribute: "id"}
+	}
+	for _, claim := range claims {
+		if err := s.checkClaimAvailableLocked(bucket, id, claim); err != nil {
+			return err
+		}
+	}
+	s.buckets[bucket][id] = stored
+	for _, claim := range claims {
+		s.unique[bucket][claim.LockID] = id
+	}
+	return nil
+}
+
+// ReplaceUnique implements Store.
+func (s *MemoryStore) ReplaceUnique(bucket, id string, doc map[string]interface{}, newClaims []UniqueClaim, extractClaims func(map[string]interface{}) []UniqueClaim) error {
+	stored, err := cloneDoc(doc)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ensureLocked(bucket)
+	current, exists := s.buckets[bucket][id]
+	if !exists {
+		return ErrNotFound
+	}
+	for _, claim := range newClaims {
+		if err := s.checkClaimAvailableLocked(bucket, id, claim); err != nil {
+			return err
+		}
+	}
+	var oldClaims []UniqueClaim
+	if extractClaims != nil {
+		oldClaims = extractClaims(current)
+	}
+	s.buckets[bucket][id] = stored
+	for _, old := range oldClaims {
+		if s.unique[bucket][old.LockID] == id {
+			delete(s.unique[bucket], old.LockID)
+		}
+	}
+	for _, claim := range newClaims {
+		s.unique[bucket][claim.LockID] = id
+	}
+	return nil
+}
+
+// RemoveUnique implements Store.
+func (s *MemoryStore) RemoveUnique(bucket, id string, claims []UniqueClaim) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.buckets[bucket][id]; !ok {
+		return ErrNotFound
+	}
+	delete(s.buckets[bucket], id)
+	for _, claim := range claims {
+		if s.unique[bucket][claim.LockID] == id {
+			delete(s.unique[bucket], claim.LockID)
+		}
+	}
+	s.releaseOwnerLocksLocked(bucket, id)
+	return nil
+}
+
+func (s *MemoryStore) ensureLocked(bucket string) {
+	if _, ok := s.buckets[bucket]; !ok {
+		s.buckets[bucket] = make(map[string]map[string]interface{})
+	}
+	if _, ok := s.unique[bucket]; !ok {
+		s.unique[bucket] = make(map[string]string)
+	}
+}
+
+func (s *MemoryStore) releaseOwnerLocksLocked(bucket, ownerID string) {
+	locks := s.unique[bucket]
+	for lockID, owner := range locks {
+		if owner == ownerID {
+			delete(locks, lockID)
+		}
+	}
+}
+
+func (s *MemoryStore) checkClaimAvailableLocked(bucket, selfID string, claim UniqueClaim) error {
+	if owner, taken := s.unique[bucket][claim.LockID]; taken && owner != selfID {
+		if _, alive := s.buckets[bucket][owner]; alive {
+			return &UniqueConflictError{Attribute: claim.Attribute}
+		}
+		delete(s.unique[bucket], claim.LockID)
+	}
+	wanted, err := normalizeValue(claim.RawValue)
+	if err != nil {
+		return err
+	}
+	path := opPathTopathArray(claim.Attribute)
+	for existingID, doc := range s.buckets[bucket] {
+		if existingID == selfID {
+			continue
+		}
+		existingVal := resolvePath(doc, path)
+		if existingVal == nil {
+			continue
+		}
+		if !claim.CaseExact {
+			sA, okA := existingVal.(string)
+			sB, okB := wanted.(string)
+			if okA && okB && strings.EqualFold(sA, sB) {
+				return &UniqueConflictError{Attribute: claim.Attribute}
+			}
+		}
+		if existingVal == wanted {
+			return &UniqueConflictError{Attribute: claim.Attribute}
+		}
+	}
 	return nil
 }
 

@@ -67,7 +67,9 @@ func TestPatchRejectsMalformedRequests(t *testing.T) {
 		{"unknown op", patchBody(map[string]interface{}{"op": "frobnicate", "path": "name", "value": "x"})},
 		{"remove without a path", patchBody(map[string]interface{}{"op": "remove"})},
 		{"pathless replace with a scalar", patchBody(map[string]interface{}{"op": "replace", "value": "x"})},
-		{"value filter in the path", patchBody(map[string]interface{}{"op": "replace", "path": `emails[type eq "work"].value`, "value": "x"})},
+		{"empty value filter in the path", patchBody(map[string]interface{}{"op": "replace", "path": `emails[].value`, "value": "x"})},
+		{"malformed value filter in the path", patchBody(map[string]interface{}{"op": "replace", "path": `emails[type eq].value`, "value": "x"})},
+		{"unclosed value filter in the path", patchBody(map[string]interface{}{"op": "replace", "path": `emails[type eq "work".value`, "value": "x"})},
 	}
 
 	for _, tc := range cases {

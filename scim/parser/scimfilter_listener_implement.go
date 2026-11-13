@@ -27,21 +27,108 @@ type Query struct {
 // key no document has.
 type NameResolver func(path string) string
 
+type n1qlArrayScope struct {
+	attrNode      antlr.TerminalNode
+	lbracNode     antlr.TerminalNode
+	rbracNode     antlr.TerminalNode
+	fullPath      string
+	resolvedFull  string
+	varName       string
+	trimLeadingWS bool
+}
+
 // ScimFilterListenerN1QL walks the parse tree building the N1QL text.
 type ScimFilterListenerN1QL struct {
 	*BaseScimFilterListener
-	query         strings.Builder
+	query         []byte
 	params        []interface{}
 	prevOperation string
 	resolve       NameResolver
 
 	inCriteria bool
 	criteria   strings.Builder
+
+	scopes  []*n1qlArrayScope
+	nextVar int
+}
+
+func (l *ScimFilterListenerN1QL) write(s string) {
+	l.query = append(l.query, s...)
+}
+
+func (l *ScimFilterListenerN1QL) trimTrailingSpaces() {
+	for len(l.query) > 0 && l.query[len(l.query)-1] == ' ' {
+		l.query = l.query[:len(l.query)-1]
+	}
+}
+
+// EnterLBRAC_EXPR_RBRAC translates attribute[subFilter] into a N1QL quantified
+// array predicate:
+//
+//	(ANY `_v0` IN `attribute` SATISFIES ... END)
+func (l *ScimFilterListenerN1QL) EnterLBRAC_EXPR_RBRAC(c *LBRAC_EXPR_RBRACContext) {
+	if len(l.scopes) > 0 {
+		l.scopes[len(l.scopes)-1].trimLeadingWS = false
+	}
+
+	rawAttr := c.ATTRNAME().GetText()
+	fullPath := rawAttr
+	if len(l.scopes) > 0 {
+		fullPath = l.scopes[len(l.scopes)-1].fullPath + "." + rawAttr
+	}
+	resolvedFull := fullPath
+	if l.resolve != nil {
+		resolvedFull = l.resolve(fullPath)
+	}
+
+	var collectionExpr string
+	if len(l.scopes) == 0 {
+		collectionExpr = AddQuote(resolvedFull)
+	} else {
+		parent := l.scopes[len(l.scopes)-1]
+		rel := stripParentPrefix(resolvedFull, parent.resolvedFull, rawAttr)
+		collectionExpr = "`" + parent.varName + "`." + AddQuote(rel)
+	}
+
+	varName := "_v" + strconv.Itoa(l.nextVar)
+	l.nextVar++
+	l.prevOperation = ""
+	l.write("(ANY `" + varName + "` IN " + collectionExpr + " SATISFIES ")
+
+	l.scopes = append(l.scopes, &n1qlArrayScope{
+		attrNode:      c.ATTRNAME(),
+		lbracNode:     c.LBRAC(),
+		rbracNode:     c.RBRAC(),
+		fullPath:      fullPath,
+		resolvedFull:  resolvedFull,
+		varName:       varName,
+		trimLeadingWS: true,
+	})
+}
+
+// ExitLBRAC_EXPR_RBRAC closes the N1QL quantified array predicate.
+func (l *ScimFilterListenerN1QL) ExitLBRAC_EXPR_RBRAC(*LBRAC_EXPR_RBRACContext) {
+	if len(l.scopes) > 0 {
+		l.scopes = l.scopes[:len(l.scopes)-1]
+	}
+	l.trimTrailingSpaces()
+	l.write(" END)")
+}
+
+func stripParentPrefix(resolvedFull, parentResolved, fallback string) string {
+	prefix := parentResolved + "."
+	if len(resolvedFull) > len(prefix) && strings.EqualFold(resolvedFull[:len(prefix)], prefix) {
+		return resolvedFull[len(prefix):]
+	}
+	return fallback
 }
 
 // EnterCriteria starts collecting the text of a quoted value. Its terminals are
 // buffered rather than written, so the value leaves as a parameter.
 func (l *ScimFilterListenerN1QL) EnterCriteria(c *CriteriaContext) {
+	if len(l.scopes) > 0 {
+		l.scopes[len(l.scopes)-1].trimLeadingWS = false
+	}
 	l.inCriteria = true
 	l.criteria.Reset()
 }
@@ -53,7 +140,7 @@ func (l *ScimFilterListenerN1QL) ExitCriteria(c *CriteriaContext) {
 	l.bind(value)
 	if isPattern {
 		// Makes the escaping in escapeLikeWildcards effective.
-		l.query.WriteString(` ESCAPE "\\"`)
+		l.write(` ESCAPE "\\"`)
 	}
 }
 
@@ -83,7 +170,7 @@ func escapeLikeWildcards(value string) string {
 // bind records a value and writes its positional placeholder.
 func (l *ScimFilterListenerN1QL) bind(value interface{}) {
 	l.params = append(l.params, value)
-	l.query.WriteString("$" + strconv.Itoa(len(l.params)))
+	l.write("$" + strconv.Itoa(len(l.params)))
 	l.prevOperation = ""
 }
 
@@ -110,7 +197,7 @@ func FilterToN1QL(resourceName string, filter string, resolve NameResolver) (Que
 	listener := &ScimFilterListenerN1QL{resolve: resolve}
 	antlr.ParseTreeWalkerDefault.Walk(listener, tree)
 
-	where := " WHERE " + listener.query.String()
+	where := " WHERE " + string(listener.query)
 	return Query{
 		Page:   "SELECT * " + from + where,
 		Count:  "SELECT count(*) as count " + from + where,
@@ -131,12 +218,35 @@ func (l *ScimFilterListenerN1QL) VisitTerminal(node antlr.TerminalNode) {
 		return
 	}
 
-	switch node.GetSymbol().GetTokenType() {
-	case ScimFilterParserATTRNAME:
-		if l.resolve != nil {
-			value = l.resolve(value)
+	tokenType := node.GetSymbol().GetTokenType()
+	if len(l.scopes) > 0 {
+		top := l.scopes[len(l.scopes)-1]
+		if node == top.attrNode || node == top.lbracNode || node == top.rbracNode {
+			return
 		}
-		value = AddQuote(value)
+		if top.trimLeadingWS && tokenType == ScimFilterParserWS {
+			return
+		}
+		top.trimLeadingWS = false
+	}
+
+	switch tokenType {
+	case ScimFilterParserATTRNAME:
+		if len(l.scopes) > 0 {
+			top := l.scopes[len(l.scopes)-1]
+			fullPath := top.fullPath + "." + value
+			resolvedFull := fullPath
+			if l.resolve != nil {
+				resolvedFull = l.resolve(fullPath)
+			}
+			rel := stripParentPrefix(resolvedFull, top.resolvedFull, value)
+			value = "`" + top.varName + "`." + AddQuote(rel)
+		} else {
+			if l.resolve != nil {
+				value = l.resolve(value)
+			}
+			value = AddQuote(value)
+		}
 		l.prevOperation = ""
 
 	case ScimFilterParserNUMBERS:
@@ -190,7 +300,7 @@ func (l *ScimFilterListenerN1QL) VisitTerminal(node antlr.TerminalNode) {
 		value = ""
 	}
 
-	l.query.WriteString(value)
+	l.write(value)
 }
 
 // urnPathPattern splits "urn:...:Schema.attr.sub" into its schema URN and the

@@ -1,0 +1,65 @@
+services:
+  couchbase:
+    image: couchbase:community-7.1.1
+    ports:
+      - "8091-8094:8091-8094"
+      - "11210:11210"
+    volumes:
+      - couchbase-data:/opt/couchbase/var
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8091/pools >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 15s
+
+  couchbase-init:
+    image: couchbase:community-7.1.1
+    depends_on:
+      couchbase:
+        condition: service_healthy
+    environment:
+      CB_USER: ${SCIM_ADMIN_USER:-Administrator}
+      CB_PASSWORD: ${SCIM_ADMIN_PASSWORD:-password}
+    entrypoint:
+      - /bin/bash
+      - -ec
+      - |
+        if curl -fsS -u "$${CB_USER}:$${CB_PASSWORD}" http://couchbase:8091/pools/default >/dev/null 2>&1; then
+          echo "Couchbase cluster is already initialised."
+          exit 0
+        fi
+        echo "Initialising Couchbase cluster..."
+        couchbase-cli cluster-init \
+          --cluster http://couchbase:8091 \
+          --cluster-username "$${CB_USER}" \
+          --cluster-password "$${CB_PASSWORD}" \
+          --services data,index,query \
+          --cluster-ramsize 1024 \
+          --cluster-index-ramsize 256 \
+          --index-storage-setting default
+
+  goscim:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      couchbase-init:
+        condition: service_completed_successfully
+    ports:
+      - "8080:8080"
+    environment:
+      GIN_MODE: release
+      SCIM_PORT: ":8080"
+      SCIM_COUCHBASE_URL: couchbase
+      SCIM_COUCHBASE_TLS: "false"
+      SCIM_ADMIN_USER: ${SCIM_ADMIN_USER:-Administrator}
+      SCIM_ADMIN_PASSWORD: ${SCIM_ADMIN_PASSWORD:-password}
+      SCIM_AUTH: ${SCIM_AUTH:-basic}
+      SCIM_BASIC_USERS: ${SCIM_BASIC_USERS:-admin:secret:admin,role1,role2,role3}
+      SCIM_PASSWORD_MODE: ${SCIM_PASSWORD_MODE:-argon2id}
+      SCIM_TRUSTED_PROXIES: ${SCIM_TRUSTED_PROXIES:-none}
+    restart: unless-stopped
+
+volumes:
+  couchbase-data:

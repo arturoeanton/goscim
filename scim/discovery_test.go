@@ -29,7 +29,7 @@ func TestServiceProviderConfig(t *testing.T) {
 		"patch":          true,
 		"bulk":           false,
 		"filter":         true,
-		"changePassword": false,
+		"changePassword": true,
 		"sort":           true,
 		"etag":           true,
 	}
@@ -48,6 +48,16 @@ func TestServiceProviderConfig(t *testing.T) {
 	if filter["maxResults"] != float64(maxSearchCount) {
 		t.Errorf("filter.maxResults = %v, want %d", filter["maxResults"], maxSearchCount)
 	}
+
+	t.Run("changePassword turns false when SCIM_PASSWORD_MODE=reject", func(t *testing.T) {
+		t.Setenv("SCIM_PASSWORD_MODE", "reject")
+		w := do(t, r, http.MethodGet, PREFIX+"/ServiceProviderConfig", "")
+		requireStatus(t, w, http.StatusOK)
+		cp := decode(t, w)["changePassword"].(map[string]interface{})
+		if cp["supported"] != false {
+			t.Errorf("changePassword.supported = %v, want false", cp["supported"])
+		}
+	})
 }
 
 // The advertised authentication schemes come from the authenticator actually

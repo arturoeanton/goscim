@@ -12,6 +12,11 @@ func Read(resource string) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		resourceType := Resources[resource]
 		id := c.Param("id")
+		setAuditTarget(c, "read", resourceType.Name, id)
+		proj, ok := parseProjectionFromQuery(c)
+		if !ok {
+			return
+		}
 		element, err := getElementByID(c, id, resourceType)
 		if err != nil {
 			return
@@ -24,7 +29,7 @@ func Read(resource string) func(c *gin.Context) {
 		if tag := entityTag(version); tag != "" {
 			c.Header("ETag", tag)
 		}
-		writeSCIM(c, http.StatusOK, ValidateReadRole(currentRoles(c), resourceType, element))
+		writeSCIM(c, http.StatusOK, FormatResource(currentRoles(c), resourceType, element, proj))
 	}
 }
 

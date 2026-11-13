@@ -183,3 +183,70 @@ func resolveAttributeChain(resourceType ResourceType, path string) []Attribute {
 	}
 	return chain
 }
+
+// ValidateRootSortBy validates sortBy on a server-root POST /.search: every
+// path must be declared by at least one resource type and must be sortable on
+// every resource type that declares it.
+func ValidateRootSortBy(resourceTypes []ResourceType, sortBy string) error {
+	if strings.TrimSpace(sortBy) == "" {
+		return nil
+	}
+	for _, raw := range strings.Split(sortBy, ",") {
+		path := strings.TrimSpace(raw)
+		if path == "" {
+			return fmt.Errorf("sortBy contains an empty attribute path")
+		}
+		declaredAnywhere := false
+		for _, rt := range resourceTypes {
+			if attributeIsDeclared(rt, path) {
+				declaredAnywhere = true
+				if !attributeIsSortable(rt, path) {
+					return fmt.Errorf("sortBy: %q cannot be used for sorting", path)
+				}
+			}
+		}
+		if !declaredAnywhere {
+			return fmt.Errorf("sortBy: %q is not a declared attribute", path)
+		}
+	}
+	return nil
+}
+
+// ValidateRootFilterAttributes validates a filter on a server-root POST
+// /.search: every referenced attribute must be declared by at least one
+// resource type, and on every resource type that declares it the attribute must
+// be returnable and readable by the caller's roles.
+func ValidateRootFilterAttributes(resourceTypes []ResourceType, roles []string, filter string) error {
+	if filter == "" {
+		return nil
+	}
+	paths, err := parser.ReferencedAttributes(filter)
+	if err != nil {
+		return err
+	}
+	for _, path := range paths {
+		_, attrPath := parser.SplitURNPath(path)
+		if attrPath == "" {
+			return fmt.Errorf("invalid attribute path %q in filter", path)
+		}
+		declaredAnywhere := false
+		for _, rt := range resourceTypes {
+			if !attributeIsDeclared(rt, path) {
+				continue
+			}
+			declaredAnywhere = true
+			for _, attr := range resolveAttributeChain(rt, path) {
+				if !isReturnable(attr) {
+					return fmt.Errorf("attribute %q cannot be filtered", attr.Name)
+				}
+				if !canRead(roles, attr) {
+					return fmt.Errorf("the caller is not allowed to filter by %q", attr.Name)
+				}
+			}
+		}
+		if !declaredAnywhere {
+			return fmt.Errorf("attribute %q is not declared", path)
+		}
+	}
+	return nil
+}

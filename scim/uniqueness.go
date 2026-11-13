@@ -1,67 +1,126 @@
 package scim
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
-// EnforceUniqueness refuses a write that would duplicate a value the schema
-// declares unique (RFC 7643 7, "uniqueness": "server" or "global").
-//
-// currentID is the resource being replaced, or "" on a create: a resource is
-// allowed to keep its own value.
-//
-// Without this, an identity provider that retries a provisioning request --
-// because the first attempt timed out, say -- silently creates a second user
-// with the same userName, and every later lookup by that name is ambiguous.
-//
-// It reports whether the caller may proceed; when it returns false the
-// response has already been written.
-func EnforceUniqueness(c *gin.Context, resourceType ResourceType, element map[string]interface{}, currentID string) bool {
-	coreSchema, _ := LookupSchema(resourceType.Schema)
-	if !checkUniqueAttributes(c, resourceType, coreSchema.Attributes, element, "", currentID) {
-		return false
+// ExtractUniqueClaims collects every unique attribute value present on element
+// for resourceType, returning them in deterministic LockID order so multi-key
+// acquisitions never deadlock.
+func ExtractUniqueClaims(resourceType ResourceType, element map[string]interface{}) []UniqueClaim {
+	if element == nil {
+		return nil
+	}
+	var claims []UniqueClaim
+	if coreSchema, ok := LookupSchema(resourceType.Schema); ok {
+		claims = collectObjectUniqueClaims(claims, coreSchema.Attributes, element, "")
 	}
 	for _, extension := range resourceType.SchemaExtensions {
-		values, ok := element[extension.Schema].(map[string]interface{})
+		rawExt, ok := lookupValueFold(element, extension.Schema)
 		if !ok {
 			continue
 		}
-		extensionSchema, _ := LookupSchema(extension.Schema)
-		if !checkUniqueAttributes(c, resourceType, extensionSchema.Attributes, values, extension.Schema+".", currentID) {
-			return false
+		values, ok := rawExt.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if extSchema, ok := LookupSchema(extension.Schema); ok {
+			claims = collectObjectUniqueClaims(claims, extSchema.Attributes, values, extSchema.ID+".")
 		}
 	}
-	return true
+	sort.Slice(claims, func(i, j int) bool {
+		return claims[i].LockID < claims[j].LockID
+	})
+	return claims
 }
 
-// checkUniqueAttributes looks up every unique attribute present in element.
-//
-// prefix carries the extension URN so the lookup path matches how the value is
-// stored, nested under that key.
-func checkUniqueAttributes(c *gin.Context, resourceType ResourceType, attributes []Attribute,
-	element map[string]interface{}, prefix, currentID string) bool {
-
+func collectObjectUniqueClaims(out []UniqueClaim, attributes []Attribute, element map[string]interface{}, prefix string) []UniqueClaim {
 	for _, attribute := range attributes {
-		if !isUniqueAttribute(attribute) {
+		val, present := lookupValueFold(element, attribute.Name)
+		if !present || val == nil {
 			continue
 		}
-		value, present := element[attribute.Name]
-		if !present || value == nil {
-			continue
-		}
-
 		path := prefix + attribute.Name
-		existingID, err := DB.FindIDByAttribute(resourceType.Name, path, value)
+		if isUniqueAttribute(attribute) {
+			key, ok := canonicalUniqueKey(attribute, val)
+			if ok {
+				out = append(out, UniqueClaim{
+					Attribute: path,
+					LockID:    uniqueLockID(path, key),
+					Key:       key,
+					RawValue:  val,
+					CaseExact: attribute.CaseExact,
+				})
+			}
+		}
+		if !attribute.MultiValued && len(attribute.SubAttributes) > 0 {
+			if subMap, ok := val.(map[string]interface{}); ok {
+				out = collectObjectUniqueClaims(out, attribute.SubAttributes, subMap, path+".")
+			}
+		}
+	}
+	return out
+}
+
+func canonicalUniqueKey(attribute Attribute, value interface{}) (string, bool) {
+	if s, ok := value.(string); ok {
+		if !attribute.CaseExact {
+			s = strings.ToLower(s)
+		}
+		raw, err := json.Marshal(s)
+		if err != nil {
+			return "", false
+		}
+		return string(raw), true
+	}
+	norm, err := normalizeValue(value)
+	if err != nil {
+		return "", false
+	}
+	raw, err := json.Marshal(norm)
+	if err != nil {
+		return "", false
+	}
+	return string(raw), true
+}
+
+func uniqueLockID(attributePath, canonicalKey string) string {
+	sum := sha256.Sum256([]byte(attributePath + "\x00" + canonicalKey))
+	return "u:" + hex.EncodeToString(sum[:])
+}
+
+// writeStoreUniqueError translates a UniqueConflictError to RFC 7644 409
+// uniqueness and any other error to internalError.
+func writeStoreUniqueError(c *gin.Context, resourceType ResourceType, err error) {
+	var conflict *UniqueConflictError
+	if errors.As(err, &conflict) {
+		MakeTypedError(c, http.StatusConflict, "uniqueness",
+			"a "+resourceType.Name+" with this "+conflict.Attribute+" already exists")
+		return
+	}
+	internalError(c, err)
+}
+
+// EnforceUniqueness checks uniqueness against the Store for callers invoking
+// validation outside CreateUnique/ReplaceUnique.
+func EnforceUniqueness(c *gin.Context, resourceType ResourceType, element map[string]interface{}, currentID string) bool {
+	for _, claim := range ExtractUniqueClaims(resourceType, element) {
+		existingID, err := DB.FindIDByAttribute(resourceType.Name, claim.Attribute, claim.RawValue)
 		if err != nil {
 			internalError(c, err)
 			return false
 		}
 		if existingID != "" && existingID != currentID {
 			MakeTypedError(c, http.StatusConflict, "uniqueness",
-				"a "+resourceType.Name+" with this "+path+" already exists")
+				"a "+resourceType.Name+" with this "+claim.Attribute+" already exists")
 			return false
 		}
 	}

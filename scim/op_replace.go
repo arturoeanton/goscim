@@ -17,6 +17,7 @@ func Replace(resource string) func(c *gin.Context) {
 			return
 		}
 		resourceType := Resources[resource]
+		setAuditTarget(c, "replace", resourceType.Name, id)
 		raw, ok := readBody(c)
 		if !ok {
 			return
@@ -30,15 +31,19 @@ func Replace(resource string) func(c *gin.Context) {
 			MakeTypedError(c, http.StatusBadRequest, "invalidSyntax", "request body must be a JSON object")
 			return
 		}
-		replaceWithMode(c, resourceType, id, element, false)
+		replaceWithMode(c, resourceType, id, element, false, nil)
 	}
 }
 
 func replace(c *gin.Context, resourceType ResourceType, id string, element map[string]interface{}) {
-	replaceWithMode(c, resourceType, id, element, false)
+	replaceWithMode(c, resourceType, id, element, false, nil)
 }
 
-func replaceWithMode(c *gin.Context, resourceType ResourceType, id string, element map[string]interface{}, isPatch bool) {
+func replaceWithMode(c *gin.Context, resourceType ResourceType, id string, element map[string]interface{}, isPatch bool, patchedPaths map[string]bool) {
+	proj, ok := parseProjectionFromQuery(c)
+	if !ok {
+		return
+	}
 	// The previous meta comes from the stored resource, never from the
 	// request: RFC 7644 does not require a client to echo meta back on a PUT,
 	// and meta.created is not the client's to set.
@@ -51,7 +56,7 @@ func replaceWithMode(c *gin.Context, resourceType ResourceType, id string, eleme
 	}
 	previousMeta, _ := stored["meta"].(map[string]interface{})
 
-	ok, _ := ValidateFieldSchemas(c, element, resourceType)
+	ok, _ = ValidateFieldSchemas(c, element, resourceType)
 	if !ok {
 		return
 	}
@@ -65,22 +70,26 @@ func replaceWithMode(c *gin.Context, resourceType ResourceType, id string, eleme
 	if !ok {
 		return
 	}
-	if !EnforceUniqueness(c, resourceType, element, id) {
+	if !ApplyPasswordPolicy(c, resourceType, element, stored, patchedPaths) {
 		return
 	}
 	element["id"] = id
 	meta := updateMeta(previousMeta, element, resourceType)
 	element["meta"] = meta
 
-	if err := DB.Replace(resourceType.Name, id, element); err != nil {
+	newClaims := ExtractUniqueClaims(resourceType, element)
+	err = DB.ReplaceUnique(resourceType.Name, id, element, newClaims, func(current map[string]interface{}) []UniqueClaim {
+		return ExtractUniqueClaims(resourceType, current)
+	})
+	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			MakeError(c, http.StatusNotFound, "Resource "+id+" not found")
 			return
 		}
-		internalError(c, err)
+		writeStoreUniqueError(c, resourceType, err)
 		return
 	}
 	c.Header("Location", absoluteLocation(c, resourceType, id))
 	setVersionHeader(c, meta)
-	writeSCIM(c, http.StatusOK, ValidateReadRole(currentRoles(c), resourceType, element))
+	writeSCIM(c, http.StatusOK, FormatResource(currentRoles(c), resourceType, element, proj))
 }

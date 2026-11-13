@@ -23,7 +23,9 @@ func TestPermissiveGrammarConstructsAreRejected(t *testing.T) {
 		{"two adjacent expressions without AND/OR", `(userName eq "a")(active eq true)`},
 		{"attribute compared to boolean expression", `userName eq title pr`},
 		{"expression compared to expression", `(userName eq "a") eq (active eq true)`},
-		{"unsupported complex value filter", `emails[type eq "work"]`},
+		{"empty complex value filter", `emails[]`},
+		{"malformed complex value filter", `emails[type eq]`},
+		{"SQL comment inside complex value filter", `emails[type eq --]`},
 	}
 
 	for _, tc := range cases {

@@ -55,7 +55,9 @@ always current.
 
 Each resource type is a bucket, quota set at creation from
 `config/bucketSettings/`, 200 MB by default. Three shipped resource types means
-600 MB of cluster quota for an untouched install.
+600 MB of cluster quota for an untouched install. Within each bucket,
+`EnsureBucket` also creates the `_default.scim_unique` collection to store
+compact KV sentinel locks (`u:<sha256>`) for `uniqueness: server | global`.
 
 Changing a bucket settings file afterwards does nothing — the settings apply at
 creation. Change the bucket in Couchbase.
@@ -72,38 +74,72 @@ whatever your operator provides, per bucket.
 Configuration lives in the config directory and in environment variables. It is
 worth keeping under version control, since it defines the SCIM model.
 
-## Logging
+## Logging and audit trail
 
-Requests go through gin's default logger, to stdout. Startup and shutdown are
-logged with UTC timestamps.
+HTTP access logs go through gin's default logger to stdout, and startup/shutdown
+messages are logged with UTC timestamps.
 
-What is **not** logged: who changed what. There is no audit trail. If you need
-one, it is an [open item](../RELEASE-1.0.md) and would go in the write path
-alongside the permission checks.
+Every request under `/scim/v2` (excluding unauthenticated discovery endpoints
+and `/healthz` / `/readyz`) also emits a structured `log/slog` audit record
+(`msg: "scim.audit"`), controlled by `SCIM_AUDIT_LOG` (`json` by default, `text`
+for key-value output, or `off` / `none` to disable):
+
+```json
+{
+  "time": "2026-11-13T17:39:53.980084Z",
+  "level": "INFO",
+  "msg": "scim.audit",
+  "request_id": "req-entra-patch-01",
+  "action": "patch",
+  "subject": "spn-entra-provisioning",
+  "roles": ["admin"],
+  "resource_type": "User",
+  "resource_id": "ce83bcd4-721f-4d5e-a364-17f110371b02",
+  "method": "PATCH",
+  "path": "/scim/v2/Users/ce83bcd4-721f-4d5e-a364-17f110371b02",
+  "status": 200,
+  "outcome": "success",
+  "client_ip": "10.0.0.5",
+  "duration_ms": 4.689
+}
+```
+
+- `level` is `INFO` on `2xx`/`3xx`, `WARN` on `4xx` (`unauthenticated`,
+  `forbidden`, `conflict`, `client_error`), and `ERROR` on `5xx`
+  (`server_error`).
+- `X-Request-Id` is propagated from the request when valid
+  (`^[A-Za-z0-9._:-]{1,128}$`) or generated as a UUID and returned on every
+  response.
+- Credentials, `password` attributes, request bodies, and raw query strings are
+  never written to the audit stream.
 
 Warnings worth alerting on:
 
 ```
 WARNING: SCIM_AUTH=none - every request is served unauthenticated
 WARNING: SCIM_COUCHBASE_TLS_SKIP_VERIFY is set - the Couchbase certificate is not verified
+WARNING: SCIM_PASSWORD_MODE=plain - passwords are stored unhashed
 ```
 
-Both mean a safety mechanism was deliberately disabled. Neither should appear
+All three mean a safety mechanism was deliberately disabled. None should appear
 in production.
 
 ## Monitoring
 
-There are no metrics, health or readiness endpoints. This is an
-[open item](../RELEASE-1.0.md), and is the main thing missing for a
-well-instrumented deployment.
+Two unauthenticated probe endpoints live at the server root:
 
-Available today:
+- **Liveness** (`GET /healthz`): answers `200 OK` (`{"status":"ok"}`) while the
+  HTTP server is running, without touching Couchbase so a transient database
+  outage stops traffic rather than restarting pods in a loop.
+- **Readiness** (`GET /readyz`): pings the Couchbase query service and a
+  configured bucket's key-value service under a 2-second deadline, answering
+  `200 OK` (`{"status":"ready"}`) when reachable or `503 Service Unavailable`
+  (`{"status":"unavailable"}`) otherwise.
+- **Container healthcheck**: `./goscim -healthcheck` probes `/readyz` on
+  `SCIM_PORT` and exits `0` or `1`, allowing distroless images without `curl` or
+  a shell to run native `HEALTHCHECK` probes.
 
-- **Liveness**: a TCP check on the listen port.
-- **Readiness**: `GET /scim/v2/ServiceProviderConfig` answers 200 without
-  credentials and only after the config loaded, so it is a reasonable proxy —
-  but it does not prove Couchbase is reachable.
-- **Couchbase health**: from the cluster's own monitoring.
+Prometheus metrics are not yet exposed.
 
 ## Troubleshooting
 

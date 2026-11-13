@@ -13,7 +13,7 @@ starting unauthenticated by omission.
 | Variable | Default | Meaning |
 |---|---|---|
 | `SCIM_AUTH` | *(required)* | `jwt`, `basic`, or `none` |
-| `SCIM_JWT_JWKS_URL` | — | Required for `jwt`. Where the issuer publishes its signing keys |
+| `SCIM_JWT_JWKS_URL` | — | Required for `jwt`. Where the issuer publishes its signing keys (RSA `RS256`/`384`/`512`, EC `ES256`/`384`/`512`, OKP `EdDSA`) |
 | `SCIM_JWT_ISSUER` | — | Required for `jwt`. The `iss` a token must carry |
 | `SCIM_JWT_AUDIENCE` | — | Required for `jwt`. The `aud` a token must carry |
 | `SCIM_JWT_ROLES_CLAIM` | — | An extra claim to read roles from, for issuers that use their own |
@@ -36,6 +36,8 @@ so every attribute with a `$reader` list is filtered out of responses.
 | `SCIM_CONFIG_DIR` | `config` | Directory holding `schemas/`, `resourceType/`, `bucketSettings/`, `serviceProviderConfig/` |
 | `SCIM_TRUSTED_PROXIES` | `127.0.0.1` | Comma-separated addresses whose `X-Forwarded-For` is believed, or `none` to trust nobody |
 | `SCIM_PUBLIC_URL` | *(empty)* | Externally reachable base URL (e.g. `https://scim.example.com`) used to build `Location` headers |
+| `SCIM_PASSWORD_MODE` | `argon2id` | How `password` attributes are stored: `argon2id`, `bcrypt`, `reject` (`400 invalidValue`), or `plain` (logs a warning) |
+| `SCIM_AUDIT_LOG` | `json` | Structured `log/slog` audit stream on SCIM endpoints: `json`, `text`, or `off` (`none`) |
 
 Fixed in code rather than configurable, because no deployment has asked yet:
 read header timeout 10s, read and write timeouts 30s, idle timeout 120s,

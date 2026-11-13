@@ -26,6 +26,9 @@ var testRoles = []string{"user", "admin", "superadmin", "role1"}
 func newTestServerAs(t *testing.T, authenticator Authenticator) (*gin.Engine, *MemoryStore) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
+	prevAudit := AuditLogger()
+	SetAuditLogger(nil)
+	t.Cleanup(func() { SetAuditLogger(prevAudit) })
 	store := NewMemoryStore()
 	DB = store
 	r := gin.New()

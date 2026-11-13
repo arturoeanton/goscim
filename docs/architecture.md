@@ -8,9 +8,10 @@ JSON rather than from code.
 
 ```
                         ┌──────────────────────────────┐
-  HTTP ────────────────▶│ gin router  (scim/router.go) │
+  HTTP ────────────────▶│ gin router + RequestID       │  router.go, audit.go
                         └──────────────┬───────────────┘
                                        │
+              /healthz, /readyz        ├──▶ health.go     (no authentication)
               /scim/v2/ServiceProviderConfig, /ResourceTypes, /Schemas
                                        │  (no authentication)
                                        ▼
@@ -21,7 +22,8 @@ JSON rather than from code.
               /scim/v2/{resource}      │
                                        ▼
                         ┌──────────────────────────────┐
-                        │ LimitBody  → Authenticate    │  auth.go, limits.go
+                        │ AuditMiddleware → LimitBody  │  audit.go, limits.go
+                        │                → Authenticate│  auth.go
                         └──────────────┬───────────────┘
                                        ▼
                         ┌──────────────────────────────┐
@@ -31,8 +33,10 @@ JSON rather than from code.
         ┌──────────────────────────────────────────────────────┐
         │ validate.go        types, required, multiValued      │
         │ validate_write.go  $writer, mutability               │
-        │ uniqueness.go      uniqueness: server | global       │
+        │ password.go        Argon2id / bcrypt / reject        │
+        │ uniqueness.go      atomic uniqueness claims          │
         │ validate_role.go   $reader, returned  (on the way out)│
+        │ projection.go      attributes / excludedAttributes   │
         └──────────────────────────────┬───────────────────────┘
                                        ▼
                         ┌──────────────────────────────┐
@@ -83,17 +87,25 @@ type Store interface {
 	Upsert(bucket, id string, doc map[string]interface{}) error
 	Replace(bucket, id string, doc map[string]interface{}) error
 	Remove(bucket, id string) error
+	CreateUnique(bucket, id string, doc map[string]interface{}, claims []UniqueClaim) error
+	ReplaceUnique(bucket, id string, doc map[string]interface{}, oldClaims, newClaims []UniqueClaim) error
+	RemoveUnique(bucket, id string, claims []UniqueClaim) error
 	Search(q SearchQuery) (total int, resources []map[string]interface{}, err error)
 	FindIDByAttribute(bucket, attributePath string, value interface{}) (string, error)
+	Ping(ctx context.Context) error
 	Close() error
 }
 ```
 
 **`CouchbaseStore`** is production. One bucket per resource type, one document
-per resource keyed by its SCIM `id`. Search is N1QL. Because `SELECT * FROM
-`Bucket`` nests each row under the bucket name, the store unwraps that before
-returning. Driver errors for a missing document become `ErrNotFound`, so
-handlers never import gocb.
+per resource keyed by its SCIM `id` in `_default._default`, plus a dedicated
+`_default.scim_unique` collection holding KV sentinel documents (`u:<sha256>`)
+for `uniqueness: server | global`. Keeping sentinels in their own collection
+makes `CreateUnique` and `ReplaceUnique` linearizable via KV `Insert` and
+document CAS without polluting `SELECT * FROM \`Bucket\`` or `SELECT count(*)`.
+Search is N1QL. Because `SELECT * FROM \`Bucket\`` nests each row under the
+bucket name, the store unwraps that before returning. Driver errors for a
+missing document become `ErrNotFound`, so handlers never import gocb.
 
 **`MemoryStore`** backs the tests. It round-trips every document through JSON
 exactly as the driver does, so a `Meta` struct comes back as a map and integers
@@ -111,11 +123,16 @@ tests and by the integration suite against a real cluster.
 
 `ScimFilter.g4` at the repository root, generated with ANTLR 4.13 against
 `github.com/antlr4-go/antlr/v4`. Everything in `scim/parser/` is generated
-except `scimfilter_listener_implement.go` and `errors.go`.
+except `scimfilter_listener_implement.go`, `errors.go`, and `eval.go`.
 
-`FilterToN1QL` walks the parse tree and emits N1QL by token substitution:
-`eq` becomes `=`, `co`/`sw`/`ew` become `LIKE` with the wildcards applied to
-the value, `pr` becomes `IS NOT NULL`. There is no AST and no query builder.
+`FilterToN1QL` walks the parse tree and emits N1QL: `eq` becomes `=`,
+`co`/`sw`/`ew` become `LIKE ... ESCAPE "\\"` with wildcards applied to the
+bound value, `pr` becomes `IS NOT NULL`, and complex array filters
+(`emails[type eq "work"]`, `emails[type eq "work"].value co "@corp.com"`)
+become quantified `(ANY \`_v0\` IN \`emails\` SATISFIES ... END)` predicates.
+Separately, `eval.go` (`CompileMatcher`, `Match`, `EqualitySeeds`) evaluates the
+same ANTLR parse tree against decoded JSON maps in memory so `PATCH` can resolve
+value-selection paths (`emails[type eq "work"].value`) without N1QL.
 
 Two properties matter more than the mechanism:
 

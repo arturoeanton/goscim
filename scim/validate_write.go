@@ -231,24 +231,35 @@ func enforcePatchOperationWriteAccess(c *gin.Context, resourceType ResourceType,
 }
 
 func checkPatchPathWritable(c *gin.Context, roles []string, resourceType ResourceType, rawPath string) bool {
-	if strings.ContainsAny(rawPath, "[]") {
-		return true // rejected as invalidPath by resolvePatchPath
-	}
-	urn, attrPath := parser.SplitURNPath(rawPath)
+	extURN, attrPath := splitPatchURN(resourceType, rawPath)
 	schemaID := resourceType.Schema
-	if urn != "" {
-		if !strings.EqualFold(urn, resourceType.Schema) && !containsSchemaFold(resourceType.SchemaExtensions, urn) {
+	if extURN != "" {
+		if !containsSchemaFold(resourceType.SchemaExtensions, extURN) {
 			return true
 		}
-		schemaID = urn
+		schemaID = extURN
 	}
 	schema, ok := LookupSchema(schemaID)
 	if !ok {
 		return true
 	}
+	if extURN != "" && attrPath == "" {
+		for _, attr := range schema.Attributes {
+			if !isReadOnly(attr) && !canWrite(roles, attr) {
+				return forbidWrite(c, attr.Name)
+			}
+		}
+		return true
+	}
+
+	segments, err := parsePatchSegments(attrPath)
+	if err != nil {
+		return true // syntax error handled by applyPatchOperationForResource
+	}
+
 	attributes := schema.Attributes
-	for _, segment := range strings.Split(attrPath, ".") {
-		attr, found := FindAttribute(attributes, segment)
+	for _, seg := range segments {
+		attr, found := FindAttribute(attributes, seg.Attr)
 		if !found {
 			return true
 		}
@@ -258,9 +269,43 @@ func checkPatchPathWritable(c *gin.Context, roles []string, resourceType Resourc
 		if !canWrite(roles, attr) {
 			return forbidWrite(c, attr.Name)
 		}
+		if seg.Filter != "" {
+			refPaths, err := parser.ReferencedAttributes(seg.Filter)
+			if err != nil {
+				return true
+			}
+			for _, ref := range refPaths {
+				for _, subAttr := range resolveSubAttributeChain(attr.SubAttributes, ref) {
+					if !isReturnable(subAttr) {
+						MakeTypedError(c, http.StatusBadRequest, "invalidFilter",
+							"attribute "+strconv.Quote(subAttr.Name)+" cannot be filtered")
+						return false
+					}
+					if !canRead(roles, subAttr) {
+						MakeTypedError(c, http.StatusBadRequest, "invalidFilter",
+							"the caller is not allowed to filter by "+strconv.Quote(subAttr.Name))
+						return false
+					}
+				}
+			}
+		}
 		attributes = attr.SubAttributes
 	}
 	return true
+}
+
+func resolveSubAttributeChain(attributes []Attribute, dottedPath string) []Attribute {
+	segments := strings.Split(dottedPath, ".")
+	chain := make([]Attribute, 0, len(segments))
+	for _, segment := range segments {
+		attr, found := FindAttribute(attributes, segment)
+		if !found {
+			break
+		}
+		chain = append(chain, attr)
+		attributes = attr.SubAttributes
+	}
+	return chain
 }
 
 func checkValueWritable(c *gin.Context, roles []string, attribute Attribute, value interface{}) bool {

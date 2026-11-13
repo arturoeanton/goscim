@@ -3,16 +3,19 @@
 ## Layout
 
 ```
-main.go                       startup, timeouts, signals
+main.go                       startup, -healthcheck flag, timeouts, signals
 ScimFilter.g4                 the filter grammar
 Makefile                      build, check, integration, generate
+Dockerfile docker-compose.yml container image and local Couchbase stack
 config/                       schemas, resource types, bucket settings
 scim/
   router.go                   route registration, middleware order
+  audit.go                    X-Request-Id and structured log/slog audit middleware
+  health.go                   /healthz and /readyz handlers
   config.go                   loading config, registering endpoints
   types.go                    SCIM data structures
   store.go                    the Store interface
-  store_couchbase.go          production storage
+  store_couchbase.go          production storage + _default.scim_unique sentinels
   store_couchbase_tls.go      connection string and TLS settings
   store_memory.go             the test fake
   auth.go auth_jwt.go auth_basic.go auth_claims.go
@@ -20,13 +23,15 @@ scim/
   validate.go                 types, required, multiValued
   validate_write.go           $writer, mutability
   validate_role.go            $reader, returned
-  uniqueness.go               uniqueness: server | global
+  projection.go               attributes and excludedAttributes projection
+  password.go                 Argon2id / bcrypt / reject password handling
+  uniqueness.go               atomic uniqueness claim extraction
   sortby.go                   sortBy whitelist, attribute path canonicalisation
   caseinsensitive.go          case-insensitive resolution
   discovery.go                ServiceProviderConfig, ResourceTypes, Schemas
   response.go                 media type, ETag, preconditions
   limits.go error.go meta.go contains.go
-  parser/                     ANTLR output, plus two hand-written files
+  parser/                     ANTLR output, plus three hand-written files
 test/integration/             the suite against a real Couchbase
 ```
 
@@ -104,8 +109,8 @@ it go red.
 ## The filter parser
 
 `ScimFilter.g4` is the grammar. Everything in `scim/parser/` is generated
-**except** `scimfilter_listener_implement.go` and `errors.go`, which are
-hand-written and must not be overwritten.
+**except** `scimfilter_listener_implement.go`, `errors.go`, and `eval.go`, which
+are hand-written and must not be overwritten.
 
 ```bash
 make generate   # runs ANTLR 4.13 in a container; no JDK needed

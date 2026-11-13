@@ -21,7 +21,11 @@ func NewRouter(folderConfig string, r *gin.Engine, authenticator Authenticator) 
 	if r == nil {
 		r = gin.Default()
 	}
+	r.Use(RequestID())
 	discoveryAuthenticator = authenticator
+
+	r.GET("/healthz", Healthz)
+	r.GET("/readyz", Readyz)
 
 	discovery := r.Group(PREFIX)
 	discovery.GET("/ServiceProviderConfig", DiscoveryServiceProviderConfig(folderConfig))
@@ -30,10 +34,11 @@ func NewRouter(folderConfig string, r *gin.Engine, authenticator Authenticator) 
 	discovery.GET("/Schemas", DiscoverySchemas)
 	discovery.GET("/Schemas/:id", DiscoverySchema)
 
-	scim := r.Group(PREFIX, LimitBody(DefaultMaxBodyBytes), Authenticate(authenticator))
+	scim := r.Group(PREFIX, AuditMiddleware(), LimitBody(DefaultMaxBodyBytes), Authenticate(authenticator))
 	if err := ReadResourceType(folderConfig, scim); err != nil {
 		return nil, err
 	}
+	scim.POST("/.search", RootPostSearch)
 	//scim.POST("/Bulk", Bulk) // Bulk: 		POST https://example.com/{v}/Bulk
 
 	return r, nil

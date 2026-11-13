@@ -63,7 +63,7 @@ func buildServiceProviderConfig(folderConfig string) ServiceProviderConfig {
 		Patch:          supported{Supported: true},
 		Bulk:           supported{Supported: false}, // /Bulk is not implemented
 		Filter:         filterSupport{Supported: true, MaxResults: maxSearchCount},
-		ChangePassword: supported{Supported: false},
+		ChangePassword: supported{Supported: passwordSupported()},
 		Sort:           supported{Supported: true},
 		ETag:           supported{Supported: true},
 		Meta: Meta{
@@ -95,7 +95,9 @@ func buildServiceProviderConfig(folderConfig string) ServiceProviderConfig {
 func DiscoveryServiceProviderConfig(folderConfig string) gin.HandlerFunc {
 	config := buildServiceProviderConfig(folderConfig)
 	return func(c *gin.Context) {
-		writeSCIM(c, http.StatusOK, config)
+		current := config
+		current.ChangePassword = supported{Supported: passwordSupported()}
+		writeSCIM(c, http.StatusOK, current)
 	}
 }
 

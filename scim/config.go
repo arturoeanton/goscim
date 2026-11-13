@@ -72,12 +72,13 @@ func ReadResourceType(folderConfig string, r gin.IRouter) error {
 			return err
 		}
 
-		r.POST(resourceType.Endpoint, Create(resourceType.Endpoint))          // Create:  	POST https://example.com/{v}/{resource}
-		r.GET(resourceType.Endpoint+"/:id", Read(resourceType.Endpoint))      // Read: 	GET https://example.com/{v}/{resource}/{id}
-		r.PUT(resourceType.Endpoint+"/:id", Replace(resourceType.Endpoint))   // Replace: 	PUT https://example.com/{v}/{resource}/{id}
-		r.DELETE(resourceType.Endpoint+"/:id", Delete(resourceType.Endpoint)) // Delete: 	DELETE https://example.com/{v}/{resource}/{id}
-		r.PATCH(resourceType.Endpoint+"/:id", Update(resourceType.Endpoint))  // Update: 	PATCH https://example.com/{v}/{resource}/{id}
-		r.GET(resourceType.Endpoint, Search(resourceType.Endpoint))           // Search: 	GET https://example.com/{v}/{resource}?ﬁlter={attribute}{op}{value}&sortBy={attributeName}&sortOrder={ascending|descending}
+		r.POST(resourceType.Endpoint, Create(resourceType.Endpoint))                // Create:  	POST https://example.com/{v}/{resource}
+		r.GET(resourceType.Endpoint+"/:id", Read(resourceType.Endpoint))            // Read: 	GET https://example.com/{v}/{resource}/{id}
+		r.PUT(resourceType.Endpoint+"/:id", Replace(resourceType.Endpoint))         // Replace: 	PUT https://example.com/{v}/{resource}/{id}
+		r.DELETE(resourceType.Endpoint+"/:id", Delete(resourceType.Endpoint))       // Delete: 	DELETE https://example.com/{v}/{resource}/{id}
+		r.PATCH(resourceType.Endpoint+"/:id", Update(resourceType.Endpoint))        // Update: 	PATCH https://example.com/{v}/{resource}/{id}
+		r.GET(resourceType.Endpoint, Search(resourceType.Endpoint))                 // Search: 	GET https://example.com/{v}/{resource}?filter=...
+		r.POST(resourceType.Endpoint+"/.search", PostSearch(resourceType.Endpoint)) // Search:	POST https://example.com/{v}/{resource}/.search
 	}
 	return nil
 }

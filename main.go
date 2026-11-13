@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,7 +18,7 @@ import (
 )
 
 // Version is the release this binary was built from.
-const Version = "1.0.1"
+const Version = "1.1.0"
 
 // Server timeouts. net/http applies none by default, which leaves a connection
 // that dribbles a request out one byte at a time holding a goroutine
@@ -31,6 +33,12 @@ const (
 )
 
 func main() {
+	healthcheck := flag.Bool("healthcheck", false, "probe /readyz on the configured SCIM_PORT and exit")
+	flag.Parse()
+	if *healthcheck {
+		os.Exit(runHealthcheck(envOr("SCIM_PORT", ":8080")))
+	}
+
 	log.SetFlags(log.LstdFlags | log.LUTC)
 	log.Printf("GoSCIM %s starting", Version)
 
@@ -40,6 +48,18 @@ func main() {
 	}
 	if _, anonymous := authenticator.(*scim.AnonymousAuthenticator); anonymous {
 		log.Println("WARNING: SCIM_AUTH=none - every request is served unauthenticated")
+	}
+
+	passwordMode, err := scim.PasswordModeFromEnv()
+	if err != nil {
+		log.Fatalln(">>>", err.Error())
+	}
+	if passwordMode == scim.PasswordModePlain {
+		log.Println("WARNING: SCIM_PASSWORD_MODE=plain - passwords are stored unhashed")
+	}
+
+	if _, err := scim.ConfigureAuditLoggerFromEnv(nil); err != nil {
+		log.Fatalln(">>>", err.Error())
 	}
 
 	folderConfig := envOr("SCIM_CONFIG_DIR", "config")
@@ -133,4 +153,26 @@ func trustedProxies() []string {
 		}
 	}
 	return proxies
+}
+
+// runHealthcheck probes the local /readyz endpoint so distroless containers
+// need neither a shell nor curl for Docker/Compose healthchecks.
+func runHealthcheck(listenAddr string) int {
+	host, port, err := net.SplitHostPort(listenAddr)
+	if err != nil {
+		port = strings.TrimPrefix(listenAddr, ":")
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get("http://" + net.JoinHostPort(host, port) + "/readyz")
+	if err != nil {
+		return 1
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		return 0
+	}
+	return 1
 }

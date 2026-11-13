@@ -18,7 +18,8 @@ What this design assumes:
   filter values are bound rather than interpolated, and attribute-level
   permissions are enforced on both read and write.
 - **Anyone with cluster credentials has everything.** GoSCIM stores documents
-  unencrypted, `password` included.
+  unencrypted (`password` is hashed with Argon2id by default unless
+  `SCIM_PASSWORD_MODE=plain` is set).
 
 What it does not defend against: a compromised token within its lifetime,
 denial of service beyond basic limits, or anyone with access to Couchbase.
@@ -44,17 +45,23 @@ What is checked, and why each matters:
 - **Signature**, against a key fetched from the JWKS and cached. An unknown key
   id triggers one refetch, serialized and rate limited so a stream of tokens
   naming keys that do not exist cannot be turned into load on the issuer.
-- **Key parameters**, requiring RSA keys of at least 2048 bits (`RFC 7518 §3.3`)
-  whose `use` (if set) is `"sig"` and `key_ops` (if set) includes `"verify"`.
-- **Algorithm**, restricted to `RS256`, `RS384`, `RS512`. Without an
-  allow-list, a token signed with an algorithm that happens to verify against
-  the same RSA key is accepted; `HS256` with the public key as the secret is
-  the classic version of that attack.
+- **Key parameters**, across three asymmetric key families whose `use` (if set)
+  is `"sig"` and `key_ops` (if set) includes `"verify"`:
+  - **RSA** (`"kty": "RSA"`): modulus of at least 2048 bits (`RFC 7518 §3.3`)
+    and valid odd exponent `>= 3`.
+  - **EC** (`"kty": "EC"`): NIST `P-256`, `P-384`, or `P-521` with exact
+    coordinate byte lengths (`32`, `48`, `66` per `RFC 7518 §6.2.1.2`) and
+    on-curve / non-infinity verification via `crypto/ecdh`.
+  - **OKP** (`"kty": "OKP"`): `Ed25519` 32-byte public keys (`RFC 8037`);
+    encryption curves such as `X25519` are rejected.
+- **Algorithm binding**, restricted to `RS256`, `RS384`, `RS512`, `ES256`,
+  `ES384`, `ES512`, and `EdDSA`, with strict key-type and curve matching (`P-256`
+  only verifies `ES256`, `P-384` only `ES384`, `P-521` only `ES512`, `Ed25519`
+  only `EdDSA`, RSA only `RS*`) and enforcement of any JWK `"alg"` pin. Symmetric
+  algorithms (`HS*`) and `"none"` are never accepted.
 - **Issuer and audience**, both required. Skipping either turns any token the
   client can obtain anywhere into a valid credential here.
 - **Expiry**, required to be present. A token with no `exp` is refused.
-
-Only RSA keys are understood. An EC or OKP key in the JWKS is skipped.
 
 ### Basic — development
 
@@ -100,12 +107,15 @@ Per attribute, not per endpoint. See
 [schemas and permissions](schemas.md#role-based-permissions).
 
 Enforced on the way in by `$writer` and `mutability` (including `DELETE`,
-case-insensitive attribute keys, and removal attempts on `PUT` or `PATCH`), and
-on the way out by `$reader`, `returned: never` and `writeOnly`. Search `filter`
-and `sortBy` also refuse `writeOnly` / `returned: never` attributes (and
-`filter` refuses attributes outside the caller's `$reader` roles) so secrets
-cannot be probed via blind queries. Both walk the schema, so complex values,
-the elements of multi-valued attributes, and extension objects are all covered.
+case-insensitive attribute keys, bracketed `PATCH` value-selection paths such
+as `emails[type eq "work"].value`, and removal attempts on `PUT` or `PATCH`),
+and on the way out by `$reader`, `returned: never` and `writeOnly`. Search
+`filter`, `PATCH` value-selection filters, and `sortBy` also refuse `writeOnly` /
+`returned: never` attributes (and filters refuse attributes outside the
+caller's `$reader` roles, including sub-attributes inside `[...]`) so secrets
+cannot be probed via blind queries or selective patches. Both walk the schema,
+so complex values, the elements of multi-valued attributes, and extension
+objects are all covered.
 
 Denied reads **omit** the attribute rather than blanking it: an empty string
 cannot be told apart from a legitimately empty value.
@@ -169,19 +179,40 @@ rather than the instances.
 
 There is **no rate limiting**. Put it in the proxy.
 
+## Audit logging
+
+Every SCIM resource request (including `401` authentication failures, `403`
+role denials, `409` uniqueness conflicts, `413` body-limit rejections, and
+successful reads/writes) emits a structured `log/slog` event (`msg:
+"scim.audit"`), controlled by `SCIM_AUDIT_LOG` (`json` default, `text`, or
+`off`):
+
+- Records `request_id`, `action`, `subject`, `roles`, `resource_type`,
+  `resource_id`, `method`, `path`, `status`, `outcome`, optional `scim_type`,
+  `client_ip`, and `duration_ms`.
+- Never logs `Authorization` headers, `password` values, request/response
+  bodies, or raw query strings (which can carry PII inside `?filter=`).
+- Validates incoming `X-Request-Id` headers against `^[A-Za-z0-9._:-]{1,128}$`
+  before echoing or logging them, replacing malformed or oversized values with a
+  fresh UUID to prevent header splitting and log injection.
+
+## Atomic uniqueness
+
+Attributes with `uniqueness: server` or `uniqueness: global` are claimed
+atomically in a dedicated Couchbase collection (`_default.scim_unique`) using
+KV `Insert` before writing the resource document (and CAS on `PUT` / `PATCH`),
+closing the read-then-write TOCTOU race across concurrent server instances.
+
 ## Not handled
 
 Be explicit about these before deploying:
 
-- **Passwords are stored as sent.** No hashing. Treat the `User` bucket as
-  holding secrets, or keep passwords out of SCIM.
-- **No audit log.** Requests are logged by gin's default logger; who changed
-  what is not recorded.
+- **`SCIM_PASSWORD_MODE=plain` disables password hashing.** The default is
+  `argon2id`; `bcrypt` and `reject` are also supported.
+- **`SCIM_AUDIT_LOG=off` disables structured audit events.** Leave it at `json`
+  (or `text`) in production.
 - **No rate limiting or lockout.**
 - **No encryption at rest.** Use Couchbase's own, if you need it.
-- **The uniqueness check is read-then-write.** Two concurrent creates of the
-  same `userName` can both pass. Closing that needs a unique index or a
-  sentinel document.
 - **`meta.location` is a server-relative path** unless mapped upstream; set
   `SCIM_PUBLIC_URL` so HTTP `Location` headers use your public origin rather
   than client-supplied `Host` headers.
@@ -197,4 +228,5 @@ Before exposing this to anything real:
 - [ ] A Couchbase account scoped to the buckets GoSCIM uses
 - [ ] Rate limiting in the proxy
 - [ ] The `Element` resource type removed, unless you want the example endpoint
-- [ ] Decided what happens to `password`, given it is stored in the clear
+- [ ] `SCIM_PASSWORD_MODE` left at `argon2id` (or set to `bcrypt` / `reject`, never `plain`)
+- [ ] `SCIM_AUDIT_LOG` left at `json` and shipped to central log storage

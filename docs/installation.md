@@ -32,12 +32,15 @@ Use a real cluster, and prefer a dedicated account over the administrator.
 
 #### A least-privilege Couchbase user
 
-GoSCIM creates its buckets and primary indexes on first start, which needs
-cluster-level privilege. Once they exist, that privilege is no longer needed.
+GoSCIM creates its buckets, `_default.scim_unique` collections, and primary
+indexes on first start, which needs cluster-level privilege. Once they exist,
+that privilege is no longer needed.
 
-1. Start once with an administrator account so the buckets are created.
-2. Create a user with, per GoSCIM bucket: **Application Access**, **Query
-   Select**, **Query Insert**, **Query Update**, **Query Delete**.
+1. Start once with an administrator account so the buckets and `_default.scim_unique`
+   collections are created.
+2. Create a user with, per GoSCIM bucket: **Application Access** (or **Data
+   Reader** and **Data Writer** across `_default`), **Query Select**, **Query
+   Insert**, **Query Update**, **Query Delete**.
 3. Switch `SCIM_ADMIN_USER` and `SCIM_ADMIN_PASSWORD` to that user.
 
 `EnsureBucket` still runs on every start, but finds the buckets present and
@@ -60,25 +63,22 @@ make check   # build, vet, and the unit suite with the race detector
 The binary needs the config directory at runtime. Either run it from a
 directory containing `config/`, or point `SCIM_CONFIG_DIR` at one.
 
-### Container
+### Container and Docker Compose
 
-There is no Dockerfile in the repository yet — it is an
-[open item](../RELEASE-1.0.md). A minimal one:
+A multi-stage `Dockerfile` (building a static binary onto
+`gcr.io/distroless/static-debian12:nonroot` with a built-in `-healthcheck`
+probe against `/readyz`) and a `docker-compose.yml` (starting Couchbase,
+initialising the cluster automatically, and running GoSCIM) ship at the
+repository root:
 
-```dockerfile
-FROM golang:1.27 AS build
-WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 go build -o /goscim .
+```bash
+docker compose up -d --build
+```
 
-FROM gcr.io/distroless/static-debian12
-COPY --from=build /goscim /goscim
-COPY config /config
-ENV SCIM_CONFIG_DIR=/config
-EXPOSE 8080
-ENTRYPOINT ["/goscim"]
+Or build the image standalone:
+
+```bash
+docker build -t goscim:latest .
 ```
 
 ## Running
@@ -137,9 +137,9 @@ not kill the process while it is finishing requests.
 Nothing special is required: the process is stateless and handles `SIGTERM`.
 
 - `terminationGracePeriodSeconds: 30`, again above the 20-second drain.
-- No readiness probe endpoint exists yet. A TCP check on the port is the
-  closest available; HTTP health endpoints are an
-  [open item](../RELEASE-1.0.md).
+- Configure `livenessProbe` against `GET /healthz` and `readinessProbe` against
+  `GET /readyz` (which verifies Couchbase KV and Query connectivity under a 2s
+  timeout).
 - Secrets belong in a `Secret`, not in the manifest.
 
 ## First start
@@ -148,7 +148,7 @@ The first run creates one bucket per resource type and a primary index on
 each. Expect log lines like:
 
 ```
-GoSCIM 1.0.1 starting
+GoSCIM 1.1.0 starting
 urn:ietf:params:scim:schemas:core:2.0:User
 ...
 Create Bucket -> User

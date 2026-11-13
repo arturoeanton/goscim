@@ -3,7 +3,13 @@
 Base path `/scim/v2`. Payloads are `application/scim+json` (RFC 7644 §3.1);
 `application/json` is accepted on requests.
 
-Every resource endpoint requires authentication. Discovery does not.
+Every resource endpoint requires authentication. Discovery and health probes
+(`/healthz`, `/readyz`) do not.
+
+Every response includes an `X-Request-Id` header. If the caller supplies a
+valid `X-Request-Id` (1–128 ASCII characters from `[A-Za-z0-9._:-]`), it is
+echoed back and attached to the structured audit event; otherwise the server
+generates a UUID.
 
 ## Endpoints
 
@@ -15,6 +21,8 @@ configuration produces `/Users`, `/Groups` and `/Elements`.
 | `POST` | `/scim/v2/{resource}` | Create |
 | `GET` | `/scim/v2/{resource}/{id}` | Read one |
 | `GET` | `/scim/v2/{resource}` | Search |
+| `POST` | `/scim/v2/{resource}/.search` | Search via POST body (RFC 7644 §3.4.3) |
+| `POST` | `/scim/v2/.search` | Search across all resource types (RFC 7644 §3.4.3) |
 | `PUT` | `/scim/v2/{resource}/{id}` | Replace |
 | `PATCH` | `/scim/v2/{resource}/{id}` | Modify |
 | `DELETE` | `/scim/v2/{resource}/{id}` | Delete |
@@ -67,6 +75,24 @@ instead of the body.
 | `sortOrder` | `ascending` | `descending` for the other direction |
 | `startIndex` | `1` | 1-based, per RFC 7644 |
 | `count` | `100` | Capped at 200 |
+| `attributes` | *(none)* | Comma-separated attributes to include (mutually exclusive with `excludedAttributes`) |
+| `excludedAttributes` | *(none)* | Comma-separated attributes to omit (mutually exclusive with `attributes`) |
+
+Clients that prefer not to put filters in URLs may `POST` an RFC 7644 §3.4.3
+`SearchRequest` to `/scim/v2/{resource}/.search` (single resource type) or
+`/scim/v2/.search` (all resource types):
+
+```json
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:SearchRequest"],
+  "attributes": ["userName", "emails.value"],
+  "filter": "userName sw \"jane\"",
+  "sortBy": "userName",
+  "sortOrder": "ascending",
+  "startIndex": 1,
+  "count": 50
+}
+```
 
 The response is a `ListResponse`:
 
@@ -100,7 +126,8 @@ the previous one from storage, since `meta.created` is not the client's to set.
   "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
   "Operations": [
     { "op": "replace", "path": "active", "value": false },
-    { "op": "add", "path": "emails", "value": [{ "value": "j@example.org" }] },
+    { "op": "replace", "path": "emails[type eq \"work\"].value", "value": "jane.work@example.com" },
+    { "op": "add", "path": "phoneNumbers[type eq \"mobile\"].value", "value": "+1-555-0100" },
     { "op": "remove", "path": "nickName" },
     { "op": "replace", "value": { "title": "Engineer" } }
   ]
@@ -111,9 +138,20 @@ the previous one from storage, since `meta.created` is not the client's to set.
 - An operation with no `path` applies the members of its object value to the
   resource. Several identity providers send this form.
 - `remove` requires a path.
-- Value paths — `emails[type eq "work"].value` — are **not implemented**, and
-  are refused with `400` rather than misinterpreted as a literal attribute
-  name.
+- **Value-selection paths** (`emails[type eq "work"]`,
+  `emails[type eq "work"].value`, `members[value eq "..."]`) are supported on
+  `add`, `replace` and `remove`:
+  - `replace` and `remove` return `400` (`scimType: "noTarget"`) when no array
+    element matches the filter.
+  - Removing all remaining elements of a multi-valued attribute unassigns the
+    attribute per RFC 7644 §3.5.2.2.
+  - `add` targeting `attr[filter].subAttr` updates matching elements when
+    present, or synthesises a new array entry seeded from conjunctive `eq`
+    predicates in `filter` when none match (matching Microsoft Entra ID's
+    provisioning requests).
+- Both `urn:...:Schema:attr` (RFC 7644 §3.10) and `urn:...:Schema.attr` are
+  accepted in `PATCH` paths; patching a declared extension attribute attaches
+  its schema URI to `"schemas"` automatically if absent.
 
 Both funnel through the same validation as a create: the result is checked
 against the schema, so a patch cannot leave a resource that violates it.
@@ -160,6 +198,9 @@ than interpolated.
 userName eq "bjensen"
 name.familyName co "O"
 title pr and userType eq "Employee"
+emails[type eq "work" and primary eq true]
+emails[type eq "work"].value ew "@example.com"
+not emails[type eq "home"]
 userType eq "Employee" and (emails co "example.com" or emails co "example.org")
 meta.lastModified gt "2011-05-13T04:42:34Z"
 urn:ietf:params:scim:schemas:extension:enterprise:2.0:User.department eq "Sales"
@@ -168,15 +209,16 @@ urn:ietf:params:scim:schemas:extension:enterprise:2.0:User.department eq "Sales"
 String values are double-quoted; numbers and booleans are bare. Attribute names
 and schema URNs are case-insensitive.
 
+Complex array value filters (`attr[subFilter]` and `attr[subFilter].subAttr op value`
+or `attr[subFilter].subAttr pr`) translate to N1QL quantified `ANY ... IN ...
+SATISFIES ... END` predicates with bound positional parameters.
+
 `%` and `_` inside a `co`, `sw` or `ew` value are literal characters, not
 wildcards.
 
 A filter that does not parse is refused with `400` and
 `"scimType": "invalidFilter"` rather than translated, so no part of a
 malformed expression reaches the query.
-
-**Not implemented:** value paths, `emails[type eq "work"]`. They parse as
-grammar but are not translated.
 
 ## Errors
 
@@ -205,17 +247,22 @@ RFC 7644 §3.12:
 `scimType` values in use: `invalidFilter`, `invalidValue`, `invalidSyntax`,
 `invalidPath`, `noTarget`, `mutability`, `uniqueness`.
 
-## Attribute visibility
+## Attribute visibility and projection
 
-What comes back depends on the schema and on the caller:
+What comes back depends on the schema, the caller's roles, and optional
+`attributes` / `excludedAttributes` parameters (accepted on `GET`, `POST`, `PUT`,
+`PATCH` and `POST /.search`, per RFC 7644 §3.4.2.5 and §3.9):
 
-- `returned: never` and `mutability: writeOnly` are never returned. The shipped
-  `password` is both.
+- `returned: never` and `mutability: writeOnly` are never returned, even if
+  requested in `attributes`. The shipped `password` is both.
 - An attribute whose `$reader` list does not include one of the caller's roles
-  is **omitted**, not blanked. An empty string cannot be told apart from a
-  legitimately empty value.
-
-This applies to every response carrying a resource, including create, replace
-and patch — not only read and search.
+  is **omitted**, not blanked, even if requested in `attributes`.
+- `returned: always` (along with `id` and `schemas`) is always returned when the
+  caller may read it, even when `attributes` omits it or `excludedAttributes`
+  names it.
+- `returned: request` is omitted by default and included only when named in
+  `attributes`.
+- Both `urn:...:Schema:attr` (RFC 7644 §3.10) and `urn:...:Schema.attr` are
+  accepted for extension and core URN-prefixed paths.
 
 See [schemas and permissions](schemas.md).

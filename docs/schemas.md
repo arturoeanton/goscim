@@ -44,13 +44,11 @@ Standard, from RFC 7643 §7.
 | `required` | `true`, `false` | Absent on a write is `400` |
 | `subAttributes` | array | For `complex`; validated recursively |
 | `mutability` | `readWrite`, `readOnly`, `immutable`, `writeOnly` | See below |
-| `returned` | `default`, `always`, `never`, `request` | `never` is never in a response |
-| `uniqueness` | `none`, `server`, `global` | `server` and `global` are enforced; a duplicate is `409` |
-| `caseExact` | `true`, `false` | Recorded, not yet acted on |
+| `returned` | `default`, `always`, `never`, `request` | Honoured on every resource response alongside `attributes` and `excludedAttributes` |
+| `uniqueness` | `none`, `server`, `global` | `server` and `global` are enforced atomically via KV sentinel claims; a duplicate is `409` |
+| `caseExact` | `true`, `false` | `false` folds case when enforcing uniqueness and evaluating `PATCH` value-selection filters; `true` compares exact bytes |
 
 `binary` and `reference` are accepted as JSON strings without further checking.
-`returned: always` and `returned: request` behave like `default`, since
-`attributes` and `excludedAttributes` are not implemented.
 
 ### mutability
 
@@ -147,11 +145,13 @@ Their attributes live in an object keyed by the URN:
 `required: false` means the object may be absent. When it is present it is
 validated like any other schema.
 
-Filters, `sortBy` and PATCH paths reach extension attributes by prefixing the
-URN:
+Filters, `sortBy`, attribute projection and `PATCH` paths reach extension
+attributes by prefixing the URN (using `.` in filters/`sortBy`, and either `.`
+or `:` per RFC 7644 §3.10 in `PATCH` paths and `attributes` / `excludedAttributes`):
 
 ```
 urn:ietf:params:scim:schemas:extension:enterprise:2.0:User.department eq "Sales"
+urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department
 ```
 
 ## Validation is a whitelist
@@ -178,6 +178,9 @@ to work against. Remove its resource type if you do not want the endpoint.
 
 ## Passwords
 
-`password` is stored exactly as received. There is no hashing, and
-`changePassword` is advertised as unsupported. Treat the `User` bucket as
-holding secrets, or do not send passwords through SCIM.
+`password` attributes (`type: string`, `mutability: writeOnly`) are hashed with
+Argon2id before reaching the store. Set `SCIM_PASSWORD_MODE` to `bcrypt` for
+bcrypt hashes, `reject` to refuse password writes with `400`
+(`scimType: invalidValue`) and advertise `changePassword.supported: false`, or
+`plain` to store cleartext (which logs a startup warning). Omitting `password`
+on a `PUT` preserves the existing hash per RFC 7644 §3.5.1.

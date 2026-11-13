@@ -1,5 +1,56 @@
 # Changelog
 
+## 1.1.0
+
+Interoperability, storage concurrency, authentication and operational release.
+
+### Added
+
+- **Password hashing** (`SCIM_PASSWORD_MODE`): `writeOnly` `password` attributes
+  are hashed before storage with `argon2id` by default, with `bcrypt`, `reject`
+  (`400 invalidValue`, advertising `changePassword.supported: false` in
+  `/ServiceProviderConfig`) and `plain` (opt-in, logs a warning) also available.
+  Omitting `password` on `PUT` or `PATCH` preserves the stored hash.
+- **Attribute projection** (`RFC 7644 §3.4.2.5` and `§3.9`): `attributes` and
+  `excludedAttributes` are honoured across `GET`, `POST`, `PUT`, `PATCH` and
+  `POST /.search`, alongside `returned: always | default | request | never` and
+  both `:` and `.` URN delimiters.
+- **`POST /.search`** (`RFC 7644 §3.4.3`): `POST /scim/v2/{resource}/.search` and
+  server-root `POST /scim/v2/.search` across all configured resource types,
+  accepting `SearchRequest` bodies with `filter`, `sortBy`, `sortOrder`,
+  `startIndex`, `count`, `attributes` and `excludedAttributes`.
+- **Complex array value filters** (`emails[type eq "work"]` and
+  `emails[type eq "work"].value`):
+  - Translated to N1QL quantified `(ANY ... IN ... SATISFIES ... END)`
+    predicates with bound positional parameters in `GET` and `POST /.search`.
+  - Evaluated in memory (`scim/parser/eval.go`) on `PATCH` `add`, `replace` and
+    `remove` (`RFC 7644 §3.5.2`), including Microsoft Entra ID `add` entry
+    synthesis from conjunctive `eq` predicates, empty-array unassignment on
+    `remove`, colon-delimited URN paths, and `$writer` / `$reader` / `writeOnly`
+    enforcement.
+- **EC and OKP signing keys in JWKS**: `SCIM_AUTH=jwt` now verifies `ES256`
+  (`P-256`), `ES384` (`P-384`), `ES512` (`P-521`) via `crypto/ecdh` and `EdDSA`
+  (`Ed25519` OKP) alongside `RS256` / `RS384` / `RS512`, enforcing strict curve
+  and algorithm binding.
+- **Structured audit logging and `X-Request-Id`**: `scim.audit` `log/slog`
+  records (`SCIM_AUDIT_LOG=json|text|off`) capturing caller `subject`, `roles`,
+  action, resource type/id, HTTP status, outcome and latency, correlated via a
+  validated `X-Request-Id` header.
+- **Health and readiness probes**: `GET /healthz`, `GET /readyz` (`Store.Ping`
+  against Couchbase KV and Query services under a 2s deadline), `-healthcheck`
+  CLI flag, distroless multi-stage `Dockerfile`, `docker-compose.yml` and
+  `.github/dependabot.yml`.
+
+### Changed
+
+- **Atomic uniqueness enforcement**: `CouchbaseStore` now claims `uniqueness:
+  server | global` values in a dedicated `_default.scim_unique` KV collection
+  (`u:<sha256>`) using atomic `Insert` and document CAS on `PUT` / `PATCH`,
+  closing the read-then-write TOCTOU race and folding case when
+  `caseExact: false`.
+- `/ServiceProviderConfig` advertises `changePassword.supported: true` unless
+  `SCIM_PASSWORD_MODE=reject`.
+
 ## 1.0.1
 
 Security and dependency maintenance release. Details of every finding and fix

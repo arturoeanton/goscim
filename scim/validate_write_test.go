@@ -21,13 +21,17 @@ func TestWriteOnlyAttributesAreNeverReturned(t *testing.T) {
 	}
 	id := created["id"].(string)
 
-	// It was stored, it is just never disclosed.
+	// It was stored as a hash (never in the clear), and is never disclosed.
 	stored, err := store.Get("User", id)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored["password"] != "correct-horse" {
-		t.Errorf("the password was not stored: %v", stored["password"])
+	storedHash, _ := stored["password"].(string)
+	if storedHash == "" || storedHash == "correct-horse" {
+		t.Errorf("the password was missing or stored unhashed: %v", stored["password"])
+	}
+	if ok, err := VerifyPasswordHash(storedHash, "correct-horse"); err != nil || !ok {
+		t.Errorf("VerifyPasswordHash(%q) = %v, %v", storedHash, ok, err)
 	}
 
 	w = do(t, r, http.MethodGet, usersPath+"/"+id, "")
