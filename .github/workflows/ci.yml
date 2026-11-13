@@ -16,7 +16,7 @@ jobs:
     name: build, vet and test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v5
         with:
@@ -53,7 +53,7 @@ jobs:
     # creation end to end.
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v5
         with:
@@ -67,7 +67,7 @@ jobs:
     name: govulncheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v5
         with:
@@ -86,7 +86,7 @@ jobs:
     name: go.mod is tidy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v5
         with:
