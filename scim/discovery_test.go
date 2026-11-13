@@ -22,12 +22,9 @@ func TestServiceProviderConfig(t *testing.T) {
 		t.Errorf("schemas = %v", schemas)
 	}
 
-	// The document must describe what this server does, not what the file
-	// used to claim. The shipped config advertised bulk support, which does
-	// not exist.
 	capabilities := map[string]bool{
 		"patch":          true,
-		"bulk":           false,
+		"bulk":           true,
 		"filter":         true,
 		"changePassword": true,
 		"sort":           true,
@@ -42,6 +39,14 @@ func TestServiceProviderConfig(t *testing.T) {
 		if section["supported"] != want {
 			t.Errorf("%s.supported = %v, want %v", name, section["supported"], want)
 		}
+	}
+
+	bulk := body["bulk"].(map[string]interface{})
+	if bulk["maxOperations"] != float64(MaxBulkOperations) {
+		t.Errorf("bulk.maxOperations = %v, want %d", bulk["maxOperations"], MaxBulkOperations)
+	}
+	if bulk["maxPayloadSize"] != float64(DefaultMaxBodyBytes) {
+		t.Errorf("bulk.maxPayloadSize = %v, want %d", bulk["maxPayloadSize"], DefaultMaxBodyBytes)
 	}
 
 	filter := body["filter"].(map[string]interface{})

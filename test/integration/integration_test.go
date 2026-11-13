@@ -702,3 +702,132 @@ func TestArrayValueFiltersInSearchAndPatchAgainstCouchbase(t *testing.T) {
 		t.Fatalf("post-PATCH N1QL search = %v, want [%s-corp]", got4, prefix)
 	}
 }
+
+func TestGroupMembershipSyncAndBulkAgainstCouchbase(t *testing.T) {
+	prefix := fmt.Sprintf("bulk-%d", time.Now().UnixNano())
+	bulkReq, _ := json.Marshal(map[string]interface{}{
+		"schemas": []string{"urn:ietf:params:scim:api:messages:2.0:BulkRequest"},
+		"Operations": []map[string]interface{}{
+			{
+				"method": "POST",
+				"bulkId": "u1",
+				"path":   "/Users",
+				"data": map[string]interface{}{
+					"schemas":  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
+					"userName": prefix + "-indirect",
+				},
+			},
+			{
+				"method": "POST",
+				"bulkId": "u2",
+				"path":   "/Users",
+				"data": map[string]interface{}{
+					"schemas":  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
+					"userName": prefix + "-direct",
+				},
+			},
+			{
+				"method": "POST",
+				"bulkId": "g-child",
+				"path":   "/Groups",
+				"data": map[string]interface{}{
+					"schemas":     []string{"urn:ietf:params:scim:schemas:core:2.0:Group"},
+					"displayName": prefix + "-Backend",
+					"members": []map[string]interface{}{
+						{"value": "bulkId:u1", "type": "User", "display": "Indirect Member"},
+					},
+				},
+			},
+			{
+				"method": "POST",
+				"bulkId": "g-parent",
+				"path":   "/Groups",
+				"data": map[string]interface{}{
+					"schemas":     []string{"urn:ietf:params:scim:schemas:core:2.0:Group"},
+					"displayName": prefix + "-Engineering",
+					"members": []map[string]interface{}{
+						{"value": "bulkId:g-child", "type": "Group"},
+						{"value": "bulkId:u2", "type": "User", "display": "Direct Member"},
+					},
+				},
+			},
+		},
+	})
+
+	w := do(t, http.MethodPost, scim.PREFIX+"/Bulk", string(bulkReq))
+	requireStatus(t, w, http.StatusOK)
+	ops := decode(t, w)["Operations"].([]interface{})
+	if len(ops) != 4 {
+		t.Fatalf("expected 4 bulk operation results, got %d: %s", len(ops), w.Body.String())
+	}
+	extractID := func(idx int) string {
+		op := ops[idx].(map[string]interface{})
+		if op["status"] != "201" {
+			t.Fatalf("bulk op[%d] status = %v, want 201: %v", idx, op["status"], op)
+		}
+		loc := op["location"].(string)
+		return loc[strings.LastIndex(loc, "/")+1:]
+	}
+	u1ID := extractID(0)
+	u2ID := extractID(1)
+	gChildID := extractID(2)
+	gParentID := extractID(3)
+
+	t.Cleanup(func() {
+		do(t, http.MethodDelete, scim.PREFIX+"/Groups/"+gParentID, "")
+		do(t, http.MethodDelete, scim.PREFIX+"/Groups/"+gChildID, "")
+		do(t, http.MethodDelete, usersPath+"/"+u1ID, "")
+		do(t, http.MethodDelete, usersPath+"/"+u2ID, "")
+	})
+
+	// Verify computed User.groups is persisted in Couchbase and searchable via N1QL.
+	fIndirect := fmt.Sprintf(`groups[value eq %q and type eq "indirect"]`, gParentID)
+	gotIndirect := userNamesIn(t, search(t, "filter="+url.QueryEscape(fIndirect)))
+	if len(gotIndirect) != 1 || gotIndirect[0] != prefix+"-indirect" {
+		t.Fatalf("N1QL indirect group search = %v, want [%s-indirect]", gotIndirect, prefix)
+	}
+
+	fDirect := fmt.Sprintf(`groups[value eq %q and type eq "direct"]`, gParentID)
+	gotDirect := userNamesIn(t, search(t, "filter="+url.QueryEscape(fDirect)))
+	if len(gotDirect) != 1 || gotDirect[0] != prefix+"-direct" {
+		t.Fatalf("N1QL direct group search = %v, want [%s-direct]", gotDirect, prefix)
+	}
+
+	// Second Bulk request: delete u2 and rename parent group displayName.
+	bulkMutate, _ := json.Marshal(map[string]interface{}{
+		"schemas": []string{"urn:ietf:params:scim:api:messages:2.0:BulkRequest"},
+		"Operations": []map[string]interface{}{
+			{
+				"method": "DELETE",
+				"path":   "/Users/" + u2ID,
+			},
+			{
+				"method": "PATCH",
+				"path":   "/Groups/" + gParentID,
+				"data": map[string]interface{}{
+					"schemas": []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"},
+					"Operations": []map[string]interface{}{
+						{"op": "replace", "path": "displayName", "value": prefix + "-PlatformEng"},
+					},
+				},
+			},
+		},
+	})
+	w2 := do(t, http.MethodPost, scim.PREFIX+"/Bulk", string(bulkMutate))
+	requireStatus(t, w2, http.StatusOK)
+
+	// Parent group must have cleaned up deleted member u2, keeping only gChildID.
+	wParent := do(t, http.MethodGet, scim.PREFIX+"/Groups/"+gParentID, "")
+	requireStatus(t, wParent, http.StatusOK)
+	members, _ := decode(t, wParent)["members"].([]interface{})
+	if len(members) != 1 || members[0].(map[string]interface{})["value"] != gChildID {
+		t.Fatalf("parent group members after deleting u2 = %#v, want only %s", members, gChildID)
+	}
+
+	// And u1's indirect group display must reflect the renamed parent group in N1QL.
+	fRenamed := fmt.Sprintf(`groups[value eq %q and display eq %q]`, gParentID, prefix+"-PlatformEng")
+	gotRenamed := userNamesIn(t, search(t, "filter="+url.QueryEscape(fRenamed)))
+	if len(gotRenamed) != 1 || gotRenamed[0] != prefix+"-indirect" {
+		t.Fatalf("N1QL renamed group search = %v, want [%s-indirect]", gotRenamed, prefix)
+	}
+}

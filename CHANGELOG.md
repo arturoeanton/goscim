@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.2.0
+
+Bulk provisioning and referential group membership release.
+
+### Added
+
+- **`POST /scim/v2/Bulk`** (`RFC 7644 §3.7`): executes up to `1000`
+  (`MaxBulkOperations`) `POST`, `PUT`, `PATCH` and `DELETE` operations within a
+  single 1 MiB (`maxPayloadSize`) request:
+  - Resolves `bulkId:<id>` transient cross-references in operation `path`
+    (`/Users/bulkId:u1`), `$ref` URIs, complex/extension attribute values and
+    `PATCH` value-filter literals (`members[value eq "bulkId:u1"]`), answering
+    per-operation `400` (`scimType: invalidValue`) on forward, unknown or failed
+    references.
+  - Honours `version` (`If-Match` precondition, answering per-operation `412` on
+    mismatch) and `failOnErrors` early termination.
+  - Answers HTTP `413 Payload Too Large` when either `maxOperations` (`1000`) or
+    `maxPayloadSize` (`1048576` bytes) is exceeded (`RFC 7644 §3.7.2`).
+  - Dispatches every sub-operation through the full validation, `$writer` /
+    `$reader` RBAC, password-hashing, atomic-uniqueness and audit pipeline under
+    the outer caller's `Principal` and `X-Request-Id`.
+- **Referential `Group.members` ↔ `User.groups` synchronisation**
+  (`RFC 7643 §4.1.2` and `§4.2`):
+  - Creating, replacing, patching or deleting a `Group` differentially updates
+    the server-owned `readOnly` `User.groups` array (`value`, `$ref`, `display`,
+    `type: "direct" | "indirect"`) in storage, supporting nested groups with
+    cycle-safe traversal and N1QL filtering on `User.groups`.
+  - Deleting a `User` or `Group` removes dangling entries from `Group.members`
+    (unassigning `members` when empty) and refreshes `Group.meta`.
+- **`Group.members.display` sub-attribute**: declared in the shipped
+  `urn:ietf:params:scim:schemas:core:2.0:Group` schema (`RFC 7643 §8.3` / Errata
+  4769) so group payloads from Okta and Microsoft Entra ID carrying member
+  display names validate cleanly.
+
+### Changed
+
+- `/ServiceProviderConfig` now advertises
+  `"bulk": { "supported": true, "maxOperations": 1000, "maxPayloadSize": 1048576 }`.
+
 ## 1.1.0
 
 Interoperability, storage concurrency, authentication and operational release.

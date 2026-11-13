@@ -11,10 +11,6 @@ import (
 func Delete(resource string) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		id := c.Param("id")
-		if resource == "Bulk" {
-			Bulk(c)
-			return
-		}
 		resourceType := Resources[resource]
 		setAuditTarget(c, "delete", resourceType.Name, id)
 		stored, err := getElementByID(c, id, resourceType)
@@ -36,6 +32,7 @@ func Delete(resource string) func(c *gin.Context) {
 			internalError(c, err)
 			return
 		}
+		syncAfterDelete(resourceType, id, stored)
 		c.Writer.WriteHeader(http.StatusNoContent)
 	}
 }

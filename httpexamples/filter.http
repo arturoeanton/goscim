@@ -1,19 +1,43 @@
 @host=http://127.0.0.1:8080/scim/v2
- 
-###
+@auth=Basic YWRtaW46c2VjcmV0
 
+### List all Elements
 GET {{host}}/Elements HTTP/1.1
-content-type: application/json
+Authorization: {{auth}}
+Accept: application/scim+json
 
-###
-GET {{host}}/Elements/3290812f-2caf-4f13-9479-d0f620130eda  HTTP/1.1
-content-type: application/json
+### Paginated extension filter with sortBy
+GET {{host}}/Elements?filter=urn:ietf:params:scim:schemas:extension:one:2.0:Element.required%20ge%200&startIndex=1&count=2&sortBy=urn:ietf:params:scim:schemas:extension:one:2.0:Element.required&sortOrder=descending HTTP/1.1
+Authorization: {{auth}}
+Accept: application/scim+json
 
-###
+### Complex array filter + attribute projection on Users
+GET {{host}}/Users?filter=emails%5Btype%20eq%20%22work%22%20and%20primary%20eq%20true%5D&attributes=userName,emails.value,groups HTTP/1.1
+Authorization: {{auth}}
+Accept: application/scim+json
 
-GET {{host}}/Elements
-    ?filter=urn:ietf:params:scim:schemas:extension:one:2.0:Element.required ge 0
-    &startIndex=1
-    &count=2
-    &sortBy=urn:ietf:params:scim:schemas:extension:one:2.0:Element.required
-    &sortOrder=descending
+### POST /.search on Users (RFC 7644 3.4.3)
+POST {{host}}/Users/.search HTTP/1.1
+Authorization: {{auth}}
+Content-Type: application/scim+json
+
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:SearchRequest"],
+  "attributes": ["userName", "groups"],
+  "filter": "groups[type eq \"indirect\"]",
+  "sortBy": "userName",
+  "sortOrder": "ascending",
+  "startIndex": 1,
+  "count": 50
+}
+
+### Root POST /.search across all resource types
+POST {{host}}/.search HTTP/1.1
+Authorization: {{auth}}
+Content-Type: application/scim+json
+
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:SearchRequest"],
+  "startIndex": 1,
+  "count": 20
+}

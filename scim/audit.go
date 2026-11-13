@@ -266,6 +266,9 @@ func inferAuditTarget(method, urlPath string) (action, resourceType, resourceID 
 	if trimmed == "/.search" && method == http.MethodPost {
 		return "search", "*", ""
 	}
+	if trimmed == "/Bulk" && method == http.MethodPost {
+		return "bulk", "*", ""
+	}
 	for endpoint, rt := range Resources {
 		if trimmed == endpoint+"/.search" && method == http.MethodPost {
 			return "search", rt.Name, ""

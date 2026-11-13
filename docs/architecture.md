@@ -1,8 +1,8 @@
 # Architecture
 
-Around 2,000 lines of hand-written Go. The defining trait is that resource
-types, endpoints, storage buckets, validation and permissions all come from
-JSON rather than from code.
+A compact Go codebase whose defining trait is that resource types, endpoints,
+storage buckets, validation and permissions all come from JSON rather than from
+code.
 
 ## Request path
 
@@ -28,6 +28,7 @@ JSON rather than from code.
                                        ▼
                         ┌──────────────────────────────┐
                         │ op_create / op_read / ...    │
+                        │ op_bulk (sub-request router) │
                         └──────────────┬───────────────┘
                                        ▼
         ┌──────────────────────────────────────────────────────┐
@@ -35,6 +36,7 @@ JSON rather than from code.
         │ validate_write.go  $writer, mutability               │
         │ password.go        Argon2id / bcrypt / reject        │
         │ uniqueness.go      atomic uniqueness claims          │
+        │ groups_sync.go     Group.members ↔ User.groups sync  │
         │ validate_role.go   $reader, returned  (on the way out)│
         │ projection.go      attributes / excludedAttributes   │
         └──────────────────────────────┬───────────────────────┘
@@ -61,9 +63,13 @@ JSON rather than from code.
 
 - loads every schema in `config/schemas/` into the `Schemas` map, keyed by URN;
 - records the resource type in `Resources`, keyed by its **endpoint**;
-- calls `Store.EnsureBucket(resourceType.Name)`, creating the bucket and its
-  primary index if they do not exist;
-- registers the six verbs under `/scim/v2` + endpoint.
+- calls `Store.EnsureBucket(resourceType.Name)`, creating the bucket, its
+  `_default.scim_unique` sentinel collection, and its primary index if they do
+  not exist;
+- registers the seven per-resource routes (`POST`, `GET /:id`, `PUT /:id`,
+  `DELETE /:id`, `PATCH /:id`, `GET`, `POST /.search`) under `/scim/v2` +
+  endpoint, after which `NewRouter` mounts server-root `POST /scim/v2/.search`
+  and `POST /scim/v2/Bulk`.
 
 ### name versus endpoint
 
@@ -88,7 +94,7 @@ type Store interface {
 	Replace(bucket, id string, doc map[string]interface{}) error
 	Remove(bucket, id string) error
 	CreateUnique(bucket, id string, doc map[string]interface{}, claims []UniqueClaim) error
-	ReplaceUnique(bucket, id string, doc map[string]interface{}, oldClaims, newClaims []UniqueClaim) error
+	ReplaceUnique(bucket, id string, doc map[string]interface{}, newClaims []UniqueClaim, extractClaims func(map[string]interface{}) []UniqueClaim) error
 	RemoveUnique(bucket, id string, claims []UniqueClaim) error
 	Search(q SearchQuery) (total int, resources []map[string]interface{}, err error)
 	FindIDByAttribute(bucket, attributePath string, value interface{}) (string, error)
@@ -167,6 +173,30 @@ sides:
 Both walk the attribute definitions rather than string paths, so complex
 values, multi-valued elements and extension objects are covered by
 construction rather than by remembering to handle each case.
+
+## Group membership synchronisation and Bulk
+
+Two features sit above single-document CRUD without leaking storage details into
+the handlers:
+
+- **`Group.members` ↔ `User.groups` (`scim/groups_sync.go`)**: RFC 7643 §4.1.2
+  makes `User.groups` `readOnly` and derived from `Group.members`. Computing it
+  lazily on `GET /Users` would break N1QL filters on `User.groups` (since
+  Couchbase buckets are separate and SCIM queries do not join across them) and
+  penalise reads. Instead, `Group` mutations compute the before/after membership
+  graph in memory (resolving nested groups via a cycle-safe BFS where `"direct"`
+  takes precedence over `"indirect"`) and differentially update only the `User`
+  documents whose `groups` array actually changed. Conversely, deleting a `User`
+  or `Group` cleans up dangling references in `Group.members`.
+- **`POST /scim/v2/Bulk` (`scim/op_bulk.go`)**: rather than maintaining a second
+  copy of validation, RBAC, password hashing, uniqueness and audit logic,
+  `NewRouter` builds an internal `gin.Engine` (`newBulkEngine`) mounting `POST`,
+  `PUT`, `PATCH` and `DELETE` for every configured resource type. `BulkHandler`
+  validates the envelope once, resolves `bulkId:<token>` references across paths,
+  `$ref` URIs, `data` maps and `PATCH` filter literals as `201 Created` IDs
+  accumulate, attaches the outer `Principal` and `X-Request-Id` to each
+  sub-request's context, and dispatches through `subRouter.ServeHTTP`. Every
+  guarantee of direct CRUD therefore holds inside `/Bulk` by construction.
 
 ## Deliberate omissions
 

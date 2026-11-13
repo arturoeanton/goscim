@@ -58,9 +58,9 @@ curl -s http://localhost:8080/scim/v2/ServiceProviderConfig | jq
 {
   "schemas": ["urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"],
   "patch": { "supported": true },
-  "bulk": { "supported": false },
+  "bulk": { "supported": true, "maxOperations": 1000, "maxPayloadSize": 1048576 },
   "filter": { "supported": true, "maxResults": 200 },
-  "changePassword": { "supported": false },
+  "changePassword": { "supported": true },
   "sort": { "supported": true },
   "etag": { "supported": true },
   "authenticationSchemes": [
@@ -130,7 +130,45 @@ curl -s -u admin:secret -X DELETE http://localhost:8080/scim/v2/Users/$ID -i
 Attribute names are case-insensitive, so `USERNAME` works too; the resource is
 stored under the spelling the schema declares.
 
-## 6. Add a resource type without writing code
+## 6. Groups and bulk provisioning
+
+Create a user and assign them to a group in a single `POST /scim/v2/Bulk`
+request using a transient `bulkId`:
+
+```bash
+curl -s -u admin:secret -X POST http://localhost:8080/scim/v2/Bulk \
+  -H 'Content-Type: application/scim+json' \
+  -d '{
+    "schemas": ["urn:ietf:params:scim:api:messages:2.0:BulkRequest"],
+    "failOnErrors": 1,
+    "Operations": [
+      {
+        "method": "POST",
+        "path": "/Users",
+        "bulkId": "u-ada",
+        "data": {
+          "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+          "userName": "ada@example.com"
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/Groups",
+        "bulkId": "g-platform",
+        "data": {
+          "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+          "displayName": "Platform",
+          "members": [{ "value": "bulkId:u-ada", "type": "User", "display": "Ada" }]
+        }
+      }
+    ]
+  }' | jq
+```
+
+Reading Ada back (`GET /scim/v2/Users/<id>`) now includes `"groups"` with
+`"display": "Platform"` and `"type": "direct"` automatically.
+
+## 7. Add a resource type without writing code
 
 Drop two files in `config/` and restart.
 
@@ -172,10 +210,11 @@ Drop two files in `config/` and restart.
 }
 ```
 
-Restart, and `/scim/v2/Devices` exists with all six verbs, a `Device` bucket,
-`serialNumber` enforced unique and refused on update because it is
-`immutable`. The file name of a schema replaces `:` with `+`, since a colon is
-awkward in a path.
+Restart, and `/scim/v2/Devices` exists with CRUD, `GET` and `POST /.search`,
+automatic support inside `POST /scim/v2/Bulk`, a `Device` bucket, and
+`serialNumber` enforced unique and refused on update because it is `immutable`.
+The file name of a schema replaces `:` with `+`, since a colon is awkward in a
+path.
 
 See [schemas and permissions](schemas.md) for the full attribute vocabulary,
 including the `$reader` and `$writer` role lists.

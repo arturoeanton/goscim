@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**goscim** is a SCIM 2.0 (RFC 7643/7644) server in Go, backed by Couchbase. It is a small codebase (~1.4k lines of hand-written Go) whose defining trait is that **resource types, endpoints, storage buckets and validation are all driven by JSON config, not code**.
+**goscim** is a SCIM 2.0 (RFC 7643/7644) server in Go, backed by Couchbase. It is a compact Go codebase whose defining trait is that **resource types, endpoints, storage buckets and validation are all driven by JSON config, not code**.
 
 The README and `docs/` were rewritten for 1.0 and now describe what the code actually does; earlier versions advertised authentication, metrics, health checks and a compose file that did not exist. They are trustworthy as of 1.0 — keep them that way.
 
@@ -38,8 +38,8 @@ A live Couchbase is only needed to *run* the server. Tests wire a `MemoryStore` 
 
 1. Loads every `config/schemas/*.json` into the global `scim.Schemas` map, keyed by schema `id` (a URN).
 2. Loads the resource type into `scim.Resources`, keyed by its **`endpoint`** (e.g. `/Elements`).
-3. Calls `DB.EnsureBucket(resourceType.Name)` — in production, creates a Couchbase bucket named after **`name`** (e.g. `Element`) plus a primary index, optionally configured from `config/bucketSettings/<Name>.json`.
-4. Registers the six gin routes under `PREFIX = /scim/v2`.
+3. Calls `DB.EnsureBucket(resourceType.Name)` — in production, creates a Couchbase bucket named after **`name`** (e.g. `Element`), its `_default.scim_unique` sentinel collection, and a primary index, optionally configured from `<SCIM_CONFIG_DIR>/bucketSettings/<Name>.json`.
+4. Registers the seven per-resource gin routes under `PREFIX = /scim/v2` (`POST`, `GET /:id`, `PUT /:id`, `DELETE /:id`, `PATCH /:id`, `GET`, `POST /.search`), while `NewRouter` also mounts server-root `POST /scim/v2/.search` and `POST /scim/v2/Bulk`.
 
 **The `name` vs `endpoint` split matters everywhere**: `name` is the bucket/`meta.resourceType`, `endpoint` is the URL and the map key. Handlers are closures over the endpoint string (`Create(resourceType.Endpoint)`) that look the type back up via `Resources[resource]`.
 
@@ -73,7 +73,7 @@ Regenerating (only needed when editing the `.g4`):
 make generate   # runs ANTLR in a container, no JDK needed on the machine
 make check
 ```
-The jar is downloaded into `build/` on demand rather than committed. The generator writes only the four `scimfilter_{lexer,parser,listener,base_listener}.go` files and the `.tokens`; it does not touch the two hand-written files.
+The jar is downloaded into `build/` on demand rather than committed. The generator writes only the four `scimfilter_{lexer,parser,listener,base_listener}.go` files and the `.tokens`; it does not touch the three hand-written files (`scimfilter_listener_implement.go`, `errors.go`, `eval.go`).
 
 The entry rule is `p.Start_()` — ANTLR suffixes it because `Start` collides with a method on the generated parser.
 
@@ -81,9 +81,11 @@ The entry rule is `p.Start_()` — ANTLR suffixes it because `Start` collides wi
 
 ### Request pipeline
 
-Create/Replace share one shape: `RequestID` → `AuditMiddleware` → `LimitBody` → `Authenticate` → unmarshal body → `ValidateFieldSchemas` → `EnforceWriteAccess` (`$writer` + `mutability`) → `ValidateSchemas` → `ProcessPasswords` (`SCIM_PASSWORD_MODE`: `argon2id` default, `bcrypt`, `reject`, `plain`) → `ExtractUniqueClaims` → `Store.CreateUnique` / `Store.ReplaceUnique` → `ValidateReadRole` + `ApplyProjection` (`attributes` / `excludedAttributes` + `returned`).
+Create/Replace share one shape: `RequestID` → `AuditMiddleware` → `LimitBody` → `Authenticate` → unmarshal body → `ValidateFieldSchemas` → `EnforceWriteAccess` (`$writer` + `mutability`) → `ValidateSchemas` → `ApplyPasswordPolicy` (`SCIM_PASSWORD_MODE`: `argon2id` default, `bcrypt`, `reject`, `plain`) → `ExtractUniqueClaims` → `Store.CreateUnique` / `Store.ReplaceUnique` → `syncAfterCreate` / `syncAfterReplace` (`scim/groups_sync.go`, keeping `User.groups` in sync with `Group.members` including `direct` and `indirect` nested groups) → `FormatResource` (`ValidateReadRole` + `ApplyProjection` over `attributes` / `excludedAttributes` + `returned`). Delete cleans up dangling `Group.members` references via `syncAfterDelete`.
 
-Update (`PATCH`) supports both plain paths and RFC 7644 §3.5.2 value-selection paths (`emails[type eq "work"].value`, `members[value eq "..."]`, plus Entra ID `add` entry synthesis via `parser.EqualitySeeds` and colon-delimited URN paths), checks `$writer` / `$reader` / `writeOnly` on target and filter paths, then funnels into `replace()`. Search is served on `GET /scim/v2/{resource}`, `POST /scim/v2/{resource}/.search`, and server-root `POST /scim/v2/.search`.
+Update (`PATCH`) supports both plain paths and RFC 7644 §3.5.2 value-selection paths (`emails[type eq "work"].value`, `members[value eq "..."]`, plus Entra ID `add` entry synthesis via `parser.EqualitySeeds` and colon-delimited URN paths), checks `$writer` / `$reader` / `writeOnly` on target and filter paths, then funnels into `replaceWithMode()`. Search is served on `GET /scim/v2/{resource}`, `POST /scim/v2/{resource}/.search`, and server-root `POST /scim/v2/.search`.
+
+`POST /scim/v2/Bulk` (`scim/op_bulk.go`, RFC 7644 §3.7) validates the `BulkRequest` envelope (`MaxBulkOperations = 1000`, `maxPayloadSize = DefaultMaxBodyBytes`), resolves `bulkId:<token>` cross-references in paths, `$ref` URIs, and `PATCH` filter literals, forwards `version` as `If-Match`, honours `failOnErrors`, and dispatches each sub-operation through an internal router sharing the outer `Principal` and `X-Request-Id`.
 
 ### Authentication and observability
 
@@ -102,14 +104,14 @@ Two mechanisms, both applied per attribute and both recursing into complex and m
 
 ### Not implemented
 
-`POST /scim/v2/Bulk` (RFC 7644 §3.7) and Prometheus metrics are not implemented (`/ServiceProviderConfig` advertises `bulk.supported: false`).
+Prometheus metrics are not implemented.
 
 ## Conventions and traps
 
 - The struct field for `$reader` is `Attribute.Read`; for `$writer` it is `Attribute.Writer`.
 - Handlers return `func(c *gin.Context)` closures, not plain handlers.
 - Responses go through `scim/response.go`: `writeSCIM` sets the `application/scim+json` media type (gin only fills in `Content-Type` when it is unset, so setting it first wins), and `entityTag`/`checkPrecondition` implement `ETag`, `If-Match` and `If-None-Match` over `meta.version`. Errors go through `MakeError` / `MakeTypedError`, the latter carrying the RFC 7644 3.12 `scimType` keyword.
-- Config folder paths are hardcoded relative (`"config"`, `FolderBucketSetting = "config/bucketSettings/"`), so the process must start from the repo root.
-- Manual API testing lives in `httpexamples/*.http` (REST Client format).
+- Config folder paths default to `"config"` (`SCIM_CONFIG_DIR` overrides both the schema/resourceType directory and `FolderBucketSetting`).
+- Manual API testing lives in `httpexamples/*.http` (REST Client format: `create.http`, `filter.http`, `bulk.http`).
 - Documentation is English-only, in `docs/`, and is authoritative: `getting-started`, `installation`, `configuration`, `api`, `schemas`, `architecture`, `security`, `operations`, `development`. The six partial translations were removed in 1.0 because every one had fallen behind the code.
 - A behaviour change needs the docs updated in the same commit. Several statements in this file and in `docs/` were false for months because a fix landed without them.

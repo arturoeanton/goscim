@@ -12,10 +12,6 @@ import (
 func Replace(resource string) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		id := c.Param("id")
-		if resource == "Bulk" {
-			Bulk(c)
-			return
-		}
 		resourceType := Resources[resource]
 		setAuditTarget(c, "replace", resourceType.Name, id)
 		raw, ok := readBody(c)
@@ -89,6 +85,7 @@ func replaceWithMode(c *gin.Context, resourceType ResourceType, id string, eleme
 		writeStoreUniqueError(c, resourceType, err)
 		return
 	}
+	syncAfterReplace(resourceType, id, stored, element)
 	c.Header("Location", absoluteLocation(c, resourceType, id))
 	setVersionHeader(c, meta)
 	writeSCIM(c, http.StatusOK, FormatResource(currentRoles(c), resourceType, element, proj))

@@ -23,6 +23,12 @@ type filterSupport struct {
 	MaxResults int  `json:"maxResults"`
 }
 
+type bulkSupport struct {
+	Supported      bool `json:"supported"`
+	MaxOperations  int  `json:"maxOperations"`
+	MaxPayloadSize int  `json:"maxPayloadSize"`
+}
+
 // AuthenticationScheme describes one way of authenticating, for the
 // ServiceProviderConfig (RFC 7643 5).
 type AuthenticationScheme struct {
@@ -38,7 +44,7 @@ type ServiceProviderConfig struct {
 	Schemas               []string               `json:"schemas"`
 	DocumentationURI      string                 `json:"documentationUri,omitempty"`
 	Patch                 supported              `json:"patch"`
-	Bulk                  supported              `json:"bulk"`
+	Bulk                  bulkSupport            `json:"bulk"`
 	Filter                filterSupport          `json:"filter"`
 	ChangePassword        supported              `json:"changePassword"`
 	Sort                  supported              `json:"sort"`
@@ -53,15 +59,18 @@ var discoveryAuthenticator Authenticator
 
 // buildServiceProviderConfig describes what this server actually does.
 //
-// It is derived from the code rather than read from a file. The file that used
-// to sit unread in config/ advertised bulk support, which does not exist: a
-// provider config that can drift from the implementation is worse than none,
-// because a client believes it.
+// It is derived from the code rather than read from a file so the advertised
+// capabilities, limits and authentication schemes cannot drift from the
+// implementation.
 func buildServiceProviderConfig(folderConfig string) ServiceProviderConfig {
 	config := ServiceProviderConfig{
-		Schemas:        []string{"urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"},
-		Patch:          supported{Supported: true},
-		Bulk:           supported{Supported: false}, // /Bulk is not implemented
+		Schemas: []string{"urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"},
+		Patch:   supported{Supported: true},
+		Bulk: bulkSupport{
+			Supported:      true,
+			MaxOperations:  MaxBulkOperations,
+			MaxPayloadSize: int(DefaultMaxBodyBytes),
+		},
 		Filter:         filterSupport{Supported: true, MaxResults: maxSearchCount},
 		ChangePassword: supported{Supported: passwordSupported()},
 		Sort:           supported{Supported: true},

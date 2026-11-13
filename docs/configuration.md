@@ -41,7 +41,8 @@ so every attribute with a `$reader` list is filtered out of responses.
 
 Fixed in code rather than configurable, because no deployment has asked yet:
 read header timeout 10s, read and write timeouts 30s, idle timeout 120s,
-shutdown drain 20s, max header 1 MiB, max body 1 MiB, max search page 200.
+shutdown drain 20s, max header 1 MiB, max body 1 MiB, max search page 200, max
+bulk operations 1000.
 
 ### Couchbase
 
@@ -162,7 +163,6 @@ that already exists; change it in Couchbase.
 ```
 
 Everything else in `/ServiceProviderConfig` — which operations are supported,
-`filter.maxResults`, the authentication schemes — is derived from the running
-code. It used to be served from this file, which advertised bulk support that
-does not exist. A capability document that can drift from the implementation
-is worse than none, because a client believes it.
+`bulk.maxOperations`, `bulk.maxPayloadSize`, `filter.maxResults`, the
+authentication schemes — is derived from the running code so the capability
+document cannot drift from the implementation.

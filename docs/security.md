@@ -170,7 +170,8 @@ rather than the instances.
 
 | Limit | Value | Purpose |
 |---|---|---|
-| Request body | 1 MiB | Payloads are read into memory before parsing |
+| Request body | 1 MiB | Payloads are read into memory before parsing (also advertised as `bulk.maxPayloadSize`) |
+| Bulk operations | 1000 | Max operations per `POST /scim/v2/Bulk` request (`bulk.maxOperations`) |
 | Request headers | 1 MiB | |
 | Read header timeout | 10 s | A connection dribbling a request holds a goroutine |
 | Read / write timeout | 30 s | |
@@ -195,6 +196,10 @@ successful reads/writes) emits a structured `log/slog` event (`msg:
 - Validates incoming `X-Request-Id` headers against `^[A-Za-z0-9._:-]{1,128}$`
   before echoing or logging them, replacing malformed or oversized values with a
   fresh UUID to prevent header splitting and log injection.
+- On `POST /scim/v2/Bulk`, emits one `scim.audit` event per executed
+  sub-operation (`create`, `replace`, `patch`, `delete`) plus one outer
+  `"action": "bulk"` record, all correlated under the same `request_id` and
+  authenticated `Principal`.
 
 ## Atomic uniqueness
 

@@ -168,13 +168,29 @@ case-sensitive even though SCIM attribute names are not.
 
 | Schema | Notes |
 |---|---|
-| `core:2.0:User` | RFC 7643 user. `password` is `writeOnly` / `returned: never`; `groups` is `readOnly` |
-| `core:2.0:Group` | RFC 7643 group, with multi-valued `members` |
+| `core:2.0:User` | RFC 7643 user. `password` is `writeOnly` / `returned: never`; `groups` is `readOnly` and automatically synchronised from `Group.members` (`direct` and `indirect`) |
+| `core:2.0:Group` | RFC 7643 group, with multi-valued `members` (`value`, `$ref`, `type`, `display`) |
 | `extension:enterprise:2.0:User` | Optional enterprise extension |
 | `core:2.0:Element`, `extension:one:2.0:Element` | Example pair exercising `$reader`, `$writer`, extensions and every attribute type |
 
 `Element` exists to demonstrate the model and to give the test suite something
 to work against. Remove its resource type if you do not want the endpoint.
+
+## Group memberships
+
+When resource types backed by `urn:ietf:params:scim:schemas:core:2.0:User` (with
+a `groups` attribute) and `urn:ietf:params:scim:schemas:core:2.0:Group` (with a
+`members` attribute) are both configured:
+
+- `Group.members` accepts `value`, `$ref`, `type` (`"User"` or `"Group"`) and
+  `display`, all declared `mutability: immutable` on individual elements while
+  `members` itself is `readWrite`.
+- `User.groups` (`value`, `$ref`, `display`, `type: "direct" | "indirect"`) is
+  `readOnly`: client-supplied values on `POST`, `PUT` or `PATCH /Users` are
+  ignored, and `Group` writes (`POST`, `PUT`, `PATCH`, `DELETE /Groups`) keep
+  `User.groups` synchronised automatically.
+- Deleting a `User` or `Group` removes any matching `value` entries from
+  `Group.members`.
 
 ## Passwords
 

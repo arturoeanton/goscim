@@ -1,0 +1,52 @@
+@host=http://127.0.0.1:8080/scim/v2
+@auth=Basic YWRtaW46c2VjcmV0
+
+### Bulk provision users and nested groups with bulkId cross-references (RFC 7644 3.7)
+POST {{host}}/Bulk HTTP/1.1
+Authorization: {{auth}}
+Content-Type: application/scim+json
+X-Request-Id: example-bulk-01
+
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:BulkRequest"],
+  "failOnErrors": 1,
+  "Operations": [
+    {
+      "method": "POST",
+      "path": "/Users",
+      "bulkId": "u-ada",
+      "data": {
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+        "userName": "ada.lovelace@example.com",
+        "emails": [
+          { "value": "ada.lovelace@example.com", "type": "work", "primary": true }
+        ],
+        "active": true
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/Groups",
+      "bulkId": "g-backend",
+      "data": {
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+        "displayName": "Backend",
+        "members": [
+          { "value": "bulkId:u-ada", "type": "User", "display": "Ada Lovelace" }
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/Groups",
+      "bulkId": "g-engineering",
+      "data": {
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+        "displayName": "Engineering",
+        "members": [
+          { "value": "bulkId:g-backend", "type": "Group", "display": "Backend" }
+        ]
+      }
+    }
+  ]
+}

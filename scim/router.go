@@ -39,7 +39,7 @@ func NewRouter(folderConfig string, r *gin.Engine, authenticator Authenticator) 
 		return nil, err
 	}
 	scim.POST("/.search", RootPostSearch)
-	//scim.POST("/Bulk", Bulk) // Bulk: 		POST https://example.com/{v}/Bulk
+	scim.POST("/Bulk", BulkHandler(newBulkEngine()))
 
 	return r, nil
 }

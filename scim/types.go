@@ -107,3 +107,35 @@ type SearchRequest struct {
 	StartIndex         *int     `json:"startIndex"`
 	Count              *int     `json:"count"`
 }
+
+// BulkOperation is a single resource modification inside a BulkRequest (RFC 7644 3.7).
+type BulkOperation struct {
+	Method  string      `json:"method"`
+	BulkID  string      `json:"bulkId"`
+	Version string      `json:"version"`
+	Path    string      `json:"path"`
+	Data    interface{} `json:"data"`
+}
+
+// BulkRequest is the RFC 7644 3.7 payload for POST /Bulk.
+type BulkRequest struct {
+	Schemas      []string        `json:"schemas"`
+	FailOnErrors *int            `json:"failOnErrors"`
+	Operations   []BulkOperation `json:"Operations"`
+}
+
+// BulkOperationResult is the per-operation status entry inside a BulkResponse.
+type BulkOperationResult struct {
+	Method   string      `json:"method"`
+	BulkID   string      `json:"bulkId,omitempty"`
+	Version  string      `json:"version,omitempty"`
+	Location string      `json:"location,omitempty"`
+	Response interface{} `json:"response,omitempty"`
+	Status   string      `json:"status"`
+}
+
+// BulkResponse is the RFC 7644 3.7 response returned by POST /Bulk.
+type BulkResponse struct {
+	Schemas    []string              `json:"schemas"`
+	Operations []BulkOperationResult `json:"Operations"`
+}

@@ -33,9 +33,8 @@ is worse than none: it tells a reader something the server no longer does.
 
 ## What GoSCIM does not do
 
-Worth knowing before you invest time. Neither of these is implemented:
+Worth knowing before you invest time:
 
-- `POST /Bulk` (RFC 7644 §3.7)
 - Prometheus metrics endpoint
 
-The [1.0 audit](../RELEASE-1.0.md) records why, and roughly what each would take.
+The [1.0 audit](../RELEASE-1.0.md) records why, and roughly what it would take.

@@ -19,7 +19,8 @@ scim/
   store_couchbase_tls.go      connection string and TLS settings
   store_memory.go             the test fake
   auth.go auth_jwt.go auth_basic.go auth_claims.go
-  op_create.go op_read.go op_search.go op_replace.go op_update.go op_delete.go
+  op_create.go op_read.go op_search.go op_replace.go op_update.go op_delete.go op_bulk.go
+  groups_sync.go              Group.members ↔ User.groups synchronisation
   validate.go                 types, required, multiValued
   validate_write.go           $writer, mutability
   validate_role.go            $reader, returned
@@ -134,7 +135,7 @@ The entry rule is `p.Start_()` — ANTLR suffixes it to avoid a name collision.
 
 No code. Drop a schema in `config/schemas/` and a resource type in
 `config/resourceType/`, optionally a `config/bucketSettings/<Name>.json`, and
-restart. See [getting started](getting-started.md#6-add-a-resource-type-without-writing-code).
+restart. See [getting started](getting-started.md#7-add-a-resource-type-without-writing-code).
 
 ## Adding an authenticator
 

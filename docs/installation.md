@@ -148,7 +148,7 @@ The first run creates one bucket per resource type and a primary index on
 each. Expect log lines like:
 
 ```
-GoSCIM 1.1.0 starting
+GoSCIM 1.2.0 starting
 urn:ietf:params:scim:schemas:core:2.0:User
 ...
 Create Bucket -> User

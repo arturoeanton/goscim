@@ -5,7 +5,7 @@ merged.
 
 ## Getting set up
 
-Requirements: Go 1.25 or later, Docker (for the integration suite), Git.
+Requirements: Go 1.26 or later (1.27.4+ recommended), Docker (for the integration suite), Git.
 
 ```bash
 git clone https://github.com/arturoeanton/goscim.git
@@ -29,16 +29,17 @@ helpers, and how to regenerate the filter parser.
 
 ## What to work on
 
-[RELEASE-1.0.md](RELEASE-1.0.md) lists what is open and why, which is the most
-useful place to look. The larger items:
+Most gaps recorded in [RELEASE-1.0.md](RELEASE-1.0.md) (`POST /Bulk`, value
+filters in search and `PATCH`, `attributes` / `excludedAttributes`,
+`POST /.search`, password hashing, `/healthz` and `/readyz`, structured audit
+logging, EC/EdDSA JWKS keys, atomic uniqueness, and `Group.members` ↔
+`User.groups` synchronisation) have since landed in 1.1.0 and 1.2.0. Useful
+areas still open:
 
-- `POST /Bulk` (RFC 7644 §3.7)
-- Value paths — `emails[type eq "work"]` — in filters and PATCH paths
-- `attributes` and `excludedAttributes`
-- `POST /.search`
-- Health, readiness and metrics endpoints
-- A Dockerfile and a compose file
-- Password hashing
+- Prometheus metrics endpoint (`/metrics`)
+- Interoperability testing and field reports against Okta, Microsoft Entra ID,
+  Keycloak and PingFederate
+- Secondary Couchbase index definitions for large deployments
 
 Issues labelled `good first issue` and `help wanted` are also a reasonable
 starting point. If you are planning something substantial, open an issue first

@@ -59,8 +59,12 @@ revision in `ETag`.
 
 ## What it does
 
-- **CRUD, search (`GET` and `POST /.search`), filtering, sorting, pagination and
-  attribute projection (`attributes` / `excludedAttributes`)** over RFC 7643/7644
+- **CRUD, search (`GET` and `POST /.search`), bulk operations (`POST /Bulk`),
+  filtering, sorting, pagination and attribute projection
+  (`attributes` / `excludedAttributes`)** over RFC 7643/7644
+- **Group membership synchronisation**: `Group.members` changes automatically
+  materialise `User.groups` (`direct` and `indirect` nested memberships, cycle-safe)
+  and clean up dangling references when users or groups are deleted
 - **Complex array value filters**: `emails[type eq "work"]` and
   `emails[type eq "work"].value` in both search (`GET` / `POST /.search`) and
   `PATCH` (`add`, `replace`, `remove`), compatible with Microsoft Entra ID and Okta
@@ -86,10 +90,9 @@ revision in `ETag`.
 
 Worth knowing before you invest time:
 
-- `POST /Bulk` (RFC 7644 §3.7)
 - Prometheus metrics endpoint
 
-The [1.0 audit](RELEASE-1.0.md) records why each is open and roughly what it
+The [1.0 audit](RELEASE-1.0.md) records why it is open and roughly what it
 would take.
 
 ## Adding a resource type
@@ -118,8 +121,9 @@ Two files, no code:
 }
 ```
 
-Restart, and `/scim/v2/Devices` exists with all six verbs, its own bucket,
-`serialNumber` enforced unique and refused on update.
+Restart, and `/scim/v2/Devices` exists with CRUD, `GET` and `POST /.search`,
+automatic inclusion in root `POST /scim/v2/.search` and `POST /scim/v2/Bulk`,
+its own bucket, and `serialNumber` enforced unique and refused on update.
 
 ## Filters
 
@@ -173,7 +177,7 @@ Contributions are welcome — see [CONTRIBUTING](CONTRIBUTING.md), and
 
 ## Status
 
-1.1.0. The test suite covers the request path end to end, and the integration
+1.2.0. The test suite covers the request path end to end, and the integration
 suite exercises it against a real Couchbase. It has not yet been run against a
 production identity provider such as Okta or Entra ID; if you do, reports are
 welcome — that is where the remaining interoperability gaps will show up.

@@ -18,7 +18,7 @@ import (
 )
 
 // Version is the release this binary was built from.
-const Version = "1.1.0"
+const Version = "1.2.0"
 
 // Server timeouts. net/http applies none by default, which leaves a connection
 // that dribbles a request out one byte at a time holding a goroutine

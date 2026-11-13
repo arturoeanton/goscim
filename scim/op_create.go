@@ -11,10 +11,6 @@ import (
 // Create is  POST https://example.com/{v}/{resource}
 func Create(resource string) func(c *gin.Context) {
 	return func(c *gin.Context) {
-		if resource == "Bulk" {
-			Bulk(c)
-			return
-		}
 		resourceType := Resources[resource]
 		setAuditTarget(c, "create", resourceType.Name, "")
 		proj, ok := parseProjectionFromQuery(c)
@@ -57,6 +53,7 @@ func Create(resource string) func(c *gin.Context) {
 			writeStoreUniqueError(c, resourceType, err)
 			return
 		}
+		syncAfterCreate(resourceType, id, element)
 		setAuditTarget(c, "create", resourceType.Name, id)
 
 		// RFC 7644 3.3: a successful create answers 201 with the URI of the

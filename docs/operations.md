@@ -64,7 +64,9 @@ creation. Change the bucket in Couchbase.
 
 Searches are capped at 200 resources per page, which is also what
 `/ServiceProviderConfig` advertises as `filter.maxResults`. A client asking for
-more gets 200.
+more gets 200. Bulk batches (`POST /scim/v2/Bulk`) are capped at 1,000
+operations (`bulk.maxOperations`) and 1 MiB (`bulk.maxPayloadSize`), answering
+`413` if either limit is exceeded.
 
 ## Backups
 
@@ -183,7 +185,8 @@ an undeclared attribute is not rejected in a filter, it simply matches nothing.
 
 ### 413
 
-The body is over 1 MiB. That limit is in `scim/limits.go`.
+Either the request body exceeds 1 MiB (`scim/limits.go`), or a `POST /scim/v2/Bulk`
+batch carries more than `1000` operations (`MaxBulkOperations` in `scim/op_bulk.go`).
 
 ### Startup fails creating a bucket
 

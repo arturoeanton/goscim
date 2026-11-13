@@ -23,6 +23,7 @@ configuration produces `/Users`, `/Groups` and `/Elements`.
 | `GET` | `/scim/v2/{resource}` | Search |
 | `POST` | `/scim/v2/{resource}/.search` | Search via POST body (RFC 7644 §3.4.3) |
 | `POST` | `/scim/v2/.search` | Search across all resource types (RFC 7644 §3.4.3) |
+| `POST` | `/scim/v2/Bulk` | Bulk operations across resource types (RFC 7644 §3.7) |
 | `PUT` | `/scim/v2/{resource}/{id}` | Replace |
 | `PATCH` | `/scim/v2/{resource}/{id}` | Modify |
 | `DELETE` | `/scim/v2/{resource}/{id}` | Delete |
@@ -160,6 +161,166 @@ against the schema, so a patch cannot leave a resource that violates it.
 
 `DELETE /scim/v2/Users/{id}` → `204 No Content`, or `404`.
 
+Deleting a `User` or `Group` automatically removes dangling entries from
+`Group.members` and recomputes affected `User.groups` memberships.
+
+## Group membership synchronisation
+
+`User.groups` (`mutability: readOnly`, RFC 7643 §4.1.2) is owned by the server
+and synchronised automatically whenever `Group` resources (`Group.members`,
+RFC 7643 §4.2) are created, replaced, patched, or deleted:
+
+```json
+{
+  "groups": [
+    {
+      "value": "382c1b2e-889b-444b-bab4-9668b41a71ce",
+      "$ref": "/scim/v2/Groups/382c1b2e-889b-444b-bab4-9668b41a71ce",
+      "display": "Backend",
+      "type": "direct"
+    },
+    {
+      "value": "6080c279-4c6d-4287-9f17-075deb9bc9fb",
+      "$ref": "/scim/v2/Groups/6080c279-4c6d-4287-9f17-075deb9bc9fb",
+      "display": "Engineering",
+      "type": "indirect"
+    }
+  ]
+}
+```
+
+- **Direct and nested memberships**: users listed directly in `Group.members`
+  receive `"type": "direct"`. When a `Group` contains another `Group` as a
+  member (`"type": "Group"`, a `/Groups/` `$ref`, or a known `Group` ID), all
+  ancestor groups are propagated transitively with `"type": "indirect"`. Cyclic
+  group graphs are traversed safely without infinite recursion; if a user is
+  both a direct and transitive member of the same group, `"direct"` wins.
+- **Display updates**: renaming `Group.displayName` via `PUT` or `PATCH`
+  automatically updates `"display"` across every affected user's `groups`
+  array.
+- **Referential cleanup on delete**:
+  - `DELETE /scim/v2/Users/{id}` removes that user from every `Group.members`
+    array (unassigning `members` completely when the last member is removed)
+    and refreshes `Group.meta`.
+  - `DELETE /scim/v2/Groups/{id}` unlinks the deleted group from any parent
+    `Group.members` and recomputes affected `User.groups` entries.
+- **Searchable via N1QL**: because `User.groups` is persisted differentially in
+  storage rather than synthesised at read time, standard filters such as
+  `groups[value eq "<group-id>" and type eq "indirect"]` and
+  `groups[display sw "Eng"]` work in `GET` and `POST /.search`.
+
+## Bulk operations
+
+`POST /scim/v2/Bulk` executes a sequence of `POST`, `PUT`, `PATCH` and `DELETE`
+operations across any configured resource types in a single HTTP request
+(RFC 7644 §3.7):
+
+```json
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:BulkRequest"],
+  "failOnErrors": 1,
+  "Operations": [
+    {
+      "method": "POST",
+      "path": "/Users",
+      "bulkId": "u-jane",
+      "data": {
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+        "userName": "jane.doe@example.com"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/Groups",
+      "bulkId": "g-eng",
+      "data": {
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+        "displayName": "Engineering",
+        "members": [
+          {
+            "value": "bulkId:u-jane",
+            "$ref": "https://scim.example.com/scim/v2/Users/bulkId:u-jane",
+            "type": "User",
+            "display": "Jane Doe"
+          }
+        ]
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/Groups/bulkId:g-eng",
+      "data": {
+        "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+        "Operations": [
+          { "op": "replace", "path": "displayName", "value": "Platform Engineering" }
+        ]
+      }
+    }
+  ]
+}
+```
+
+A valid batch answers `200 OK` with a `BulkResponse`:
+
+```json
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:BulkResponse"],
+  "Operations": [
+    {
+      "method": "POST",
+      "bulkId": "u-jane",
+      "version": "W/\"9a20d07a-bb4b-4c06-af43-75c77e5f8c2c\"",
+      "location": "http://localhost:8080/scim/v2/Users/f08bf17d-de35-43e3-9919-bfdb42ff7b25",
+      "status": "201"
+    },
+    {
+      "method": "POST",
+      "bulkId": "g-eng",
+      "version": "W/\"41b8d320-18ea-4b2c-98a4-8c28d7f5bc10\"",
+      "location": "http://localhost:8080/scim/v2/Groups/6080c279-4c6d-4287-9f17-075deb9bc9fb",
+      "status": "201"
+    },
+    {
+      "method": "PATCH",
+      "version": "W/\"7e11f904-55d1-4ef8-8bc0-21f40e8bc911\"",
+      "location": "http://localhost:8080/scim/v2/Groups/6080c279-4c6d-4287-9f17-075deb9bc9fb",
+      "status": "200"
+    }
+  ]
+}
+```
+
+Rules enforced per RFC 7644 §3.7:
+
+- **`bulkId` cross-references (§3.7.1)**: every `POST` operation requires a
+  unique non-empty `bulkId`. Later operations in the same batch may reference
+  `"bulkId:<id>"` as a path segment (`/Users/bulkId:u-jane` or
+  `/scim/v2/Users/bulkId:u-jane`), inside `$ref` URIs, inside scalar/complex or
+  extension values in `data`, and inside `PATCH` value-filter literals
+  (`members[value eq "bulkId:u-jane"]`). Referencing an unknown, forward or
+  failed `bulkId` records a per-operation `400` (`scimType: "invalidValue"`).
+- **Optimistic concurrency (`version`)**: setting `"version"` on `PUT`, `PATCH`
+  or `DELETE` forwards `If-Match` to the sub-operation; a revision mismatch
+  records `"status": "412"` for that operation without aborting unrelated ones
+  unless `failOnErrors` is reached.
+- **Error threshold (`failOnErrors`, §3.7.3)**: when `failOnErrors > 0`,
+  processing stops as soon as `errorCount >= failOnErrors` and returns the
+  results completed up to and including the failing operation. When omitted or
+  `0`, every operation in the batch runs. Failed operations (`status >= 400`)
+  always carry the SCIM `Error` payload in `"response"`; successful operations
+  omit `"response"` and report `"location"` (including on `204` `DELETE`) and
+  `"version"`.
+- **Limits (§3.7.2)**: `maxOperations` is `1000` and `maxPayloadSize` is
+  `1048576` bytes (1 MiB), both advertised in `/ServiceProviderConfig`. Breaching
+  either answers HTTP `413 Payload Too Large` for the whole request. Malformed
+  envelopes (wrong `schemas`, empty `Operations`, unsupported HTTP methods,
+  missing or duplicate `POST` `bulkId`) answer HTTP `400`
+  (`scimType: "invalidSyntax"`).
+- **Security and audit**: authentication runs once on the outer `/Bulk` request,
+  and every sub-operation executes under the caller's `Principal` and
+  `X-Request-Id`, enforcing `$writer` / `$reader` RBAC, `mutability`, password
+  hashing, atomic uniqueness, and emitting correlated `scim.audit` records.
+
 ## Concurrency control
 
 Every write stamps a new `meta.version`, published as a weak `ETag`.
@@ -241,7 +402,7 @@ RFC 7644 §3.12:
 | `404` | No such resource |
 | `409` | A unique attribute already holds that value |
 | `412` | `If-Match` did not match the current revision |
-| `413` | Body over 1 MiB |
+| `413` | Body over 1 MiB, or `/Bulk` over `maxOperations` (`1000`) |
 | `500` | Storage or internal failure |
 
 `scimType` values in use: `invalidFilter`, `invalidValue`, `invalidSyntax`,
