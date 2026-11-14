@@ -460,7 +460,11 @@ func (s *CouchbaseStore) checkLegacyUniqueOwner(bucket, selfID string, claim Uni
 
 // Search implements Store by translating the SCIM filter to N1QL.
 func (s *CouchbaseStore) Search(q SearchQuery) (int, []map[string]interface{}, error) {
-	query, err := parser.FilterToN1QL(q.Bucket, q.Filter, q.ResolveName)
+	query, err := parser.FilterToN1QLWithOptions(q.Bucket, q.Filter, parser.FilterOptions{
+		Resolve:       q.ResolveName,
+		IsCaseExact:   q.IsCaseExact,
+		IsMultiValued: q.IsMultiValued,
+	})
 	if err != nil {
 		return 0, nil, fmt.Errorf("%w: %s", ErrInvalidFilter, err)
 	}

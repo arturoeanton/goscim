@@ -125,8 +125,20 @@ func (a *JWTAuthenticator) Authenticate(r *http.Request) (*Principal, error) {
 		return nil, ErrUnauthenticated
 	}
 
-	subject, _ := claims["sub"].(string)
+	subject := subjectFromClaims(claims)
 	return &Principal{Subject: subject, Roles: rolesFromClaims(claims, a.rolesClaim)}, nil
+}
+
+// subjectFromClaims extracts the principal identifier across standard OIDC/RFC 9068
+// tokens ("sub") and client-credentials tokens issued by Okta ("cid"), Keycloak
+// ("client_id" / "azp"), and Microsoft Entra ID ("oid" / "appid" / "azp").
+func subjectFromClaims(claims jwt.MapClaims) string {
+	for _, key := range []string{"sub", "client_id", "cid", "azp", "oid", "appid"} {
+		if val, ok := claims[key].(string); ok && strings.TrimSpace(val) != "" {
+			return strings.TrimSpace(val)
+		}
+	}
+	return ""
 }
 
 func (a *JWTAuthenticator) keyfunc(token *jwt.Token) (interface{}, error) {

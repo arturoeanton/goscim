@@ -148,7 +148,7 @@ The first run creates one bucket per resource type and a primary index on
 each. Expect log lines like:
 
 ```
-GoSCIM 1.2.0 starting
+GoSCIM 1.3.0 starting
 urn:ietf:params:scim:schemas:core:2.0:User
 ...
 Create Bucket -> User
@@ -180,7 +180,7 @@ Stored documents need no migration.
 
 ## Troubleshooting
 
-**`SCIM_AUTH is not set`** — deliberate. Choose `jwt`, `basic`, or `none`.
+**`SCIM_AUTH is not set`** — deliberate. Choose `jwt`, `bearer`, `basic`, or `none`.
 
 **`Compression mode is supported in enterprise edition only`** — a bucket
 settings file sets `compression_mode` against Community Edition. Remove the

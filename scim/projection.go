@@ -99,6 +99,7 @@ func (t *selectionTree) addAttr(attrName, subName string) {
 type parsedSelection struct {
 	core       *selectionTree
 	extensions map[string]*selectionTree // canonical extension URN -> tree
+	externalID bool
 	metaWhole  bool
 	metaSubs   map[string]bool // lowercase meta field name -> true
 }
@@ -152,9 +153,13 @@ func parseSelection(resourceType ResourceType, paths []string) *parsedSelection 
 			continue
 		}
 
-		// 3. Common attributes: id, schemas, meta(.sub).
+		// 3. Common attributes: id, externalId, schemas, meta(.sub).
 		lower := strings.ToLower(trimmed)
 		if lower == "id" || lower == "schemas" {
+			continue
+		}
+		if lower == "externalid" {
+			ps.externalID = true
 			continue
 		}
 		if lower == "meta" {
@@ -218,6 +223,11 @@ func applyProjection(resourceType ResourceType, visible map[string]interface{}, 
 		if id, ok := visible["id"]; ok {
 			out["id"] = id
 		}
+		if sel.externalID || sel.core.wholeSchema {
+			if extID, ok := visible["externalId"]; ok {
+				out["externalId"] = extID
+			}
+		}
 		if metaVal, ok := projectMetaInclude(visible["meta"], sel); ok {
 			out["meta"] = metaVal
 		}
@@ -249,6 +259,11 @@ func applyProjection(resourceType ResourceType, visible map[string]interface{}, 
 		out := make(map[string]interface{})
 		if id, ok := visible["id"]; ok {
 			out["id"] = id
+		}
+		if !sel.externalID {
+			if extID, ok := visible["externalId"]; ok {
+				out["externalId"] = extID
+			}
 		}
 		if metaVal, ok := projectMetaExclude(visible["meta"], sel); ok {
 			out["meta"] = metaVal

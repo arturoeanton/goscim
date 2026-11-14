@@ -1,0 +1,105 @@
+@host=http://127.0.0.1:8080/scim/v2
+@token=okta-api-token-example
+
+### 1. Discovery check (ServiceProviderConfig and case-insensitive User Schema)
+GET {{host}}/Schemas/urn:ietf:params:scim:schemas:core:2.0:user HTTP/1.1
+Accept: application/scim+json
+
+### 2. Okta pre-provisioning user check
+GET {{host}}/Users?filter=userName%20eq%20%22jane.okta@example.com%22&startIndex=1&count=100 HTTP/1.1
+Authorization: Bearer {{token}}
+Accept: application/scim+json
+
+### 3. Okta Create User (externalId, password, and explicit null optional fields)
+POST {{host}}/Users HTTP/1.1
+Authorization: Bearer {{token}}
+Content-Type: application/scim+json
+
+{
+  "schemas": [
+    "urn:ietf:params:scim:schemas:core:2.0:User",
+    "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"
+  ],
+  "externalId": "00u1a2b3c4d5e6f7g8h9",
+  "userName": "jane.okta@example.com",
+  "password": "InitialOktaPassword#2026",
+  "active": true,
+  "displayName": "Jane Okta",
+  "title": "Senior Identity Engineer",
+  "nickName": null,
+  "profileUrl": null,
+  "name": {
+    "givenName": "Jane",
+    "familyName": "Okta",
+    "middleName": null
+  },
+  "emails": [
+    { "value": "jane.okta@example.com", "type": "work", "primary": true },
+    { "value": "jane.personal@example.org", "type": "home", "primary": false }
+  ],
+  "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User": {
+    "department": "Security",
+    "division": null
+  }
+}
+
+### 4. Okta filter on multi-valued complex sub-attribute (emails.value)
+GET {{host}}/Users?filter=emails.value%20eq%20%22jane.personal@example.org%22 HTTP/1.1
+Authorization: Bearer {{token}}
+Accept: application/scim+json
+
+### 5. Okta Group Push
+@userId=REPLACE_WITH_USER_ID
+POST {{host}}/Groups HTTP/1.1
+Authorization: Bearer {{token}}
+Content-Type: application/scim+json
+
+{
+  "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+  "externalId": "00g9z8y7x6w5v4u3t2s1",
+  "displayName": "Okta-Security-Engineering",
+  "members": [
+    { "value": "{{userId}}", "display": "Jane Okta" }
+  ]
+}
+
+### 6. Okta Full PUT replacement (echoes readOnly groups, clears title and EnterpriseUser via null)
+PUT {{host}}/Users/{{userId}} HTTP/1.1
+Authorization: Bearer {{token}}
+Content-Type: application/scim+json
+
+{
+  "schemas": [
+    "urn:ietf:params:scim:schemas:core:2.0:User",
+    "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"
+  ],
+  "id": "{{userId}}",
+  "externalId": "00u1a2b3c4d5e6f7g8h9",
+  "userName": "jane.okta@example.com",
+  "active": true,
+  "displayName": "Jane M. Okta",
+  "title": null,
+  "name": {
+    "givenName": "Jane",
+    "familyName": "Okta"
+  },
+  "emails": [
+    { "value": "jane.okta@example.com", "type": "work", "primary": true }
+  ],
+  "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User": null
+}
+
+### 7. Okta Deactivate User (pathless PATCH replace)
+PATCH {{host}}/Users/{{userId}} HTTP/1.1
+Authorization: Bearer {{token}}
+Content-Type: application/scim+json
+
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+  "Operations": [
+    {
+      "op": "replace",
+      "value": { "active": false }
+    }
+  ]
+}

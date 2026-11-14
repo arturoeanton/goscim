@@ -54,14 +54,21 @@ curl -s -u admin:secret -X POST http://localhost:8080/scim/v2/Users \
 revision in `ETag`.
 
 `SCIM_AUTH` has no default: the server refuses to start until you pick `jwt`,
-`basic`, or `none`. Full walkthrough in
-[getting started](docs/getting-started.md).
+`bearer`, `basic`, or `none`. Full walkthrough in
+[getting started](docs/getting-started.md), and IdP setup in
+[identity provider compatibility](docs/idp-compatibility.md).
 
 ## What it does
 
 - **CRUD, search (`GET` and `POST /.search`), bulk operations (`POST /Bulk`),
   filtering, sorting, pagination and attribute projection
-  (`attributes` / `excludedAttributes`)** over RFC 7643/7644
+  (`attributes` / `excludedAttributes`)** over RFC 7643/7644, including
+  `externalId` (`caseExact: true`) and explicit JSON `null` clearing
+- **Identity provider compatibility**: verified against **Microsoft Entra ID**,
+  **Okta**, and **Keycloak** provisioning flows (colon-delimited URN filters and
+  patches, case-insensitive `userName` / case-exact `externalId` N1QL queries,
+  dotted multi-valued filters such as `emails.value eq "..."`, legacy and
+  `?aadOptscim062020` Entra `PATCH` dialects, Okta full `PUT` updates)
 - **Group membership synchronisation**: `Group.members` changes automatically
   materialise `User.groups` (`direct` and `indirect` nested memberships, cycle-safe)
   and clean up dangling references when users or groups are deleted
@@ -71,8 +78,11 @@ revision in `ETag`.
 - **Discovery**: `ServiceProviderConfig`, `ResourceTypes`, `Schemas`, derived
   from the running code rather than a file that can drift from it
 - **Authentication**: OAuth 2.0 access tokens (RFC 9068) verified against a
-  JWKS (`RS256`/`384`/`512`, `ES256`/`384`/`512`, `EdDSA`), HTTP Basic for
-  development, or an explicit anonymous mode
+  JWKS (`RS256`/`384`/`512`, `ES256`/`384`/`512`, `EdDSA`, with Entra `scp`,
+  Okta `scp`/`cid`, and Keycloak `realm_access.roles` / `resource_access`),
+  static opaque Bearer tokens (`SCIM_AUTH=bearer`) for Entra Secret Token and
+  Okta API Token connectors, HTTP Basic for development, or an explicit
+  anonymous mode
 - **Authorization per attribute**: `$reader` / `$writer` role lists alongside
   SCIM's own `mutability`, `returned` and atomic `uniqueness`
 - **Structured audit logging**: `log/slog` audit trail (`SCIM_AUDIT_LOG`) with
@@ -133,20 +143,23 @@ name.familyName co "O"
 title pr and userType eq "Employee"
 emails[type eq "work" and primary eq true]
 emails[type eq "work"].value ew "@example.com"
+emails.value eq "bjensen@example.com"
 userType eq "Employee" and (emails co "example.com" or emails co "example.org")
-urn:ietf:params:scim:schemas:extension:enterprise:2.0:User.department eq "Sales"
+urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department eq "Sales"
 ```
 
 All RFC 7644 operators — `eq ne co sw ew gt ge lt le pr`, `and or not`, `( )`,
-and `[ ]` complex array value filters. Values are passed to Couchbase as bound
-parameters and never enter the query text; a filter that fails to parse is
-refused rather than translated.
+and `[ ]` complex array value filters. String comparisons honour `caseExact`
+(`userName` folds case; `externalId` and `id` match exact bytes). Values are
+passed to Couchbase as bound parameters and never enter the query text; a filter
+that fails to parse is refused rather than translated.
 
 ## Documentation
 
 | | |
 |---|---|
 | [Getting started](docs/getting-started.md) | A running server and your first user |
+| [IdP compatibility](docs/idp-compatibility.md) | Connecting Microsoft Entra ID, Okta, and Keycloak |
 | [Installation](docs/installation.md) | Couchbase, building, deploying |
 | [Configuration](docs/configuration.md) | Every variable and config file |
 | [API reference](docs/api.md) | Endpoints, payloads, status codes, filters |
@@ -177,10 +190,10 @@ Contributions are welcome — see [CONTRIBUTING](CONTRIBUTING.md), and
 
 ## Status
 
-1.2.0. The test suite covers the request path end to end, and the integration
-suite exercises it against a real Couchbase. It has not yet been run against a
-production identity provider such as Okta or Entra ID; if you do, reports are
-welcome — that is where the remaining interoperability gaps will show up.
+1.3.0. Both the unit conformance suites and the Couchbase integration suite
+verify the full request path across RFC 7643/7644 and the provisioning dialects
+of Microsoft Entra ID, Okta, and Keycloak. Reports from field deployments remain
+welcome.
 
 ## License
 

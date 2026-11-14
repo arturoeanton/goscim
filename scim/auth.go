@@ -112,6 +112,8 @@ func NewAuthenticatorFromEnv() (Authenticator, error) {
 	switch scheme := strings.ToLower(strings.TrimSpace(os.Getenv("SCIM_AUTH"))); scheme {
 	case "jwt":
 		return NewJWTAuthenticatorFromEnv()
+	case "bearer":
+		return NewBearerAuthenticatorFromEnv()
 	case "basic":
 		return NewBasicAuthenticatorFromEnv()
 	case "none":
@@ -119,9 +121,9 @@ func NewAuthenticatorFromEnv() (Authenticator, error) {
 		return &AnonymousAuthenticator{Roles: roles}, nil
 	case "":
 		return nil, errors.New(
-			"SCIM_AUTH is not set: choose \"jwt\", \"basic\" or, to serve every request unauthenticated, \"none\"")
+			"SCIM_AUTH is not set: choose \"jwt\", \"bearer\", \"basic\" or, to serve every request unauthenticated, \"none\"")
 	default:
-		return nil, fmt.Errorf("unknown SCIM_AUTH %q: expected \"jwt\", \"basic\" or \"none\"", scheme)
+		return nil, fmt.Errorf("unknown SCIM_AUTH %q: expected \"jwt\", \"bearer\", \"basic\" or \"none\"", scheme)
 	}
 }
 

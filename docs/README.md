@@ -13,6 +13,7 @@ is worse than none: it tells a reader something the server no longer does.
 | Document | What it covers |
 |---|---|
 | [Getting started](getting-started.md) | A running server and your first user |
+| [Identity provider compatibility](idp-compatibility.md) | Connecting Microsoft Entra ID, Okta, and Keycloak |
 | [Installation](installation.md) | Couchbase, building, and deploying |
 | [Configuration](configuration.md) | Every environment variable and JSON config file |
 | [API reference](api.md) | Endpoints, payloads, status codes, filters |

@@ -5,17 +5,29 @@ import (
 	"strings"
 )
 
+// EvalOptions supplies optional schema callbacks for in-memory filter evaluation.
+type EvalOptions struct {
+	Resolve     NameResolver
+	IsCaseExact func(attrPath string) bool
+}
+
 // CompileMatcher parses filter once and returns a predicate that evaluates it
 // against decoded JSON objects in memory. It is used by PATCH value-selection
 // paths such as emails[type eq "work"].value.
 func CompileMatcher(filter string, isCaseExact func(attrPath string) bool) (func(map[string]interface{}) bool, error) {
+	return CompileMatcherWithOptions(filter, EvalOptions{IsCaseExact: isCaseExact})
+}
+
+// CompileMatcherWithOptions parses filter once and returns an in-memory
+// predicate configured with optional attribute resolution and case-exact rules.
+func CompileMatcherWithOptions(filter string, opts EvalOptions) (func(map[string]interface{}) bool, error) {
 	tree, _, err := parseFilter(filter)
 	if err != nil {
 		return nil, err
 	}
 	root := tree.AllExpression()[0]
 	return func(doc map[string]interface{}) bool {
-		return evalExpr(root, doc, "", isCaseExact)
+		return evalExprWithOpts(root, doc, "", opts)
 	}, nil
 }
 
@@ -68,24 +80,28 @@ func collectEqualitySeeds(expr IExpressionContext, out map[string]interface{}) {
 	}
 }
 
-func evalExpr(expr IExpressionContext, doc map[string]interface{}, scopePrefix string, isCaseExact func(string) bool) bool {
+func evalExprWithOpts(expr IExpressionContext, doc map[string]interface{}, scopePrefix string, opts EvalOptions) bool {
 	if expr == nil || doc == nil {
 		return false
 	}
 	switch ctx := expr.(type) {
 	case *LPAREN_EXPR_RPARENContext:
-		return evalExpr(ctx.Expression(), doc, scopePrefix, isCaseExact)
+		return evalExprWithOpts(ctx.Expression(), doc, scopePrefix, opts)
 	case *NOT_EXPRContext:
-		return !evalExpr(ctx.Expression(), doc, scopePrefix, isCaseExact)
+		return !evalExprWithOpts(ctx.Expression(), doc, scopePrefix, opts)
 	case *EXPR_AND_EXPRContext:
-		return evalExpr(ctx.Expression(0), doc, scopePrefix, isCaseExact) &&
-			evalExpr(ctx.Expression(1), doc, scopePrefix, isCaseExact)
+		return evalExprWithOpts(ctx.Expression(0), doc, scopePrefix, opts) &&
+			evalExprWithOpts(ctx.Expression(1), doc, scopePrefix, opts)
 	case *EXPR_OR_EXPRContext:
-		return evalExpr(ctx.Expression(0), doc, scopePrefix, isCaseExact) ||
-			evalExpr(ctx.Expression(1), doc, scopePrefix, isCaseExact)
+		return evalExprWithOpts(ctx.Expression(0), doc, scopePrefix, opts) ||
+			evalExprWithOpts(ctx.Expression(1), doc, scopePrefix, opts)
 	case *LBRAC_EXPR_RBRACContext:
 		attrName := ctx.ATTRNAME().GetText()
-		rawVal, ok := lookupEvalPath(doc, attrName)
+		lookupName := attrName
+		if scopePrefix == "" && opts.Resolve != nil {
+			lookupName = opts.Resolve(attrName)
+		}
+		rawVal, ok := lookupEvalPath(doc, lookupName)
 		if !ok {
 			return false
 		}
@@ -96,13 +112,13 @@ func evalExpr(expr IExpressionContext, doc map[string]interface{}, scopePrefix s
 		items, ok := rawVal.([]interface{})
 		if !ok {
 			if m, ok := rawVal.(map[string]interface{}); ok {
-				return evalExpr(ctx.Expression(), m, nextScope, isCaseExact)
+				return evalExprWithOpts(ctx.Expression(), m, nextScope, opts)
 			}
 			return false
 		}
 		for _, item := range items {
 			if elemMap, ok := item.(map[string]interface{}); ok {
-				if evalExpr(ctx.Expression(), elemMap, nextScope, isCaseExact) {
+				if evalExprWithOpts(ctx.Expression(), elemMap, nextScope, opts) {
 					return true
 				}
 			}
@@ -110,11 +126,57 @@ func evalExpr(expr IExpressionContext, doc map[string]interface{}, scopePrefix s
 		return false
 	case *ATTR_PRContext:
 		attrName := ctx.ATTRNAME().GetText()
-		val, ok := lookupEvalPath(doc, attrName)
-		if !ok || val == nil {
+		lookupName := attrName
+		if scopePrefix == "" && opts.Resolve != nil {
+			lookupName = opts.Resolve(attrName)
+		}
+		return evalPresenceSegments(doc, splitEvalSegments(lookupName))
+	case *ATTR_OPER_CRITERIAContext:
+		attrName := ctx.ATTRNAME().GetText()
+		op := strings.ToLower(ctx.Operator().GetText())
+		rhs := unquoteCriteria(ctx.Criteria().GetText())
+		fullPath := attrName
+		if scopePrefix != "" {
+			fullPath = scopePrefix + "." + attrName
+		}
+		exact := opts.IsCaseExact != nil && opts.IsCaseExact(fullPath)
+		lookupName := attrName
+		if scopePrefix == "" && opts.Resolve != nil {
+			lookupName = opts.Resolve(attrName)
+		}
+		return evalStringSegments(doc, splitEvalSegments(lookupName), op, rhs, exact)
+	case *ATTR_OPER_VALUEContext:
+		attrName := ctx.ATTRNAME().GetText()
+		op := strings.ToLower(ctx.Operator().GetText())
+		rhs, ok := parseCriteriaValue(ctx.CriteriaValue().GetText())
+		if !ok {
 			return false
 		}
-		switch typed := val.(type) {
+		lookupName := attrName
+		if scopePrefix == "" && opts.Resolve != nil {
+			lookupName = opts.Resolve(attrName)
+		}
+		return evalScalarSegments(doc, splitEvalSegments(lookupName), op, rhs)
+	}
+	return false
+}
+
+func splitEvalSegments(attrPath string) []string {
+	urn, rest := SplitURNPath(attrPath)
+	segments := make([]string, 0, 3)
+	if urn != "" {
+		segments = append(segments, urn)
+	}
+	segments = append(segments, strings.Split(rest, ".")...)
+	return segments
+}
+
+func evalPresenceSegments(current interface{}, segments []string) bool {
+	if len(segments) == 0 {
+		if current == nil {
+			return false
+		}
+		switch typed := current.(type) {
 		case string:
 			return typed != ""
 		case []interface{}:
@@ -124,28 +186,68 @@ func evalExpr(expr IExpressionContext, doc map[string]interface{}, scopePrefix s
 		default:
 			return true
 		}
-	case *ATTR_OPER_CRITERIAContext:
-		attrName := ctx.ATTRNAME().GetText()
-		op := strings.ToLower(ctx.Operator().GetText())
-		rhs := unquoteCriteria(ctx.Criteria().GetText())
-		fullPath := attrName
-		if scopePrefix != "" {
-			fullPath = scopePrefix + "." + attrName
-		}
-		exact := isCaseExact != nil && isCaseExact(fullPath)
-		lhs, present := lookupEvalPath(doc, attrName)
-		return compareStringPredicate(lhs, present, op, rhs, exact)
-	case *ATTR_OPER_VALUEContext:
-		attrName := ctx.ATTRNAME().GetText()
-		op := strings.ToLower(ctx.Operator().GetText())
-		rhs, ok := parseCriteriaValue(ctx.CriteriaValue().GetText())
-		if !ok {
+	}
+	switch node := current.(type) {
+	case map[string]interface{}:
+		val, found := lookupMapFold(node, segments[0])
+		if !found {
 			return false
 		}
-		lhs, present := lookupEvalPath(doc, attrName)
-		return compareScalarPredicate(lhs, present, op, rhs)
+		return evalPresenceSegments(val, segments[1:])
+	case []interface{}:
+		for _, elem := range node {
+			if evalPresenceSegments(elem, segments) {
+				return true
+			}
+		}
 	}
 	return false
+}
+
+func evalStringSegments(current interface{}, segments []string, op, rhs string, exact bool) bool {
+	if len(segments) == 0 {
+		return compareStringPredicate(current, current != nil, op, rhs, exact)
+	}
+	switch node := current.(type) {
+	case map[string]interface{}:
+		val, found := lookupMapFold(node, segments[0])
+		if !found {
+			return compareStringPredicate(nil, false, op, rhs, exact)
+		}
+		return evalStringSegments(val, segments[1:], op, rhs, exact)
+	case []interface{}:
+		for _, elem := range node {
+			if evalStringSegments(elem, segments, op, rhs, exact) {
+				return true
+			}
+		}
+		return false
+	default:
+		return compareStringPredicate(nil, false, op, rhs, exact)
+	}
+}
+
+func evalScalarSegments(current interface{}, segments []string, op string, rhs interface{}) bool {
+	if len(segments) == 0 {
+		return compareScalarPredicate(current, current != nil, op, rhs)
+	}
+	switch node := current.(type) {
+	case map[string]interface{}:
+		val, found := lookupMapFold(node, segments[0])
+		if !found {
+			return compareScalarPredicate(nil, false, op, rhs)
+		}
+		return evalScalarSegments(val, segments[1:], op, rhs)
+	case []interface{}:
+		for _, elem := range node {
+			if evalScalarSegments(elem, segments, op, rhs) {
+				return true
+			}
+		}
+		return false
+	default:
+		return compareScalarPredicate(nil, false, op, rhs)
+	}
 }
 
 func unquoteCriteria(raw string) string {

@@ -1,0 +1,84 @@
+@host=http://127.0.0.1:8080/scim/v2
+@jwt=REPLACE_WITH_KEYCLOAK_ACCESS_TOKEN
+
+### 1. Initial realm export via SCIM 2.0 Bulk (Users + Groups with externalId and bulkId)
+POST {{host}}/Bulk HTTP/1.1
+Authorization: Bearer {{jwt}}
+Content-Type: application/scim+json
+X-Request-Id: keycloak-realm-sync-01
+
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:BulkRequest"],
+  "failOnErrors": 1,
+  "Operations": [
+    {
+      "method": "POST",
+      "path": "/Users",
+      "bulkId": "kc-user-1",
+      "data": {
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+        "externalId": "b8c4e190-51df-4b77-949b-7126e373a001",
+        "userName": "jdoe",
+        "displayName": "John Doe",
+        "active": true,
+        "emails": [
+          { "value": "jdoe@corp.internal", "type": "work", "primary": true }
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/Groups",
+      "bulkId": "kc-group-1",
+      "data": {
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+        "externalId": "f19d7c22-88aa-4c13-b12e-990011223344",
+        "displayName": "realm-admins",
+        "members": [
+          { "value": "bulkId:kc-user-1", "type": "User", "display": "John Doe" }
+        ]
+      }
+    }
+  ]
+}
+
+### 2. Reconcile user by Keycloak UUID (externalId)
+GET {{host}}/Users?filter=externalId%20eq%20%22b8c4e190-51df-4b77-949b-7126e373a001%22 HTTP/1.1
+Authorization: Bearer {{jwt}}
+Accept: application/scim+json
+
+### 3. Reconcile user by core URN-prefixed userName
+GET {{host}}/Users?filter=urn:ietf:params:scim:schemas:core:2.0:User:userName%20eq%20%22jdoe%22 HTTP/1.1
+Authorization: Bearer {{jwt}}
+Accept: application/scim+json
+
+### 4. Query groups containing a user via dotted multi-valued path
+@userId=REPLACE_WITH_USER_ID
+GET {{host}}/Groups?filter=members.value%20eq%20%22{{userId}}%22 HTTP/1.1
+Authorization: Bearer {{jwt}}
+Accept: application/scim+json
+
+### 5. Optimistic concurrency update with ETag / If-Match
+@etag=W/"REPLACE_WITH_VERSION"
+PATCH {{host}}/Users/{{userId}} HTTP/1.1
+Authorization: Bearer {{jwt}}
+If-Match: {{etag}}
+Content-Type: application/scim+json
+
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+  "Operations": [
+    { "op": "replace", "path": "title", "value": "Platform Engineer" }
+  ]
+}
+
+### 6. Server-root POST /.search
+POST {{host}}/.search HTTP/1.1
+Authorization: Bearer {{jwt}}
+Content-Type: application/scim+json
+
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:SearchRequest"],
+  "filter": "externalId eq \"b8c4e190-51df-4b77-949b-7126e373a001\"",
+  "attributes": ["userName", "externalId", "groups"]
+}

@@ -27,6 +27,13 @@ type Query struct {
 // key no document has.
 type NameResolver func(path string) string
 
+// FilterOptions supplies optional schema callbacks to FilterToN1QLWithOptions.
+type FilterOptions struct {
+	Resolve       NameResolver
+	IsCaseExact   func(path string) bool
+	IsMultiValued func(path string) bool
+}
+
 type n1qlArrayScope struct {
 	attrNode      antlr.TerminalNode
 	lbracNode     antlr.TerminalNode
@@ -40,10 +47,12 @@ type n1qlArrayScope struct {
 // ScimFilterListenerN1QL walks the parse tree building the N1QL text.
 type ScimFilterListenerN1QL struct {
 	*BaseScimFilterListener
-	query         []byte
-	params        []interface{}
-	prevOperation string
-	resolve       NameResolver
+	query          []byte
+	params         []interface{}
+	prevOperation  string
+	resolve        NameResolver
+	isCaseExact    func(path string) bool
+	foldNextString bool
 
 	inCriteria bool
 	criteria   strings.Builder
@@ -123,6 +132,32 @@ func stripParentPrefix(resolvedFull, parentResolved, fallback string) string {
 	return fallback
 }
 
+// EnterATTR_OPER_CRITERIA checks whether a string literal comparison targets a
+// case-insensitive attribute so both sides can be folded with LOWER(...).
+func (l *ScimFilterListenerN1QL) EnterATTR_OPER_CRITERIA(c *ATTR_OPER_CRITERIAContext) {
+	l.foldNextString = false
+	if l.isCaseExact == nil || c == nil || c.ATTRNAME() == nil || c.Operator() == nil {
+		return
+	}
+	op := strings.ToLower(c.Operator().GetText())
+	switch op {
+	case "eq", "ne", "co", "sw", "ew":
+		rawAttr := c.ATTRNAME().GetText()
+		fullPath := rawAttr
+		if len(l.scopes) > 0 {
+			fullPath = l.scopes[len(l.scopes)-1].fullPath + "." + rawAttr
+		}
+		if !l.isCaseExact(fullPath) {
+			l.foldNextString = true
+		}
+	}
+}
+
+// ExitATTR_OPER_CRITERIA resets case-folding state.
+func (l *ScimFilterListenerN1QL) ExitATTR_OPER_CRITERIA(*ATTR_OPER_CRITERIAContext) {
+	l.foldNextString = false
+}
+
 // EnterCriteria starts collecting the text of a quoted value. Its terminals are
 // buffered rather than written, so the value leaves as a parameter.
 func (l *ScimFilterListenerN1QL) EnterCriteria(c *CriteriaContext) {
@@ -137,7 +172,8 @@ func (l *ScimFilterListenerN1QL) EnterCriteria(c *CriteriaContext) {
 func (l *ScimFilterListenerN1QL) ExitCriteria(c *CriteriaContext) {
 	l.inCriteria = false
 	value, isPattern := l.likePattern(l.criteria.String())
-	l.bind(value)
+	l.bindString(value, l.foldNextString)
+	l.foldNextString = false
 	if isPattern {
 		// Makes the escaping in escapeLikeWildcards effective.
 		l.write(` ESCAPE "\\"`)
@@ -174,6 +210,17 @@ func (l *ScimFilterListenerN1QL) bind(value interface{}) {
 	l.prevOperation = ""
 }
 
+func (l *ScimFilterListenerN1QL) bindString(value string, lower bool) {
+	l.params = append(l.params, value)
+	placeholder := "$" + strconv.Itoa(len(l.params))
+	if lower {
+		l.write("LOWER(" + placeholder + ")")
+	} else {
+		l.write(placeholder)
+	}
+	l.prevOperation = ""
+}
+
 // FilterToN1QL translates a SCIM filter into the page and count queries for
 // resourceName, together with the values to bind.
 //
@@ -181,6 +228,13 @@ func (l *ScimFilterListenerN1QL) bind(value interface{}) {
 // recovers from syntax errors and keeps walking, so an unchecked tree lets
 // arbitrary tokens through into the query.
 func FilterToN1QL(resourceName string, filter string, resolve NameResolver) (Query, error) {
+	return FilterToN1QLWithOptions(resourceName, filter, FilterOptions{Resolve: resolve})
+}
+
+// FilterToN1QLWithOptions translates a SCIM filter into N1QL using schema
+// metadata for attribute canonicalisation, case-insensitivity, and multi-valued
+// dotted sub-attribute expansion (e.g. emails.value eq "x").
+func FilterToN1QLWithOptions(resourceName string, filter string, opts FilterOptions) (Query, error) {
 	from := "FROM `" + escapeIdentifier(resourceName) + "`"
 	if filter == "" {
 		return Query{
@@ -189,12 +243,20 @@ func FilterToN1QL(resourceName string, filter string, resolve NameResolver) (Que
 		}, nil
 	}
 
-	tree, _, err := parseFilter(filter)
+	expanded := filter
+	if opts.IsMultiValued != nil {
+		expanded = expandMultiValuedDottedPaths(filter, opts.IsMultiValued)
+	}
+
+	tree, _, err := parseFilter(expanded)
 	if err != nil {
 		return Query{}, err
 	}
 
-	listener := &ScimFilterListenerN1QL{resolve: resolve}
+	listener := &ScimFilterListenerN1QL{
+		resolve:     opts.Resolve,
+		isCaseExact: opts.IsCaseExact,
+	}
 	antlr.ParseTreeWalkerDefault.Walk(listener, tree)
 
 	where := " WHERE " + string(listener.query)
@@ -203,6 +265,168 @@ func FilterToN1QL(resourceName string, filter string, resolve NameResolver) (Que
 		Count:  "SELECT count(*) as count " + from + where,
 		Params: listener.params,
 	}, nil
+}
+
+// expandMultiValuedDottedPaths rewrites top-level dotted comparisons on
+// multi-valued complex attributes (such as `emails.value eq "x"` or
+// `members.value pr`) into bracketed value filters (`emails[value eq "x"]`) so
+// N1QL evaluates them with ANY ... SATISFIES ... END over the JSON array.
+func expandMultiValuedDottedPaths(input string, isMultiValued func(path string) bool) string {
+	if !strings.Contains(input, ".") {
+		return input
+	}
+	var out strings.Builder
+	out.Grow(len(input) + 16)
+	inQuote := false
+	bracketDepth := 0
+
+	for i := 0; i < len(input); {
+		ch := input[i]
+		if ch == '"' {
+			inQuote = !inQuote
+			out.WriteByte(ch)
+			i++
+			continue
+		}
+		if !inQuote {
+			if ch == '[' {
+				bracketDepth++
+				out.WriteByte(ch)
+				i++
+				continue
+			}
+			if ch == ']' {
+				if bracketDepth > 0 {
+					bracketDepth--
+				}
+				out.WriteByte(ch)
+				i++
+				continue
+			}
+			if bracketDepth == 0 && isAttrStartByte(ch) && (i == 0 || isFilterBoundary(input[i-1])) {
+				rewritten, nextPos, ok := tryRewriteMultiValuedClause(input, i, isMultiValued)
+				if ok {
+					out.WriteString(rewritten)
+					i = nextPos
+					continue
+				}
+			}
+		}
+		out.WriteByte(ch)
+		i++
+	}
+	return out.String()
+}
+
+func isAttrStartByte(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || b == '$'
+}
+
+func isFilterBoundary(b byte) bool {
+	switch b {
+	case ' ', '\t', '\r', '\n', '(':
+		return true
+	default:
+		return false
+	}
+}
+
+func tryRewriteMultiValuedClause(s string, pos int, isMultiValued func(path string) bool) (string, int, bool) {
+	attrStart := pos
+	for pos < len(s) && isAttrPathByte(s[pos]) {
+		pos++
+	}
+	attrToken := s[attrStart:pos]
+	if pos < len(s) && s[pos] == '[' {
+		return "", 0, false
+	}
+	lowerTok := strings.ToLower(attrToken)
+	if lowerTok == "and" || lowerTok == "or" || lowerTok == "not" {
+		return "", 0, false
+	}
+
+	mvAttr, subAttr, hasMV := splitMultiValuedAttrToken(attrToken, isMultiValued)
+	if !hasMV {
+		return "", 0, false
+	}
+
+	wsStart := pos
+	for pos < len(s) && s[pos] == ' ' {
+		pos++
+	}
+	if pos == wsStart {
+		return "", 0, false
+	}
+
+	opStart := pos
+	for pos < len(s) && isAlphaByte(s[pos]) {
+		pos++
+	}
+	if pos == opStart {
+		return "", 0, false
+	}
+	op := s[opStart:pos]
+
+	if strings.EqualFold(op, "pr") {
+		if pos < len(s) && !isFilterDelimiter(s[pos]) {
+			return "", 0, false
+		}
+		return mvAttr + "[" + subAttr + " " + op + "]", pos, true
+	}
+	if !isComparisonOpWord(op) {
+		return "", 0, false
+	}
+
+	ws2Start := pos
+	for pos < len(s) && s[pos] == ' ' {
+		pos++
+	}
+	if pos == ws2Start || pos >= len(s) {
+		return "", 0, false
+	}
+
+	if s[pos] == '"' {
+		endQuote := pos + 1
+		for endQuote < len(s) && s[endQuote] != '"' {
+			endQuote++
+		}
+		if endQuote >= len(s) {
+			return "", 0, false
+		}
+		rhs := s[pos : endQuote+1]
+		return mvAttr + "[" + subAttr + " " + op + " " + rhs + "]", endQuote + 1, true
+	}
+
+	rhsStart := pos
+	for pos < len(s) && !isFilterDelimiter(s[pos]) {
+		pos++
+	}
+	if pos == rhsStart {
+		return "", 0, false
+	}
+	rhs := s[rhsStart:pos]
+	return mvAttr + "[" + subAttr + " " + op + " " + rhs + "]", pos, true
+}
+
+func splitMultiValuedAttrToken(token string, isMultiValued func(path string) bool) (mvAttr, subAttr string, ok bool) {
+	urn, attrPath := SplitURNPath(token)
+	dotIdx := strings.IndexByte(attrPath, '.')
+	if dotIdx <= 0 || dotIdx >= len(attrPath)-1 {
+		return "", "", false
+	}
+	head := attrPath[:dotIdx]
+	tail := attrPath[dotIdx+1:]
+	candidate := head
+	if urn != "" {
+		candidate = urn + ":" + head
+	}
+	if !isMultiValued(candidate) {
+		return "", "", false
+	}
+	if urn != "" {
+		return urn + "." + head, tail, true
+	}
+	return head, tail, true
 }
 
 // VisitTerminal is called when a terminal node is visited.
@@ -246,6 +470,9 @@ func (l *ScimFilterListenerN1QL) VisitTerminal(node antlr.TerminalNode) {
 				value = l.resolve(value)
 			}
 			value = AddQuote(value)
+		}
+		if l.foldNextString {
+			value = "LOWER(" + value + ")"
 		}
 		l.prevOperation = ""
 
@@ -303,23 +530,35 @@ func (l *ScimFilterListenerN1QL) VisitTerminal(node antlr.TerminalNode) {
 	l.write(value)
 }
 
-// urnPathPattern splits "urn:...:Schema.attr.sub" into its schema URN and the
-// attribute path that follows it. Compiled once: it sits on the request path.
+// urnVersionSchemaPattern splits RFC 7643/7644 schema-prefixed paths using
+// either ":" (RFC 7644 3.4.2.2 / 3.10) or "." as the delimiter after the
+// <version>:<SchemaName> suffix, e.g.
 //
-// Matched case-insensitively, because RFC 7643 2.1 makes schema URNs
-// case-insensitive and a client writing "URN:IETF:..." is entitled to be
-// understood. The captured text keeps the client's spelling; canonicalising it
-// is the scim package's job.
-var urnPathPattern = regexp.MustCompile(`(?i)^(urn[:\w\.\_]*)(:-*)?(:[\w]*)(\.)(.*)$`)
+//	urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:employeeNumber
+//	urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:manager.value
+//	urn:ietf:params:scim:schemas:extension:one:2.0:Element.boolean
+var urnVersionSchemaPattern = regexp.MustCompile(`(?i)^(urn:[a-z0-9_.\-]+(?::[a-z0-9_.\-]+)*:[0-9]+(?:\.[0-9]+)*:[a-z0-9_\-]+)[:\.](.+)$`)
+
+// urnDotFallbackPattern handles unversioned URN prefixes separated by ".".
+var urnDotFallbackPattern = regexp.MustCompile(`(?i)^(urn[:\w\.\_-]*)(:-*)?(:[\w]*)(\.)([^:]+)$`)
 
 // SplitURNPath separates the schema URN prefix, when there is one, from the
 // attribute path. It lives here because both the N1QL translation and the scim
 // package's path handling need exactly this split, and scim already imports
 // this package.
 func SplitURNPath(path string) (urn string, attrPath string) {
-	if urnPathPattern.MatchString(path) {
-		return urnPathPattern.ReplaceAllString(path, `${1}${2}${3}`),
-			urnPathPattern.ReplaceAllString(path, `${5}`)
+	if !strings.HasPrefix(strings.ToLower(path), "urn:") {
+		return "", path
+	}
+	if m := urnVersionSchemaPattern.FindStringSubmatch(path); len(m) == 3 {
+		return m[1], m[2]
+	}
+	if urnDotFallbackPattern.MatchString(path) {
+		return urnDotFallbackPattern.ReplaceAllString(path, `${1}${2}${3}`),
+			urnDotFallbackPattern.ReplaceAllString(path, `${5}`)
+	}
+	if lastColon := strings.LastIndexByte(path, ':'); lastColon > 4 && lastColon < len(path)-1 {
+		return path[:lastColon], path[lastColon+1:]
 	}
 	return "", path
 }

@@ -104,6 +104,10 @@ func applyPatchOperationForResource(resourceType ResourceType, op Operation, ele
 			}
 			for key, value := range values {
 				if extURN := matchingExtensionURN(resourceType, key); extURN != "" {
+					if value == nil {
+						deleteKeyFold(element, extURN)
+						continue
+					}
 					if extPatch, ok := value.(map[string]interface{}); ok {
 						existingExt, _ := lookupValueFold(element, extURN)
 						targetExt, ok := existingExt.(map[string]interface{})
@@ -121,6 +125,22 @@ func applyPatchOperationForResource(resourceType ResourceType, op Operation, ele
 						ensureSchemaListed(element, extURN)
 						continue
 					}
+				}
+				if strings.ContainsAny(key, ".:[") {
+					subPath := key
+					if !strings.ContainsAny(subPath, "[]") {
+						subPath = canonicalPatchPath(resourceType, subPath)
+					}
+					var err error
+					element, err = applyPatchOperationForResource(resourceType, Operation{
+						Op:    operation,
+						Path:  subPath,
+						Value: value,
+					}, element)
+					if err != nil {
+						return nil, err
+					}
+					continue
 				}
 				if existingKey, found := lookupKey(element, key); found && existingKey != key {
 					delete(element, existingKey)
@@ -221,6 +241,20 @@ func applySegments(operation, fullPath string, segments []patchSegment, schemaAt
 			case "replace":
 				current[field] = value
 			case "remove":
+				if value != nil {
+					if existingArr, isArr := current[field].([]interface{}); isArr {
+						remaining := removeMatchingPatchElements(existingArr, value, segAttr)
+						if len(remaining) == 0 {
+							delete(current, field)
+						} else {
+							current[field] = remaining
+						}
+						return nil
+					}
+					if current[field] == nil && hasSegAttr && segAttr.MultiValued {
+						return nil
+					}
+				}
 				delete(current, field)
 			}
 			return nil
@@ -575,6 +609,66 @@ func addPatchValue(current interface{}, value interface{}) interface{} {
 		return append(existing, values...)
 	}
 	return append(existing, value)
+}
+
+// removeMatchingPatchElements removes from existing every element matching one
+// of the target items in value (RFC 7644 3.5.2.2 / Microsoft Entra ID group
+// member removal with path:"members" and value:[{"value":"<id>"}]).
+func removeMatchingPatchElements(existing []interface{}, value interface{}, attr Attribute) []interface{} {
+	var targets []interface{}
+	if arr, ok := value.([]interface{}); ok {
+		targets = arr
+	} else {
+		targets = []interface{}{value}
+	}
+	remaining := make([]interface{}, 0, len(existing))
+	for _, elem := range existing {
+		matched := false
+		for _, target := range targets {
+			if patchElementMatchesTarget(elem, target, attr) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			remaining = append(remaining, elem)
+		}
+	}
+	return remaining
+}
+
+func patchElementMatchesTarget(elem, target interface{}, attr Attribute) bool {
+	targetMap, targetIsMap := target.(map[string]interface{})
+	elemMap, elemIsMap := elem.(map[string]interface{})
+	if targetIsMap && elemIsMap {
+		if len(targetMap) == 0 {
+			return false
+		}
+		for k, tv := range targetMap {
+			ev, found := lookupValueFold(elemMap, k)
+			if !found {
+				return false
+			}
+			sub, hasSub := FindAttribute(attr.SubAttributes, k)
+			if !patchScalarEqual(ev, tv, hasSub && sub.CaseExact) {
+				return false
+			}
+		}
+		return true
+	}
+	return patchScalarEqual(elem, target, attr.CaseExact)
+}
+
+func patchScalarEqual(a, b interface{}, caseExact bool) bool {
+	sa, aStr := a.(string)
+	sb, bStr := b.(string)
+	if aStr && bStr {
+		if caseExact {
+			return sa == sb
+		}
+		return strings.EqualFold(sa, sb)
+	}
+	return valuesEqual(a, b)
 }
 
 // opPathTopathArray splits a patch path into its segments, keeping a schema URN

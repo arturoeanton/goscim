@@ -166,3 +166,110 @@ func TestInMemoryMatchAndEqualitySeeds(t *testing.T) {
 		t.Errorf("EqualitySeeds = %#v, want %#v", seeds, wantSeeds)
 	}
 }
+
+func TestFilterToN1QLWithOptionsIdPPatterns(t *testing.T) {
+	opts := parser.FilterOptions{
+		Resolve: func(path string) string {
+			switch strings.ToLower(path) {
+			case "username", "urn:ietf:params:scim:schemas:core:2.0:user:username":
+				return "userName"
+			case "externalid":
+				return "externalId"
+			case "emails", "urn:ietf:params:scim:schemas:core:2.0:user.emails":
+				return "emails"
+			case "emails.value":
+				return "emails.value"
+			case "emails.type":
+				return "emails.type"
+			case "members":
+				return "members"
+			case "members.value":
+				return "members.value"
+			case "urn:ietf:params:scim:schemas:extension:enterprise:2.0:user:employeenumber":
+				return "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User.employeeNumber"
+			case "urn:ietf:params:scim:schemas:extension:enterprise:2.0:user:manager.value":
+				return "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User.manager.value"
+			default:
+				return path
+			}
+		},
+		IsCaseExact: func(path string) bool {
+			return strings.EqualFold(path, "externalId") || strings.EqualFold(path, "id")
+		},
+		IsMultiValued: func(path string) bool {
+			switch strings.ToLower(path) {
+			case "emails", "members", "urn:ietf:params:scim:schemas:core:2.0:user:emails":
+				return true
+			default:
+				return false
+			}
+		},
+	}
+
+	cases := []struct {
+		name       string
+		bucket     string
+		filter     string
+		wantWhere  string
+		wantParams []interface{}
+	}{
+		{
+			name:       "case-insensitive userName equality",
+			bucket:     "User",
+			filter:     `userName eq "AdeleV@contoso.com"`,
+			wantWhere:  "WHERE LOWER(`userName`) = LOWER($1)",
+			wantParams: []interface{}{"AdeleV@contoso.com"},
+		},
+		{
+			name:       "case-exact externalId equality",
+			bucket:     "User",
+			filter:     `externalId eq "entra-oid-123"`,
+			wantWhere:  "WHERE `externalId` = $1",
+			wantParams: []interface{}{"entra-oid-123"},
+		},
+		{
+			name:       "colon-delimited EnterpriseUser extension path",
+			bucket:     "User",
+			filter:     `urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:employeeNumber eq "EMP-9001"`,
+			wantWhere:  "WHERE LOWER(`urn:ietf:params:scim:schemas:extension:enterprise:2.0:User`.`employeeNumber`) = LOWER($1)",
+			wantParams: []interface{}{"EMP-9001"},
+		},
+		{
+			name:       "colon-delimited EnterpriseUser nested sub-attribute path",
+			bucket:     "User",
+			filter:     `urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:manager.value eq "mgr-1"`,
+			wantWhere:  "WHERE LOWER(`urn:ietf:params:scim:schemas:extension:enterprise:2.0:User`.`manager`.`value`) = LOWER($1)",
+			wantParams: []interface{}{"mgr-1"},
+		},
+		{
+			name:       "Okta/Keycloak dotted multi-valued emails.value filter",
+			bucket:     "User",
+			filter:     `emails.value eq "jane@example.com"`,
+			wantWhere:  "WHERE (ANY `_v0` IN `emails` SATISFIES LOWER(`_v0`.`value`) = LOWER($1) END)",
+			wantParams: []interface{}{"jane@example.com"},
+		},
+		{
+			name:       "Keycloak dotted multi-valued members.value filter",
+			bucket:     "Group",
+			filter:     `members.value eq "user-42"`,
+			wantWhere:  "WHERE (ANY `_v0` IN `members` SATISFIES LOWER(`_v0`.`value`) = LOWER($1) END)",
+			wantParams: []interface{}{"user-42"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			q, err := parser.FilterToN1QLWithOptions(tc.bucket, tc.filter, opts)
+			if err != nil {
+				t.Fatalf("FilterToN1QLWithOptions(%q) failed: %v", tc.filter, err)
+			}
+			wantPage := "SELECT * FROM `" + tc.bucket + "` " + tc.wantWhere
+			if q.Page != wantPage {
+				t.Errorf("Page =\n  %s\nwant:\n  %s", q.Page, wantPage)
+			}
+			if !reflect.DeepEqual(q.Params, tc.wantParams) {
+				t.Errorf("Params = %#v, want %#v", q.Params, tc.wantParams)
+			}
+		})
+	}
+}

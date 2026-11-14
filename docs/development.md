@@ -18,7 +18,7 @@ scim/
   store_couchbase.go          production storage + _default.scim_unique sentinels
   store_couchbase_tls.go      connection string and TLS settings
   store_memory.go             the test fake
-  auth.go auth_jwt.go auth_basic.go auth_claims.go
+  auth.go auth_jwt.go auth_bearer.go auth_basic.go auth_claims.go
   op_create.go op_read.go op_search.go op_replace.go op_update.go op_delete.go op_bulk.go
   groups_sync.go              Group.members ↔ User.groups synchronisation
   validate.go                 types, required, multiValued
@@ -93,10 +93,10 @@ Helpers in `scim/harness_test.go`: `newTestServer`, `newTestServerAs` for a
 specific authenticator, `do`, `serve`, `decode`, `requireStatus`,
 `requireSCIMError`, `testContext`.
 
-Anything touching the filter translation, bucket creation or query behaviour
-belongs in the integration suite as well. The fake does not evaluate filters,
-and that is the point — a second filter implementation would drift from the
-first.
+Anything touching the N1QL filter translation, bucket creation or Couchbase
+query behaviour belongs in the integration suite as well (`test/integration/`),
+even though `MemoryStore` evaluates filters in memory for unit conformance
+tests.
 
 ### A note on what a test is worth
 

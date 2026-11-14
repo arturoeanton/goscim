@@ -113,17 +113,15 @@ Search is N1QL. Because `SELECT * FROM \`Bucket\`` nests each row under the
 bucket name, the store unwraps that before returning. Driver errors for a
 missing document become `ErrNotFound`, so handlers never import gocb.
 
-**`MemoryStore`** backs the tests. It round-trips every document through JSON
-exactly as the driver does, so a `Meta` struct comes back as a map and integers
-come back as `float64`. Without that the fake would hide the type-assertion
-bugs production hits — which is not hypothetical: two such bugs in the 1.0
-audit were only visible because of it.
-
-The fake deliberately does **not** evaluate SCIM filters. Translating filters
-is the storage layer's concern, and pretending otherwise would mean a second
-filter implementation drifting from the first. A non-empty filter returns
-`ErrFilterUnsupported`, and filter behaviour is covered by the parser unit
-tests and by the integration suite against a real cluster.
+**`MemoryStore`** backs the unit tests. It round-trips every document through
+JSON exactly as the driver does, so a `Meta` struct comes back as a map and
+integers come back as `float64`. Without that the fake would hide the
+type-assertion bugs production hits — which is not hypothetical: two such bugs
+in the 1.0 audit were only visible because of it. `MemoryStore` evaluates SCIM
+filters in memory via `parser.CompileMatcherWithOptions` (honouring `Resolve`,
+`IsCaseExact`, and multi-valued slice traversal), while N1QL translation is
+independently verified by `scim/parser` unit tests and by the integration suite
+against a real Couchbase cluster.
 
 ## The filter parser
 
@@ -131,14 +129,17 @@ tests and by the integration suite against a real cluster.
 `github.com/antlr4-go/antlr/v4`. Everything in `scim/parser/` is generated
 except `scimfilter_listener_implement.go`, `errors.go`, and `eval.go`.
 
-`FilterToN1QL` walks the parse tree and emits N1QL: `eq` becomes `=`,
-`co`/`sw`/`ew` become `LIKE ... ESCAPE "\\"` with wildcards applied to the
-bound value, `pr` becomes `IS NOT NULL`, and complex array filters
-(`emails[type eq "work"]`, `emails[type eq "work"].value co "@corp.com"`)
-become quantified `(ANY \`_v0\` IN \`emails\` SATISFIES ... END)` predicates.
-Separately, `eval.go` (`CompileMatcher`, `Match`, `EqualitySeeds`) evaluates the
-same ANTLR parse tree against decoded JSON maps in memory so `PATCH` can resolve
-value-selection paths (`emails[type eq "work"].value`) without N1QL.
+`FilterToN1QLWithOptions` walks the parse tree and emits N1QL: `eq` becomes `=`
+(or `LOWER(attr) = LOWER($n)` when `caseExact: false`), `co`/`sw`/`ew` become
+`LIKE ... ESCAPE "\\"` (folded with `LOWER(...)` when `caseExact: false`) with
+wildcards applied to the bound value, `pr` becomes `IS NOT NULL`, and both
+bracketed array filters (`emails[type eq "work"]`,
+`emails[type eq "work"].value co "@corp.com"`) and dotted multi-valued paths
+(`emails.value eq "x"`, `members.value eq "u1"`) become quantified
+`(ANY \`_v0\` IN \`emails\` SATISFIES ... END)` predicates.
+Separately, `eval.go` (`CompileMatcherWithOptions`, `Match`, `EqualitySeeds`)
+evaluates the same ANTLR parse tree against decoded JSON maps in memory for
+`PATCH` value-selection paths and `MemoryStore.Search`.
 
 Two properties matter more than the mechanism:
 
@@ -160,9 +161,10 @@ against the schema through a `NameResolver` and quoted with backticks doubled.
 ## Authentication and authorization
 
 `Authenticator` turns a request into a `Principal` — a subject and a set of
-roles — and the middleware publishes it for the handlers. Three
-implementations: JWT against a JWKS, HTTP Basic, and an explicit anonymous
-mode.
+roles — and the middleware publishes it for the handlers. Four
+implementations: JWT against a JWKS (`SCIM_AUTH=jwt`), static opaque Bearer
+tokens (`SCIM_AUTH=bearer`), HTTP Basic (`SCIM_AUTH=basic`), and an explicit
+anonymous mode (`SCIM_AUTH=none`).
 
 Authorization is per attribute rather than per endpoint, and runs on both
 sides:

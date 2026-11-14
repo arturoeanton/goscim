@@ -29,18 +29,20 @@ type ResourceType struct {
 
 // Attribute is of SCIM
 type Attribute struct {
-	Name          string      `json:"name"`
-	Type          string      `json:"type"`
-	MultiValued   bool        `json:"multiValued"`
-	Description   string      `json:"description"`
-	Required      bool        `json:"required"`
-	CaseExact     bool        `json:"caseExact"`
-	Mutability    string      `json:"mutability"`
-	Returned      string      `json:"returned"`
-	Uniqueness    string      `json:"uniqueness"`
-	Writer        *[]string   `json:"$writer"`
-	Read          *[]string   `json:"$reader"`
-	SubAttributes []Attribute `json:"subAttributes"`
+	Name            string      `json:"name"`
+	Type            string      `json:"type"`
+	MultiValued     bool        `json:"multiValued"`
+	Description     string      `json:"description"`
+	Required        bool        `json:"required"`
+	CaseExact       bool        `json:"caseExact"`
+	Mutability      string      `json:"mutability"`
+	Returned        string      `json:"returned"`
+	Uniqueness      string      `json:"uniqueness"`
+	CanonicalValues []string    `json:"canonicalValues,omitempty"`
+	ReferenceTypes  []string    `json:"referenceTypes,omitempty"`
+	Writer          *[]string   `json:"$writer"`
+	Read            *[]string   `json:"$reader"`
+	SubAttributes   []Attribute `json:"subAttributes"`
 }
 
 // Schema is of SCIM

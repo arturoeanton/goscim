@@ -1,5 +1,72 @@
 # Changelog
 
+## 1.3.0
+
+Microsoft Entra ID, Okta, and Keycloak compatibility release.
+
+### Added
+
+- **Static Bearer token authentication (`SCIM_AUTH=bearer`)**: supports opaque
+  shared-secret tokens (`SCIM_BEARER_TOKEN` / `SCIM_BEARER_TOKENS`,
+  `SCIM_BEARER_SUBJECT`, `SCIM_BEARER_ROLES`) for Microsoft Entra ID's Secret
+  Token provisioning mode and Okta's API Token mode, comparing every configured
+  token in constant time via SHA-256 without early exit and advertising
+  `oauthbearertoken` in `/ServiceProviderConfig`.
+- **Extended OAuth 2.0 / OIDC claim extraction (`SCIM_AUTH=jwt`)**:
+  - Reads `scp` (Microsoft Entra ID v2.0 space-delimited scopes and Okta scope
+    arrays) and `realm_access.roles` (Keycloak realm roles) by default alongside
+    `roles`, `groups`, `entitlements`, and `scope`.
+  - Supports dotted nested claim paths and comma-separated claim lists in
+    `SCIM_JWT_ROLES_CLAIM` (such as `resource_access.goscim-service.roles` for
+    Keycloak client roles) while preserving literal claim keys containing dots.
+  - Falls back from `sub` through `client_id`, `cid`, `azp`, `oid`, and `appid`
+    for client-credentials and service-account tokens that omit `sub`.
+- **RFC 7643 §3.1 `externalId` common attribute**: supported end to end across
+  create, read, replace, patch, attribute projection (`attributes` /
+  `excludedAttributes`), `sortBy`, and case-exact (`caseExact: true`) search
+  filtering in both Couchbase N1QL and `MemoryStore`.
+- **RFC 7643 §4.1.2 `addresses.primary` sub-attribute**: added to the shipped
+  `urn:ietf:params:scim:schemas:core:2.0:User` schema so default address
+  mappings from Microsoft Entra ID and Okta validate cleanly.
+- **Explicit JSON `null` clearing**: setting optional attributes, sub-attributes,
+  or non-required schema extensions (`EnterpriseUser: null`) to `null` on `POST`
+  or `PUT` unassigns them cleanly while continuing to reject `null` on
+  `required: true` attributes.
+- **Microsoft Entra ID provisioning dialect support**:
+  - Expands dotted (`name.givenName`) and colon-URN
+    (`urn:...:EnterpriseUser:department`) keys inside pathless `PATCH` `add` and
+    `replace` value maps, automatically attaching referenced extension URNs to
+    `schemas`.
+  - Supports element-selective removal on `PATCH remove` when `path` names a
+    multi-valued attribute without a bracket filter and `value` supplies the
+    elements to remove (`{"op": "Remove", "path": "members", "value":
+    [{"value": "<id>"}]}`).
+  - Normalises legacy stringified booleans (`"True"` / `"False"`) on `boolean`
+    attributes and stringified `EnterpriseUser.manager` IDs (`"manager": "<id>"`
+    to `{"value": "<id>"}`).
+- **IdP conformance and integration suites**: added `scim/compat_entra_test.go`,
+  `scim/compat_okta_test.go`, `scim/compat_keycloak_test.go`,
+  `test/integration/idp_compat_test.go`, `docs/idp-compatibility.md`, and
+  `httpexamples/idp_{entra,okta,keycloak}.http`.
+
+### Changed
+
+- **Case-aware and multi-valued SCIM filter engine**:
+  - `FilterToN1QLWithOptions` folds case (`LOWER(...)`) on string comparisons
+    when the schema declares `caseExact: false` (such as `userName`) while
+    preserving exact comparisons when `caseExact: true` (such as `id` and
+    `externalId`).
+  - Dotted paths over multi-valued complex attributes (`emails.value eq "..."`,
+    `members.value eq "..."`) now expand to quantified `ANY _v0 IN ... SATISFIES
+    ... END` predicates in N1QL and traverse slices in `MemoryStore`.
+  - `SplitURNPath` accepts both `:` (RFC 7644 §3.4.2.2 / §3.10) and `.` URN
+    delimiters across `filter`, `sortBy`, `PATCH`, and projection, and strips
+    core schema URN prefixes (`urn:ietf:params:scim:schemas:core:2.0:User:userName`)
+    to top-level attributes.
+- **Discovery completeness**: `/scim/v2/Schemas` now exposes `canonicalValues`
+  and `referenceTypes` when declared, and `/scim/v2/Schemas/{id}` resolves
+  schema URNs case-insensitively.
+
 ## 1.2.0
 
 Bulk provisioning and referential group membership release.

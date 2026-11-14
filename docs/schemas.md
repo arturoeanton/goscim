@@ -46,9 +46,14 @@ Standard, from RFC 7643 §7.
 | `mutability` | `readWrite`, `readOnly`, `immutable`, `writeOnly` | See below |
 | `returned` | `default`, `always`, `never`, `request` | Honoured on every resource response alongside `attributes` and `excludedAttributes` |
 | `uniqueness` | `none`, `server`, `global` | `server` and `global` are enforced atomically via KV sentinel claims; a duplicate is `409` |
-| `caseExact` | `true`, `false` | `false` folds case when enforcing uniqueness and evaluating `PATCH` value-selection filters; `true` compares exact bytes |
+| `caseExact` | `true`, `false` | `false` folds case in search filters (`LOWER(...)`), uniqueness enforcement, and `PATCH` value-selection filters; `true` compares exact bytes |
+| `canonicalValues` | array of strings | Exposed on `/Schemas` discovery responses |
+| `referenceTypes` | array of strings | Exposed on `/Schemas` discovery responses |
 
 `binary` and `reference` are accepted as JSON strings without further checking.
+Common attributes from RFC 7643 §3.1 (`id`, `externalId`, `meta`) are supported
+on every resource type without repeating them in each schema file; `id` and
+`externalId` are `caseExact: true`.
 
 ### mutability
 
@@ -146,12 +151,12 @@ Their attributes live in an object keyed by the URN:
 validated like any other schema.
 
 Filters, `sortBy`, attribute projection and `PATCH` paths reach extension
-attributes by prefixing the URN (using `.` in filters/`sortBy`, and either `.`
-or `:` per RFC 7644 §3.10 in `PATCH` paths and `attributes` / `excludedAttributes`):
+attributes by prefixing the URN with either `:` (RFC 7644 §3.4.2.2 / §3.10) or
+`.`:
 
 ```
+urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department eq "Sales"
 urn:ietf:params:scim:schemas:extension:enterprise:2.0:User.department eq "Sales"
-urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department
 ```
 
 ## Validation is a whitelist

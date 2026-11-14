@@ -26,7 +26,7 @@ docker compose up -d --build
 
 `SCIM_ADMIN_USER` / `SCIM_ADMIN_PASSWORD` are **Couchbase credentials only** — they never protect the HTTP API.
 
-The HTTP API is protected by `SCIM_AUTH`, which is **required**: `jwt` (RFC 9068 access tokens validated against `SCIM_JWT_JWKS_URL` / `SCIM_JWT_ISSUER` / `SCIM_JWT_AUDIENCE`), `basic` (`SCIM_BASIC_USERS=user:password:role1,role2;...`, development only), or `none` (`SCIM_ANONYMOUS_ROLES=...`). An unset `SCIM_AUTH` is a startup error rather than an open server.
+The HTTP API is protected by `SCIM_AUTH`, which is **required**: `jwt` (RFC 9068 access tokens validated against `SCIM_JWT_JWKS_URL` / `SCIM_JWT_ISSUER` / `SCIM_JWT_AUDIENCE`), `bearer` (static opaque secret tokens via `SCIM_BEARER_TOKEN` or `SCIM_BEARER_TOKENS` for Entra ID Secret Token / Okta API Token), `basic` (`SCIM_BASIC_USERS=user:password:role1,role2;...`, development only), or `none` (`SCIM_ANONYMOUS_ROLES=...`). An unset `SCIM_AUTH` is a startup error rather than an open server.
 
 A live Couchbase is only needed to *run* the server. Tests wire a `MemoryStore` into `scim.DB` instead — see "Storage" below.
 
@@ -50,7 +50,7 @@ Adding a resource type = drop a schema JSON + a resourceType JSON (+ optional bu
 Handlers never touch Couchbase directly. They go through the `Store` interface in `scim/store.go`, held in the package global `scim.DB`:
 
 - `store_couchbase.go` — production. `InitDB()` connects and installs it. One bucket per resource type, one document per resource keyed by UUID in `_default._default`, plus a dedicated `_default.scim_unique` collection holding atomic KV sentinel claims (`u:<sha256>`) for `CreateUnique`, `ReplaceUnique` (with document CAS), and `RemoveUnique`. Because search uses `SELECT * FROM \`Bucket\``, N1QL nests each row under the bucket name, so the store unwraps `item[q.Bucket]` before returning. Driver errors for missing documents are translated to `ErrNotFound`, which the handlers map to 404 — handlers must not import gocb.
-- `store_memory.go` — the test fake. It round-trips every document through JSON exactly like the real driver, so `Meta` structs come back as maps and integers as `float64`; without that the fake would hide the type-assertion panics that production hits. It enforces the same mutex-guarded `CreateUnique`/`ReplaceUnique`/`RemoveUnique` contract, and deliberately returns `ErrFilterUnsupported` for a non-empty search filter — N1QL filter translation is covered by `scim/parser` and `test/integration`.
+- `store_memory.go` — the test fake. It round-trips every document through JSON exactly like the real driver, so `Meta` structs come back as maps and integers as `float64`; without that the fake would hide the type-assertion panics that production hits. It enforces the same mutex-guarded `CreateUnique`/`ReplaceUnique`/`RemoveUnique` contract and evaluates SCIM filters in memory via `parser.CompileMatcherWithOptions` (honouring `ResolveName`, `IsCaseExact`, and `IsMultiValued`); N1QL filter translation is additionally covered by `scim/parser` and `test/integration`.
 
 `SearchQuery.SortBy` carries a raw SCIM attribute path; translating it (quoting, N1QL) is the store's job, not the handler's.
 
@@ -89,7 +89,7 @@ Update (`PATCH`) supports both plain paths and RFC 7644 §3.5.2 value-selection 
 
 ### Authentication and observability
 
-`scim/auth.go` defines the `Authenticator` interface and the gin middleware that publishes a `Principal` (subject plus roles) into the request context. `NewRouter` puts every resource endpoint and `POST /.search` behind `AuditMiddleware`, `LimitBody`, and `Authenticate`; `/healthz`, `/readyz` (`scim/health.go`), and `/scim/v2/{ServiceProviderConfig,ResourceTypes,Schemas}` (`scim/discovery.go`) stay unauthenticated. Implementations live in `auth_jwt.go` (JWKS-backed across RSA `RS256`/`384`/`512`, NIST EC `ES256`/`384`/`512` validated via `crypto/ecdh`, and Ed25519 OKP `EdDSA` with strict curve/algorithm binding), `auth_basic.go`, and `AnonymousAuthenticator`.
+`scim/auth.go` defines the `Authenticator` interface and the gin middleware that publishes a `Principal` (subject plus roles) into the request context. `NewRouter` puts every resource endpoint and `POST /.search` behind `AuditMiddleware`, `LimitBody`, and `Authenticate`; `/healthz`, `/readyz` (`scim/health.go`), and `/scim/v2/{ServiceProviderConfig,ResourceTypes,Schemas}` (`scim/discovery.go`) stay unauthenticated. Implementations live in `auth_jwt.go` (JWKS-backed across RSA `RS256`/`384`/`512`, NIST EC `ES256`/`384`/`512` validated via `crypto/ecdh`, and Ed25519 OKP `EdDSA` with strict curve/algorithm binding, plus Entra `scp`, Okta `scp`/`cid`, and Keycloak `realm_access.roles` / dotted `SCIM_JWT_ROLES_CLAIM`), `auth_bearer.go` (constant-time SHA-256 static opaque tokens), `auth_basic.go`, and `AnonymousAuthenticator`.
 
 `scim/audit.go` emits structured `log/slog` audit events (`SCIM_AUDIT_LOG=json|text|off`) with `X-Request-Id` correlation (`RequestID()`).
 
@@ -112,6 +112,6 @@ Prometheus metrics are not implemented.
 - Handlers return `func(c *gin.Context)` closures, not plain handlers.
 - Responses go through `scim/response.go`: `writeSCIM` sets the `application/scim+json` media type (gin only fills in `Content-Type` when it is unset, so setting it first wins), and `entityTag`/`checkPrecondition` implement `ETag`, `If-Match` and `If-None-Match` over `meta.version`. Errors go through `MakeError` / `MakeTypedError`, the latter carrying the RFC 7644 3.12 `scimType` keyword.
 - Config folder paths default to `"config"` (`SCIM_CONFIG_DIR` overrides both the schema/resourceType directory and `FolderBucketSetting`).
-- Manual API testing lives in `httpexamples/*.http` (REST Client format: `create.http`, `filter.http`, `bulk.http`).
-- Documentation is English-only, in `docs/`, and is authoritative: `getting-started`, `installation`, `configuration`, `api`, `schemas`, `architecture`, `security`, `operations`, `development`. The six partial translations were removed in 1.0 because every one had fallen behind the code.
+- Manual API testing lives in `httpexamples/*.http` (REST Client format: `create.http`, `filter.http`, `bulk.http`, `idp_entra.http`, `idp_okta.http`, `idp_keycloak.http`).
+- Documentation is English-only, in `docs/`, and is authoritative: `getting-started`, `idp-compatibility`, `installation`, `configuration`, `api`, `schemas`, `architecture`, `security`, `operations`, `development`. The six partial translations were removed in 1.0 because every one had fallen behind the code.
 - A behaviour change needs the docs updated in the same commit. Several statements in this file and in `docs/` were false for months because a fix landed without them.

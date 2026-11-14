@@ -42,7 +42,7 @@ On the first run the server creates one bucket per resource type — `User`,
 `Group`, `Element` — and a primary index on each, then listens on `:8080`.
 
 `SCIM_AUTH` has no default. The server refuses to start until you choose
-`jwt`, `basic`, or `none`. An earlier version served every endpoint
+`jwt`, `bearer`, `basic`, or `none`. An earlier version served every endpoint
 unauthenticated, and that was not something to leave as an accident.
 
 ## 3. Ask the server what it supports

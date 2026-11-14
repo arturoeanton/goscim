@@ -155,12 +155,21 @@ func TestMemoryStoreSearchOrderAndPagination(t *testing.T) {
 	}
 }
 
-// The fake does not evaluate filters: it must say so out loud rather than
-// silently return wrong results.
-func TestMemoryStoreRejectsFilters(t *testing.T) {
+func TestMemoryStoreEvaluatesFilters(t *testing.T) {
 	s := NewMemoryStore()
-	if _, _, err := s.Search(SearchQuery{Bucket: "Element", Filter: `name eq "x"`}); !errors.Is(err, ErrFilterUnsupported) {
-		t.Errorf("Search with a filter = %v, want ErrFilterUnsupported", err)
+	_ = s.Upsert("Element", "1", map[string]interface{}{"id": "1", "name": "Alpha"})
+	_ = s.Upsert("Element", "2", map[string]interface{}{"id": "2", "name": "Beta"})
+
+	total, docs, err := s.Search(SearchQuery{Bucket: "Element", Filter: `name eq "ALPHA"`, Limit: 10})
+	if err != nil {
+		t.Fatalf("Search with filter failed: %v", err)
+	}
+	if total != 1 || len(docs) != 1 || docs[0]["id"] != "1" {
+		t.Errorf("Search with filter = (%d, %v), want id 1", total, docs)
+	}
+
+	if _, _, err := s.Search(SearchQuery{Bucket: "Element", Filter: `name eq`}); !errors.Is(err, ErrInvalidFilter) {
+		t.Errorf("Search with malformed filter = %v, want ErrInvalidFilter", err)
 	}
 }
 

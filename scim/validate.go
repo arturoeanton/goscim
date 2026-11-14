@@ -81,6 +81,19 @@ func ValidateSchemas(c *gin.Context, element map[string]interface{}, schemaNameC
 		canonicaliseKey(element, schemaExtension.Schema)
 	}
 
+	if rawExtID, hasExtID := canonicaliseKey(element, "externalId"); hasExtID {
+		if rawExtID == nil {
+			delete(element, "externalId")
+		} else {
+			strID, ok := rawExtID.(string)
+			if !ok {
+				MakeTypedError(c, http.StatusBadRequest, "invalidValue", "externalId should be string")
+				return false, nil
+			}
+			element["externalId"] = strID
+		}
+	}
+
 	var flag bool
 	schema, _ := LookupSchema(schemaNameCore)
 	flag, element = validateSchema(c, element, schema, false)
@@ -89,7 +102,11 @@ func ValidateSchemas(c *gin.Context, element map[string]interface{}, schemaNameC
 	}
 	for _, schemaExtension := range schemas {
 		raw, present := canonicaliseKey(element, schemaExtension.Schema)
-		if !present {
+		if !present || raw == nil {
+			if raw == nil {
+				delete(element, schemaExtension.Schema)
+				removeSchemaFromList(element, schemaExtension.Schema)
+			}
 			// An extension the resource type declares as optional may simply
 			// be absent. Only a required one has to be there.
 			if schemaExtension.Required {
@@ -116,6 +133,21 @@ func ValidateSchemas(c *gin.Context, element map[string]interface{}, schemaNameC
 	return true, element
 }
 
+func removeSchemaFromList(element map[string]interface{}, schemaID string) {
+	declared, ok := element["schemas"].([]interface{})
+	if !ok {
+		return
+	}
+	kept := make([]interface{}, 0, len(declared))
+	for _, item := range declared {
+		if name, isStr := item.(string); isStr && strings.EqualFold(name, schemaID) {
+			continue
+		}
+		kept = append(kept, item)
+	}
+	element["schemas"] = kept
+}
+
 func validateSchema(c *gin.Context, element map[string]interface{}, schema Schema, isExtension bool) (bool, map[string]interface{}) {
 	if dup, ok := hasDuplicateCaseKeys(element); ok {
 		MakeTypedError(c, http.StatusBadRequest, "invalidSyntax",
@@ -133,7 +165,7 @@ func validateSchema(c *gin.Context, element map[string]interface{}, schema Schem
 	}
 	for key := range element {
 		if !isExtension {
-			if strings.EqualFold(key, "schemas") {
+			if strings.EqualFold(key, "schemas") || strings.EqualFold(key, "externalId") {
 				continue
 			}
 			// An extension object hangs off the resource under its own URN.
@@ -191,12 +223,21 @@ func validateSchema(c *gin.Context, element map[string]interface{}, schema Schem
 // validated recursively).
 func validateAttribute(c *gin.Context, element map[string]interface{}, attribute Attribute) (bool, map[string]interface{}) {
 	raw, present := canonicaliseKey(element, attribute.Name)
-	if !present {
+	if !present || raw == nil {
+		if raw == nil {
+			delete(element, attribute.Name)
+		}
 		if attribute.Required {
 			MakeTypedError(c, http.StatusBadRequest, "invalidValue", attribute.Name+" is required")
 			return false, nil
 		}
 		return true, element
+	}
+	if !attribute.MultiValued && strings.EqualFold(attribute.Type, "complex") && strings.EqualFold(attribute.Name, "manager") {
+		if s, ok := raw.(string); ok && strings.TrimSpace(s) == "" && !attribute.Required {
+			delete(element, attribute.Name)
+			return true, element
+		}
 	}
 
 	if attribute.MultiValued {
@@ -242,11 +283,22 @@ func validateValue(c *gin.Context, value interface{}, attribute Attribute, path 
 		return v, true
 
 	case "boolean":
-		v, ok := value.(bool)
-		if !ok {
+		switch v := value.(type) {
+		case bool:
+			return v, true
+		case string:
+			// Microsoft Entra ID's legacy provisioning engine serialises
+			// booleans as "True" / "False" in PATCH payloads.
+			if strings.EqualFold(strings.TrimSpace(v), "true") {
+				return true, true
+			}
+			if strings.EqualFold(strings.TrimSpace(v), "false") {
+				return false, true
+			}
+			return invalidValue(c, path+" should be boolean")
+		default:
 			return invalidValue(c, path+" should be boolean")
 		}
-		return v, true
 
 	case "decimal":
 		v, ok := value.(float64)
@@ -281,6 +333,12 @@ func validateValue(c *gin.Context, value interface{}, attribute Attribute, path 
 
 	case "complex":
 		sub, ok := value.(map[string]interface{})
+		if !ok && !attribute.MultiValued && strings.EqualFold(attribute.Name, "manager") && hasSubAttribute(attribute, "value") {
+			if strID, isStr := value.(string); isStr && strings.TrimSpace(strID) != "" {
+				sub = map[string]interface{}{"value": strID}
+				ok = true
+			}
+		}
 		if !ok {
 			return invalidValue(c, path+" should be complex")
 		}

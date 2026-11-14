@@ -107,6 +107,12 @@ func RootPostSearch(c *gin.Context) {
 			ResolveName: func(path string) string {
 				return CanonicalAttributePath(rt, path)
 			},
+			IsCaseExact: func(path string) bool {
+				return AttributeIsCaseExact(rt, path)
+			},
+			IsMultiValued: func(path string) bool {
+				return AttributeIsMultiValuedComplex(rt, path)
+			},
 			SortBy:         bucketSortBy,
 			SortDescending: params.SortDescending,
 			Offset:         0,
@@ -184,6 +190,12 @@ func executeResourceSearch(c *gin.Context, resourceType ResourceType, params sea
 		Filter: params.Filter,
 		ResolveName: func(path string) string {
 			return CanonicalAttributePath(resourceType, path)
+		},
+		IsCaseExact: func(path string) bool {
+			return AttributeIsCaseExact(resourceType, path)
+		},
+		IsMultiValued: func(path string) bool {
+			return AttributeIsMultiValuedComplex(resourceType, path)
 		},
 		SortBy:         sortBy,
 		SortDescending: params.SortDescending,

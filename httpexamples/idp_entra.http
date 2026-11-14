@@ -1,0 +1,162 @@
+@host=http://127.0.0.1:8080/scim/v2
+@token=entra-secret-token-example
+
+### 1. Pre-create lookup by userName (case-insensitive)
+GET {{host}}/Users?filter=userName%20eq%20%22ADELEV@CONTOSO.ONMICROSOFT.COM%22 HTTP/1.1
+Authorization: Bearer {{token}}
+Accept: application/scim+json
+
+### 2. Provision manager user
+POST {{host}}/Users HTTP/1.1
+Authorization: Bearer {{token}}
+Content-Type: application/scim+json
+
+{
+  "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+  "externalId": "7c942a21-5f49-4158-9146-c507619a5552",
+  "userName": "MeganB@contoso.onmicrosoft.com",
+  "displayName": "Megan Bowen",
+  "active": true
+}
+
+### 3. Provision Microsoft Entra ID gallery user (externalId, addresses.primary, EnterpriseUser)
+POST {{host}}/Users HTTP/1.1
+Authorization: Bearer {{token}}
+Content-Type: application/scim+json
+
+{
+  "schemas": [
+    "urn:ietf:params:scim:schemas:core:2.0:User",
+    "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"
+  ],
+  "externalId": "4f8b9a10-2e3d-4c5b-8a9f-0123456789ab",
+  "userName": "AdeleV@contoso.onmicrosoft.com",
+  "active": true,
+  "displayName": "Adele Vance",
+  "title": "Product Marketing Manager",
+  "name": {
+    "givenName": "Adele",
+    "familyName": "Vance",
+    "formatted": "Adele Vance"
+  },
+  "emails": [
+    { "value": "adelev@contoso.com", "type": "work", "primary": true }
+  ],
+  "addresses": [
+    {
+      "type": "work",
+      "streetAddress": "One Microsoft Way",
+      "locality": "Redmond",
+      "region": "WA",
+      "postalCode": "98052",
+      "country": "US",
+      "primary": true
+    }
+  ],
+  "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User": {
+    "employeeNumber": "EMP-10042",
+    "department": "Marketing",
+    "costCenter": "CC-410"
+  }
+}
+
+### 4. Lookup by case-exact externalId
+GET {{host}}/Users?filter=externalId%20eq%20%224f8b9a10-2e3d-4c5b-8a9f-0123456789ab%22 HTTP/1.1
+Authorization: Bearer {{token}}
+Accept: application/scim+json
+
+### 5. Lookup by colon-delimited EnterpriseUser attribute
+GET {{host}}/Users?filter=urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:employeeNumber%20eq%20%22EMP-10042%22 HTTP/1.1
+Authorization: Bearer {{token}}
+Accept: application/scim+json
+
+### 6. Entra multi-op PATCH (value-selection filter, colon-URN keys, stringified boolean)
+@userId=REPLACE_WITH_USER_ID
+@managerId=REPLACE_WITH_MANAGER_ID
+PATCH {{host}}/Users/{{userId}} HTTP/1.1
+Authorization: Bearer {{token}}
+Content-Type: application/scim+json
+
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+  "Operations": [
+    {
+      "op": "Replace",
+      "path": "emails[type eq \"work\"].value",
+      "value": "adele.vance@contoso.com"
+    },
+    {
+      "op": "Add",
+      "value": {
+        "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department": "Cloud Marketing",
+        "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:manager": "{{managerId}}",
+        "name.givenName": "Adele Miriam",
+        "active": "False"
+      }
+    }
+  ]
+}
+
+### 7. Provision Entra security group (?excludedAttributes=members)
+POST {{host}}/Groups?excludedAttributes=members HTTP/1.1
+Authorization: Bearer {{token}}
+Content-Type: application/scim+json
+
+{
+  "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+  "externalId": "grp-9c81ab12-0011-4522-9a10-bb1122334455",
+  "displayName": "Contoso-Marketing"
+}
+
+### 8. Add members to group
+@groupId=REPLACE_WITH_GROUP_ID
+PATCH {{host}}/Groups/{{groupId}} HTTP/1.1
+Authorization: Bearer {{token}}
+Content-Type: application/scim+json
+
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+  "Operations": [
+    {
+      "op": "Add",
+      "path": "members",
+      "value": [
+        { "value": "{{userId}}" },
+        { "value": "{{managerId}}" }
+      ]
+    }
+  ]
+}
+
+### 9. Remove a single member (legacy Entra Remove with value array)
+PATCH {{host}}/Groups/{{groupId}} HTTP/1.1
+Authorization: Bearer {{token}}
+Content-Type: application/scim+json
+
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+  "Operations": [
+    {
+      "op": "Remove",
+      "path": "members",
+      "value": [
+        { "value": "{{userId}}" }
+      ]
+    }
+  ]
+}
+
+### 10. Remove a single member (modern ?aadOptscim062020 bracket filter)
+PATCH {{host}}/Groups/{{groupId}} HTTP/1.1
+Authorization: Bearer {{token}}
+Content-Type: application/scim+json
+
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+  "Operations": [
+    {
+      "op": "Remove",
+      "path": "members[value eq \"{{managerId}}\"]"
+    }
+  ]
+}

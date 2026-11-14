@@ -17,10 +17,6 @@ import (
 // map, and Go structs handed to Upsert come back as map[string]interface{}
 // with float64 numbers, so the fake cannot mask type-assertion bugs that the
 // real store would expose.
-//
-// It deliberately does not implement SCIM filter evaluation: translating
-// filters is the storage layer's concern and the N1QL translation is covered by
-// the scim/parser tests. A non-empty filter returns ErrFilterUnsupported.
 type MemoryStore struct {
 	mu      sync.RWMutex
 	buckets map[string]map[string]map[string]interface{}
@@ -232,21 +228,27 @@ func (s *MemoryStore) checkClaimAvailableLocked(bucket, selfID string, claim Uni
 	return nil
 }
 
-// Search implements Store for the empty filter only. A malformed filter is
-// still rejected as such, so the fake exercises the same handler path as the
-// Couchbase store.
+// Search implements Store, evaluating SCIM filters in memory via parser.CompileMatcherWithOptions.
 func (s *MemoryStore) Search(q SearchQuery) (int, []map[string]interface{}, error) {
+	var matcher func(map[string]interface{}) bool
 	if q.Filter != "" {
-		if err := parser.Validate(q.Filter); err != nil {
+		var err error
+		matcher, err = parser.CompileMatcherWithOptions(q.Filter, parser.EvalOptions{
+			Resolve:     q.ResolveName,
+			IsCaseExact: q.IsCaseExact,
+		})
+		if err != nil {
 			return 0, nil, fmt.Errorf("%w: %s", ErrInvalidFilter, err)
 		}
-		return 0, nil, ErrFilterUnsupported
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	all := make([]map[string]interface{}, 0, len(s.buckets[q.Bucket]))
 	for _, doc := range s.buckets[q.Bucket] {
+		if matcher != nil && !matcher(doc) {
+			continue
+		}
 		copied, err := cloneDoc(doc)
 		if err != nil {
 			return 0, nil, err

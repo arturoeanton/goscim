@@ -363,6 +363,10 @@ func recordPatchedWriteOnlyPaths(resourceType ResourceType, op Operation, touche
 			}
 			continue
 		}
+		if strings.ContainsAny(key, ".:[") {
+			recordPatchedWriteOnlyPaths(resourceType, Operation{Op: op.Op, Path: key, Value: val}, touched)
+			continue
+		}
 		canonical := CanonicalAttributePath(resourceType, key)
 		touched[strings.ToLower(canonical)] = true
 	}

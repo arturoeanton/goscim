@@ -55,7 +55,11 @@ Answers `201 Created` with the resource, a `Location` header holding its URI,
 and an `ETag` holding its revision.
 
 The server owns `id` and `meta`; anything the client sends for them is
-discarded. Attributes the caller may not write are refused; attributes the
+discarded. Common `externalId` (`RFC 7643 §3.1`, `caseExact: true`) is accepted
+on every resource type. Setting an optional attribute, sub-attribute, or
+non-required schema extension to JSON `null` treats it as unassigned rather
+than rejecting the payload; setting a `required: true` attribute to `null`
+answers `400`. Attributes the caller may not write are refused; attributes the
 caller may not read are absent from the response.
 
 ## Read
@@ -137,8 +141,13 @@ the previous one from storage, since `meta.created` is not the client's to set.
 
 - `add` appends when the target is an array, and sets otherwise.
 - An operation with no `path` applies the members of its object value to the
-  resource. Several identity providers send this form.
-- `remove` requires a path.
+  resource, including dotted (`"name.givenName"`) and colon-delimited URN
+  (`"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department"`)
+  keys sent by Microsoft Entra ID and Okta.
+- `remove` requires a path. When `path` names a multi-valued attribute without
+  a bracket filter and `value` supplies an array of elements to remove
+  (`{"op": "remove", "path": "members", "value": [{"value": "<id>"}]}`), only
+  matching array elements are removed rather than deleting the entire array.
 - **Value-selection paths** (`emails[type eq "work"]`,
   `emails[type eq "work"].value`, `members[value eq "..."]`) are supported on
   `add`, `replace` and `remove`:
@@ -153,6 +162,9 @@ the previous one from storage, since `meta.created` is not the client's to set.
 - Both `urn:...:Schema:attr` (RFC 7644 §3.10) and `urn:...:Schema.attr` are
   accepted in `PATCH` paths; patching a declared extension attribute attaches
   its schema URI to `"schemas"` automatically if absent.
+- Legacy Microsoft Entra ID stringified booleans (`"True"` / `"False"`) on
+  `boolean` attributes and stringified `EnterpriseUser.manager` IDs
+  (`"manager": "<id>"`) are normalised to JSON booleans and `{"value": "<id>"}`.
 
 Both funnel through the same validation as a create: the result is checked
 against the schema, so a patch cannot leave a resource that violates it.
@@ -357,22 +369,29 @@ than interpolated.
 
 ```
 userName eq "bjensen"
+externalId eq "00u1a2b3c4d5e6f7g8h9"
 name.familyName co "O"
 title pr and userType eq "Employee"
+emails.value eq "bjensen@example.com"
 emails[type eq "work" and primary eq true]
 emails[type eq "work"].value ew "@example.com"
 not emails[type eq "home"]
 userType eq "Employee" and (emails co "example.com" or emails co "example.org")
 meta.lastModified gt "2011-05-13T04:42:34Z"
-urn:ietf:params:scim:schemas:extension:enterprise:2.0:User.department eq "Sales"
+urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department eq "Sales"
 ```
 
 String values are double-quoted; numbers and booleans are bare. Attribute names
-and schema URNs are case-insensitive.
+and schema URNs (delimited with either `:` per RFC 7644 §3.4.2.2 / §3.10 or `.`)
+are case-insensitive. String value comparisons fold case (`LOWER(...)`) when the
+attribute's schema sets `caseExact: false` (for example `userName`), and match
+exact bytes when `caseExact: true` (for example `id` and `externalId`).
 
-Complex array value filters (`attr[subFilter]` and `attr[subFilter].subAttr op value`
-or `attr[subFilter].subAttr pr`) translate to N1QL quantified `ANY ... IN ...
-SATISFIES ... END` predicates with bound positional parameters.
+Both bracketed array value filters (`attr[subFilter]` and
+`attr[subFilter].subAttr op value`) and dotted multi-valued sub-attribute
+paths (`emails.value eq "..."`, `members.value eq "..."`) translate to N1QL
+quantified `ANY ... IN ... SATISFIES ... END` predicates with bound positional
+parameters.
 
 `%` and `_` inside a `co`, `sw` or `ew` value are literal characters, not
 wildcards.

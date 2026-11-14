@@ -63,6 +63,33 @@ What is checked, and why each matters:
   client can obtain anywhere into a valid credential here.
 - **Expiry**, required to be present. A token with no `exp` is refused.
 
+### Static Bearer token — IdP secret-token connectors
+
+For identity providers whose SCIM 2.0 provisioning client authenticates with a
+pre-shared opaque bearer secret rather than OAuth 2.0 JWTs (such as Microsoft
+Entra ID's **Secret Token** mode and Okta's **API Token** mode):
+
+```bash
+export SCIM_AUTH=bearer
+export SCIM_BEARER_TOKEN='<high-entropy-secret>'
+export SCIM_BEARER_SUBJECT='entra-provisioning'
+export SCIM_BEARER_ROLES='admin'
+```
+
+Or with multiple active tokens during secret rotation:
+
+```bash
+export SCIM_AUTH=bearer
+export SCIM_BEARER_TOKENS='entra-2026q4:<token1>:admin;entra-2026q3:<token0>:admin'
+```
+
+Every configured token is hashed with SHA-256 and compared in constant time
+without early exit, so response latency discloses neither prefix matches nor
+how many tokens are configured. Because a static token has no `exp` of its own,
+use high-entropy secrets (at least 32 random bytes), restrict source egress IP
+ranges at your proxy where possible, and rotate periodically via
+`SCIM_BEARER_TOKENS`.
+
 ### Basic — development
 
 ```bash
@@ -89,11 +116,16 @@ Every request is served. The server logs a warning at startup. With no
 
 ### Roles
 
-Roles drive the `$reader` and `$writer` checks and come from the token.
-RFC 9068 §2.2.3.1 reuses SCIM's own `roles`, `groups` and `entitlements`
-claims from RFC 7643 §4.1.2, so those are read, along with `scope`.
-`SCIM_JWT_ROLES_CLAIM` names an additional claim for issuers that use their
-own.
+Roles drive the `$reader` and `$writer` checks and come from the token (or the
+configured `SCIM_BEARER_ROLES` / `SCIM_BEARER_TOKENS` entry under
+`SCIM_AUTH=bearer`). RFC 9068 §2.2.3.1 reuses SCIM's own `roles`, `groups` and
+`entitlements` claims from RFC 7643 §4.1.2, so those are read alongside `scope`,
+`scp` (Microsoft Entra ID v2.0 and Okta), and `realm_access.roles` (Keycloak).
+`SCIM_JWT_ROLES_CLAIM` names an additional claim — or comma-separated list of
+claims, supporting dotted nested paths such as
+`resource_access.goscim-service.roles` — for issuers that use their own. The
+audit principal `subject` is read from `sub`, falling back through `client_id`,
+`cid`, `azp`, `oid`, and `appid` for client-credentials tokens that omit `sub`.
 
 Each is accepted as a list of strings, a list of `{"value": "..."}` objects, or
 a space-delimited string, because all three occur in practice.
@@ -226,7 +258,7 @@ Be explicit about these before deploying:
 
 Before exposing this to anything real:
 
-- [ ] `SCIM_AUTH=jwt`, with issuer and audience set to your own values
+- [ ] `SCIM_AUTH=jwt` (with issuer and audience set to your own values) or `SCIM_AUTH=bearer` (with high-entropy secrets)
 - [ ] TLS terminated in front, HTTP not reachable directly
 - [ ] `SCIM_TRUSTED_PROXIES` naming your proxy, not the default
 - [ ] `SCIM_COUCHBASE_TLS_SKIP_VERIFY` unset, `SCIM_COUCHBASE_CA_CERT` set

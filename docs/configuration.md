@@ -12,11 +12,15 @@ starting unauthenticated by omission.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `SCIM_AUTH` | *(required)* | `jwt`, `basic`, or `none` |
+| `SCIM_AUTH` | *(required)* | `jwt`, `bearer`, `basic`, or `none` |
 | `SCIM_JWT_JWKS_URL` | — | Required for `jwt`. Where the issuer publishes its signing keys (RSA `RS256`/`384`/`512`, EC `ES256`/`384`/`512`, OKP `EdDSA`) |
 | `SCIM_JWT_ISSUER` | — | Required for `jwt`. The `iss` a token must carry |
 | `SCIM_JWT_AUDIENCE` | — | Required for `jwt`. The `aud` a token must carry |
-| `SCIM_JWT_ROLES_CLAIM` | — | An extra claim to read roles from, for issuers that use their own |
+| `SCIM_JWT_ROLES_CLAIM` | — | Optional extra claim (or comma-separated list of claims, including dotted nested paths such as `resource_access.goscim-service.roles`) to read roles from alongside `roles`, `groups`, `entitlements`, `scope`, `scp`, and `realm_access.roles` |
+| `SCIM_BEARER_TOKEN` | — | Single opaque secret token for `bearer` (Microsoft Entra ID Secret Token / Okta API Token) |
+| `SCIM_BEARER_SUBJECT` | `bearer-client` | Audit principal `subject` paired with `SCIM_BEARER_TOKEN` |
+| `SCIM_BEARER_ROLES` | *(empty)* | Comma-separated roles paired with `SCIM_BEARER_TOKEN` |
+| `SCIM_BEARER_TOKENS` | — | Multi-token list for `bearer` (e.g. zero-downtime secret rotation): `subject:token:role1,role2;other:token2:role3` |
 | `SCIM_BASIC_USERS` | — | Required for `basic`. `user:password:role1,role2;other:password:role3` |
 | `SCIM_ANONYMOUS_ROLES` | *(empty)* | Roles given to every caller under `none` |
 

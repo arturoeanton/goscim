@@ -28,6 +28,7 @@ func enforceWriteAccess(c *gin.Context, resourceType ResourceType, incoming, exi
 			"duplicate attribute "+strconv.Quote(dup))
 		return false
 	}
+	canonicaliseKey(incoming, "externalId")
 	roles := currentRoles(c)
 
 	coreSchema, _ := LookupSchema(resourceType.Schema)
@@ -224,6 +225,12 @@ func enforcePatchOperationWriteAccess(c *gin.Context, resourceType ResourceType,
 						return false
 					}
 				}
+			}
+			continue
+		}
+		if strings.ContainsAny(key, ".:[") {
+			if !checkPatchPathWritable(c, roles, resourceType, key) {
+				return false
 			}
 		}
 	}

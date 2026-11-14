@@ -43,6 +43,8 @@ type SearchQuery struct {
 	// ResolveName maps an attribute path to the spelling its schema declares.
 	// Optional: without it the filter is translated verbatim.
 	ResolveName    func(path string) string
+	IsCaseExact    func(path string) bool
+	IsMultiValued  func(path string) bool
 	SortBy         string
 	SortDescending bool
 	Offset         int

@@ -154,7 +154,7 @@ func DiscoverySchemas(c *gin.Context) {
 
 // DiscoverySchema is GET /Schemas/{id}.
 func DiscoverySchema(c *gin.Context) {
-	schema, ok := Schemas[c.Param("id")]
+	schema, ok := LookupSchema(c.Param("id"))
 	if !ok {
 		MakeError(c, http.StatusNotFound, "no schema "+c.Param("id"))
 		return
@@ -196,16 +196,18 @@ type describedSchema struct {
 }
 
 type describedAttribute struct {
-	Name          string               `json:"name"`
-	Type          string               `json:"type"`
-	MultiValued   bool                 `json:"multiValued"`
-	Description   string               `json:"description,omitempty"`
-	Required      bool                 `json:"required"`
-	CaseExact     bool                 `json:"caseExact"`
-	Mutability    string               `json:"mutability,omitempty"`
-	Returned      string               `json:"returned,omitempty"`
-	Uniqueness    string               `json:"uniqueness,omitempty"`
-	SubAttributes []describedAttribute `json:"subAttributes,omitempty"`
+	Name            string               `json:"name"`
+	Type            string               `json:"type"`
+	MultiValued     bool                 `json:"multiValued"`
+	Description     string               `json:"description,omitempty"`
+	Required        bool                 `json:"required"`
+	CaseExact       bool                 `json:"caseExact"`
+	Mutability      string               `json:"mutability,omitempty"`
+	Returned        string               `json:"returned,omitempty"`
+	Uniqueness      string               `json:"uniqueness,omitempty"`
+	CanonicalValues []string             `json:"canonicalValues,omitempty"`
+	ReferenceTypes  []string             `json:"referenceTypes,omitempty"`
+	SubAttributes   []describedAttribute `json:"subAttributes,omitempty"`
 }
 
 func describeSchema(schema Schema) describedSchema {
@@ -226,16 +228,18 @@ func describeAttributes(attributes []Attribute) []describedAttribute {
 	described := make([]describedAttribute, 0, len(attributes))
 	for _, attribute := range attributes {
 		described = append(described, describedAttribute{
-			Name:          attribute.Name,
-			Type:          attribute.Type,
-			MultiValued:   attribute.MultiValued,
-			Description:   attribute.Description,
-			Required:      attribute.Required,
-			CaseExact:     attribute.CaseExact,
-			Mutability:    attribute.Mutability,
-			Returned:      attribute.Returned,
-			Uniqueness:    attribute.Uniqueness,
-			SubAttributes: describeAttributes(attribute.SubAttributes),
+			Name:            attribute.Name,
+			Type:            attribute.Type,
+			MultiValued:     attribute.MultiValued,
+			Description:     attribute.Description,
+			Required:        attribute.Required,
+			CaseExact:       attribute.CaseExact,
+			Mutability:      attribute.Mutability,
+			Returned:        attribute.Returned,
+			Uniqueness:      attribute.Uniqueness,
+			CanonicalValues: attribute.CanonicalValues,
+			ReferenceTypes:  attribute.ReferenceTypes,
+			SubAttributes:   describeAttributes(attribute.SubAttributes),
 		})
 	}
 	return described

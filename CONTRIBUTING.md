@@ -32,13 +32,13 @@ helpers, and how to regenerate the filter parser.
 Most gaps recorded in [RELEASE-1.0.md](RELEASE-1.0.md) (`POST /Bulk`, value
 filters in search and `PATCH`, `attributes` / `excludedAttributes`,
 `POST /.search`, password hashing, `/healthz` and `/readyz`, structured audit
-logging, EC/EdDSA JWKS keys, atomic uniqueness, and `Group.members` ↔
-`User.groups` synchronisation) have since landed in 1.1.0 and 1.2.0. Useful
-areas still open:
+logging, EC/EdDSA JWKS keys, atomic uniqueness, `Group.members` ↔ `User.groups`
+synchronisation, and Microsoft Entra ID / Okta / Keycloak conformance) have
+since landed in 1.1.0, 1.2.0, and 1.3.0. Useful areas still open:
 
 - Prometheus metrics endpoint (`/metrics`)
-- Interoperability testing and field reports against Okta, Microsoft Entra ID,
-  Keycloak and PingFederate
+- Interoperability testing and field reports against additional identity
+  providers (such as PingFederate, OneLogin, and Google Workspace)
 - Secondary Couchbase index definitions for large deployments
 
 Issues labelled `good first issue` and `help wanted` are also a reasonable
@@ -87,9 +87,10 @@ one asserted a `200` from `sortBy` without checking the ordering, another
 exercised the JWT library's type safety rather than the algorithm allow-list it
 was named after. A green suite is not evidence until you have seen it go red.
 
-Anything touching the filter translation, bucket creation or query behaviour
-also belongs in the integration suite. The in-memory store deliberately does
-not evaluate filters, so unit tests cannot cover that path.
+Anything touching the N1QL filter translation, bucket creation or Couchbase
+query behaviour also belongs in the integration suite (`test/integration/`),
+even though `MemoryStore` evaluates filters in memory for unit conformance
+suites.
 
 ### Style
 

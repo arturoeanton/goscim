@@ -4,8 +4,8 @@
 
 | Version | Supported |
 |---|---|
-| 1.2.x | ✅ |
-| < 1.2 | ❌ |
+| 1.3.x | ✅ |
+| < 1.3 | ❌ |
 
 Anything before 1.0 was development code. It served every endpoint without
 authentication and had several injection paths reachable from an ordinary

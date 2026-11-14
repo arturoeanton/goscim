@@ -517,6 +517,15 @@
           "mutability" : "readWrite",
           "returned" : "default",
           "uniqueness" : "none"
+        },
+        {
+          "name" : "primary",
+          "type" : "boolean",
+          "multiValued" : false,
+          "description" : "A Boolean value indicating the 'primary' or preferred attribute value for this attribute, e.g., the preferred mailing address. The primary attribute value 'true' MUST appear no more than once.",
+          "required" : false,
+          "mutability" : "readWrite",
+          "returned" : "default"
         }
       ],
       "mutability" : "readWrite",
