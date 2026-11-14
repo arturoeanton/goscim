@@ -6,56 +6,75 @@
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/arturoeanton/goscim)](https://github.com/arturoeanton/goscim/releases)
 
-A **SCIM 2.0** server in Go, backed by Couchbase.
+A schema-driven **SCIM 2.0** (RFC 7643 / RFC 7644) server in Go with pluggable
+persistence (**Couchbase**, embedded **SQLite**, or **in-memory**), an embedded
+**HTMX Web Console & Live Traffic Inspector**, **Prometheus metrics**, **signed
+CloudEvents webhooks**, and **B2B multi-tenancy**.
 
 Resource types, schemas and per-attribute permissions are JSON files, so adding
 a resource type takes no code. Authentication is required, filter values are
 bound rather than interpolated into queries, and permissions are enforced per
 attribute on both read and write.
 
-> Using PostgreSQL instead of Couchbase? See the sister project
+> Using PostgreSQL instead of Couchbase or SQLite? See the sister project
 > [go-vorpal-scim](https://github.com/arturoeanton/go-vorpal-scim).
 
-## Quick start
+## Try it in 10 seconds (zero dependencies)
 
-With Docker Compose (starts Couchbase, initialises the cluster, and starts GoSCIM):
-
-```bash
-git clone https://github.com/arturoeanton/goscim.git && cd goscim
-docker compose up -d --build
-```
-
-Or running the binary directly against a local Couchbase container:
+Install the single static binary (Linux or macOS) or run via Go / Docker, and
+launch `-demo` mode:
 
 ```bash
-docker run -d --name goscim-db -p 8091-8094:8091-8094 -p 11210:11210 \
-  couchbase:community-7.1.1
-# Set up the cluster at http://localhost:8091 with the credentials below.
+# Option A: one-line binary install (macOS / Linux, amd64 & arm64)
+curl -fsSL https://raw.githubusercontent.com/arturoeanton/goscim/main/scripts/install.sh | sh
+goscim -demo
 
-export SCIM_AUTH=basic                       # how clients authenticate
-export SCIM_BASIC_USERS='admin:secret:admin'
-export SCIM_ADMIN_USER=Administrator         # how the server reaches Couchbase
-export SCIM_ADMIN_PASSWORD=password
-export SCIM_COUCHBASE_TLS=false              # local cluster, no certificate
+# Option B: with Go installed
+go install github.com/arturoeanton/goscim@latest
+goscim -demo
 
-go run .
+# Option C: with Docker (no local toolchain required)
+docker run --rm -p 8080:8080 ghcr.io/arturoeanton/goscim:latest -demo
 ```
+
+Open **<http://127.0.0.1:8080/ui>** to explore the HTMX directory console,
+compile SCIM filters to N1QL live, inspect traffic, or run the built-in IdP
+conformance suite:
 
 ```bash
-curl -s -u admin:secret -X POST http://localhost:8080/scim/v2/Users \
-  -H 'Content-Type: application/scim+json' \
-  -d '{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],
-       "userName":"jane.doe@example.com",
-       "emails":[{"value":"jane.doe@example.com","type":"work","primary":true}],
-       "active":true}'
+# Query seeded Users
+curl -s -H "Authorization: Bearer demo-secret-token" \
+  http://127.0.0.1:8080/scim/v2/Users | jq .
+
+# Run live RFC + Entra ID + Okta + Keycloak conformance checks
+goscim conformance -url http://127.0.0.1:8080/scim/v2 -token demo-secret-token
 ```
 
-`201 Created`, with the resource in the body, its URI in `Location` and its
-revision in `ETag`.
+## Production & Persistence Modes
 
-`SCIM_AUTH` has no default: the server refuses to start until you pick `jwt`,
-`bearer`, `basic`, or `none`. Full walkthrough in
-[getting started](docs/getting-started.md), and IdP setup in
+- **Single-node persistent (`SCIM_STORE=sqlite`)**: pure-Go embedded SQLite in
+  WAL mode (`CGO_ENABLED=0`) — durable single-file storage with zero external
+  infrastructure:
+  ```bash
+  SCIM_STORE=sqlite SCIM_SQLITE_PATH=./goscim.db \
+  SCIM_AUTH=bearer SCIM_BEARER_TOKEN='<secret>' \
+  goscim -ui
+  ```
+- **Clustered Couchbase (`SCIM_STORE=couchbase`, default)**: starts Couchbase,
+  initialises buckets, `_default.scim_unique` KV sentinels, and secondary GSI
+  indexes automatically:
+  ```bash
+  git clone https://github.com/arturoeanton/goscim.git && cd goscim
+  docker compose up -d --build
+  ```
+- **Keycloak + GoSCIM turnkey lab**:
+  ```bash
+  docker compose -f docker-compose.keycloak.yml up -d --build
+  ```
+- **Kubernetes Helm Chart**: `helm install goscim ./charts/goscim` (see
+  [installation](docs/installation.md)).
+
+Full walkthrough in [getting started](docs/getting-started.md), and IdP setup in
 [identity provider compatibility](docs/idp-compatibility.md).
 
 ## What it does
@@ -65,45 +84,33 @@ revision in `ETag`.
   (`attributes` / `excludedAttributes`)** over RFC 7643/7644, including
   `externalId` (`caseExact: true`) and explicit JSON `null` clearing
 - **Identity provider compatibility**: verified against **Microsoft Entra ID**,
-  **Okta**, and **Keycloak** provisioning flows (colon-delimited URN filters and
-  patches, case-insensitive `userName` / case-exact `externalId` N1QL queries,
-  dotted multi-valued filters such as `emails.value eq "..."`, legacy and
-  `?aadOptscim062020` Entra `PATCH` dialects, Okta full `PUT` updates)
+  **Okta**, and **Keycloak** provisioning flows, plus a built-in CLI & UI
+  verifier (`goscim conformance -profile all|rfc|entra|okta|keycloak`)
+- **Three storage backends behind one `Store` contract**:
+  - `couchbase` — clustered KV + N1QL with automatic schema-derived secondary
+    GSI indexes and linearizable `_default.scim_unique` sentinel locks
+  - `sqlite` — pure-Go single-file ACID persistence (`WAL` mode, static binary)
+  - `memory` — zero-dependency ephemeral store for instant demos and CI
+- **Embedded HTMX Web Console (`/ui`, `-ui` / `SCIM_UI=true`)**: offline-ready
+  directory manager, interactive SCIM-to-N1QL playground, `ngrok`-style live
+  request/response inspector (with automatic secret scrubbing), and one-click
+  conformance runner
+- **Multi-tenancy for B2B SaaS**: `/tenants/:tenant/scim/v2/...` URL namespaces
+  and credential-bound tenant isolation (`SCIM_BEARER_TOKENS` `@tenant`,
+  `SCIM_BEARER_TENANT`, `SCIM_JWT_TENANT_CLAIM`)
+- **Signed outbound webhooks**: asynchronous CloudEvents 1.0 dispatcher
+  (`SCIM_WEBHOOK_URLS`) with `X-SCIM-Signature-256` HMAC-SHA256 signing,
+  per-resource causal ordering, and exponential-backoff retries
+- **Prometheus metrics (`GET /metrics`)**: request counters, latency histograms,
+  auth failure and 409 uniqueness conflict counters, webhook outcomes, and store
+  health gauge (`goscim_store_up`), optionally guarded by `SCIM_METRICS_TOKEN`
 - **Group membership synchronisation**: `Group.members` changes automatically
-  materialise `User.groups` (`direct` and `indirect` nested memberships, cycle-safe)
-  and clean up dangling references when users or groups are deleted
-- **Complex array value filters**: `emails[type eq "work"]` and
-  `emails[type eq "work"].value` in both search (`GET` / `POST /.search`) and
-  `PATCH` (`add`, `replace`, `remove`), compatible with Microsoft Entra ID and Okta
-- **Discovery**: `ServiceProviderConfig`, `ResourceTypes`, `Schemas`, derived
-  from the running code rather than a file that can drift from it
-- **Authentication**: OAuth 2.0 access tokens (RFC 9068) verified against a
-  JWKS (`RS256`/`384`/`512`, `ES256`/`384`/`512`, `EdDSA`, with Entra `scp`,
-  Okta `scp`/`cid`, and Keycloak `realm_access.roles` / `resource_access`),
-  static opaque Bearer tokens (`SCIM_AUTH=bearer`) for Entra Secret Token and
-  Okta API Token connectors, HTTP Basic for development, or an explicit
-  anonymous mode
-- **Authorization per attribute**: `$reader` / `$writer` role lists alongside
-  SCIM's own `mutability`, `returned` and atomic `uniqueness`
-- **Structured audit logging**: `log/slog` audit trail (`SCIM_AUDIT_LOG`) with
-  `X-Request-Id` correlation, caller `subject` / `roles`, action and outcome
-- **Password hashing**: `password` is hashed with Argon2id by default
-  (`SCIM_PASSWORD_MODE`: `argon2id`, `bcrypt`, `reject`, or `plain`)
-- **Concurrency control**: `ETag` with `If-Match` and `If-None-Match`, plus
-  atomic Couchbase KV sentinel locks closing uniqueness TOCTOU races
-- **Health and readiness**: `/healthz` and `/readyz` (probing Couchbase KV and
-  Query services), plus a distroless multi-stage `Dockerfile`
-- **Schema-driven everything**: add a resource type by dropping in two JSON
-  files and restarting
-
-## What it does not do
-
-Worth knowing before you invest time:
-
-- Prometheus metrics endpoint
-
-The [1.0 audit](RELEASE-1.0.md) records why it is open and roughly what it
-would take.
+  materialise `User.groups` (`direct` and `indirect` nested memberships,
+  cycle-safe) and clean up dangling references on delete
+- **Authentication & per-attribute RBAC**: OAuth 2.0 JWTs against JWKS
+  (`RS256`/`384`/`512`, `ES256`/`384`/`512`, `EdDSA`), constant-time opaque
+  Bearer tokens, HTTP Basic, `$reader` / `$writer` attribute role lists,
+  Argon2id password hashing, and structured `log/slog` audit events
 
 ## Adding a resource type
 
@@ -131,9 +138,10 @@ Two files, no code:
 }
 ```
 
-Restart, and `/scim/v2/Devices` exists with CRUD, `GET` and `POST /.search`,
-automatic inclusion in root `POST /scim/v2/.search` and `POST /scim/v2/Bulk`,
-its own bucket, and `serialNumber` enforced unique and refused on update.
+Restart, and `/scim/v2/Devices` (plus `/tenants/:tenant/scim/v2/Devices`) exists
+with CRUD, `GET` and `POST /.search`, automatic inclusion in root
+`POST /.search` and `POST /Bulk`, its own bucket and secondary indexes, and
+`serialNumber` enforced unique and refused on update.
 
 ## Filters
 
@@ -160,40 +168,42 @@ that fails to parse is refused rather than translated.
 |---|---|
 | [Getting started](docs/getting-started.md) | A running server and your first user |
 | [IdP compatibility](docs/idp-compatibility.md) | Connecting Microsoft Entra ID, Okta, and Keycloak |
-| [Installation](docs/installation.md) | Couchbase, building, deploying |
+| [UI, webhooks & multi-tenancy](docs/ui-and-webhooks.md) | HTMX console, CloudEvents, tenants, conformance CLI |
+| [Installation](docs/installation.md) | Binary installer, Docker, Helm, SQLite, Couchbase |
 | [Configuration](docs/configuration.md) | Every variable and config file |
 | [API reference](docs/api.md) | Endpoints, payloads, status codes, filters |
 | [Schemas and permissions](docs/schemas.md) | Attributes, and who may read or write them |
 | [Architecture](docs/architecture.md) | How it fits together, and why |
 | [Security](docs/security.md) | Threat model and hardening checklist |
-| [Operations](docs/operations.md) | Signals, consistency, troubleshooting |
+| [Operations](docs/operations.md) | Metrics, signals, consistency, troubleshooting |
 | [Development](docs/development.md) | Building, testing, code layout |
 | [Changelog](CHANGELOG.md) | Releases and breaking changes |
 
 ## Requirements
 
-Go 1.26+ (toolchain 1.27.4+) to build. Couchbase 7.x, Community or Enterprise, with the data,
-query and index services.
+Precompiled static binaries (`linux`/`darwin`/`windows`, `amd64`/`arm64`) need
+no external runtime when running with `SCIM_STORE=memory` or `SCIM_STORE=sqlite`.
+Building from source requires Go 1.26+ (toolchain 1.27.4+). Clustered mode uses
+Couchbase 7.x, Community or Enterprise, with the data, query, and index
+services.
 
 ## Development
 
 ```bash
+make demo         # launch instant demo mode with HTMX console on :8080/ui
 make check        # build, vet, unit suite with the race detector
 make integration  # the suite against a real Couchbase, in a container
 make cover        # coverage
 ```
 
-The unit suite runs the real router over an in-memory store; the integration
-suite starts Couchbase in a container and drives the same server through it.
-Contributions are welcome — see [CONTRIBUTING](CONTRIBUTING.md), and
-[RELEASE-1.0](RELEASE-1.0.md) for what is open.
+Contributions are welcome — see [CONTRIBUTING](CONTRIBUTING.md).
 
 ## Status
 
-1.3.0. Both the unit conformance suites and the Couchbase integration suite
-verify the full request path across RFC 7643/7644 and the provisioning dialects
-of Microsoft Entra ID, Okta, and Keycloak. Reports from field deployments remain
-welcome.
+1.4.0. Both the unit conformance suites (over `MemoryStore` and `SQLiteStore`)
+and the Couchbase integration suite verify the full request path across RFC
+7643/7644, multi-tenant isolation, and the provisioning dialects of Microsoft
+Entra ID, Okta, and Keycloak.
 
 ## License
 

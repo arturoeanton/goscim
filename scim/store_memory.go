@@ -101,12 +101,33 @@ func (s *MemoryStore) Remove(bucket, id string) error {
 	return nil
 }
 
+func memoryOwnerToken(bucket, id string) string {
+	return bucket + "\x00" + id
+}
+
+func splitMemoryOwnerToken(token string) (bucket, id string) {
+	idx := strings.IndexByte(token, 0)
+	if idx < 0 {
+		return "", token
+	}
+	return token[:idx], token[idx+1:]
+}
+
+func memoryUniqueScope(bucket string, claim UniqueClaim) string {
+	if claim.Global {
+		_, phys := SplitScopedBucket(bucket)
+		return "__global__:" + phys
+	}
+	return bucket
+}
+
 // CreateUnique implements Store.
 func (s *MemoryStore) CreateUnique(bucket, id string, doc map[string]interface{}, claims []UniqueClaim) error {
 	stored, err := cloneDoc(doc)
 	if err != nil {
 		return err
 	}
+	owner := memoryOwnerToken(bucket, id)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.ensureLocked(bucket)
@@ -120,7 +141,9 @@ func (s *MemoryStore) CreateUnique(bucket, id string, doc map[string]interface{}
 	}
 	s.buckets[bucket][id] = stored
 	for _, claim := range claims {
-		s.unique[bucket][claim.LockID] = id
+		scope := memoryUniqueScope(bucket, claim)
+		s.ensureLocked(scope)
+		s.unique[scope][claim.LockID] = owner
 	}
 	return nil
 }
@@ -131,6 +154,7 @@ func (s *MemoryStore) ReplaceUnique(bucket, id string, doc map[string]interface{
 	if err != nil {
 		return err
 	}
+	owner := memoryOwnerToken(bucket, id)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.ensureLocked(bucket)
@@ -149,18 +173,22 @@ func (s *MemoryStore) ReplaceUnique(bucket, id string, doc map[string]interface{
 	}
 	s.buckets[bucket][id] = stored
 	for _, old := range oldClaims {
-		if s.unique[bucket][old.LockID] == id {
-			delete(s.unique[bucket], old.LockID)
+		scope := memoryUniqueScope(bucket, old)
+		if s.unique[scope][old.LockID] == owner {
+			delete(s.unique[scope], old.LockID)
 		}
 	}
 	for _, claim := range newClaims {
-		s.unique[bucket][claim.LockID] = id
+		scope := memoryUniqueScope(bucket, claim)
+		s.ensureLocked(scope)
+		s.unique[scope][claim.LockID] = owner
 	}
 	return nil
 }
 
 // RemoveUnique implements Store.
 func (s *MemoryStore) RemoveUnique(bucket, id string, claims []UniqueClaim) error {
+	owner := memoryOwnerToken(bucket, id)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.buckets[bucket][id]; !ok {
@@ -168,8 +196,9 @@ func (s *MemoryStore) RemoveUnique(bucket, id string, claims []UniqueClaim) erro
 	}
 	delete(s.buckets[bucket], id)
 	for _, claim := range claims {
-		if s.unique[bucket][claim.LockID] == id {
-			delete(s.unique[bucket], claim.LockID)
+		scope := memoryUniqueScope(bucket, claim)
+		if s.unique[scope][claim.LockID] == owner {
+			delete(s.unique[scope], claim.LockID)
 		}
 	}
 	s.releaseOwnerLocksLocked(bucket, id)
@@ -186,43 +215,68 @@ func (s *MemoryStore) ensureLocked(bucket string) {
 }
 
 func (s *MemoryStore) releaseOwnerLocksLocked(bucket, ownerID string) {
-	locks := s.unique[bucket]
-	for lockID, owner := range locks {
-		if owner == ownerID {
-			delete(locks, lockID)
+	owner := memoryOwnerToken(bucket, ownerID)
+	_, phys := SplitScopedBucket(bucket)
+	for _, scope := range []string{bucket, "__global__:" + phys} {
+		locks := s.unique[scope]
+		for lockID, heldBy := range locks {
+			if heldBy == owner {
+				delete(locks, lockID)
+			}
 		}
 	}
 }
 
 func (s *MemoryStore) checkClaimAvailableLocked(bucket, selfID string, claim UniqueClaim) error {
-	if owner, taken := s.unique[bucket][claim.LockID]; taken && owner != selfID {
-		if _, alive := s.buckets[bucket][owner]; alive {
+	selfOwner := memoryOwnerToken(bucket, selfID)
+	scope := memoryUniqueScope(bucket, claim)
+	s.ensureLocked(scope)
+	if owner, taken := s.unique[scope][claim.LockID]; taken && owner != selfOwner {
+		ownerBucket, ownerID := splitMemoryOwnerToken(owner)
+		if ownerBucket == "" {
+			ownerBucket = bucket
+		}
+		if _, alive := s.buckets[ownerBucket][ownerID]; alive {
 			return &UniqueConflictError{Attribute: claim.Attribute}
 		}
-		delete(s.unique[bucket], claim.LockID)
+		delete(s.unique[scope], claim.LockID)
 	}
 	wanted, err := normalizeValue(claim.RawValue)
 	if err != nil {
 		return err
 	}
 	path := opPathTopathArray(claim.Attribute)
-	for existingID, doc := range s.buckets[bucket] {
-		if existingID == selfID {
+	_, targetPhys := SplitScopedBucket(bucket)
+	for bName, docs := range s.buckets {
+		if strings.HasPrefix(bName, "__global__:") {
 			continue
 		}
-		existingVal := resolvePath(doc, path)
-		if existingVal == nil {
+		if claim.Global {
+			_, candidatePhys := SplitScopedBucket(bName)
+			if candidatePhys != targetPhys {
+				continue
+			}
+		} else if bName != bucket {
 			continue
 		}
-		if !claim.CaseExact {
-			sA, okA := existingVal.(string)
-			sB, okB := wanted.(string)
-			if okA && okB && strings.EqualFold(sA, sB) {
+		for existingID, doc := range docs {
+			if bName == bucket && existingID == selfID {
+				continue
+			}
+			existingVal := resolvePath(doc, path)
+			if existingVal == nil {
+				continue
+			}
+			if !claim.CaseExact {
+				sA, okA := existingVal.(string)
+				sB, okB := wanted.(string)
+				if okA && okB && strings.EqualFold(sA, sB) {
+					return &UniqueConflictError{Attribute: claim.Attribute}
+				}
+			}
+			if existingVal == wanted {
 				return &UniqueConflictError{Attribute: claim.Attribute}
 			}
-		}
-		if existingVal == wanted {
-			return &UniqueConflictError{Attribute: claim.Attribute}
 		}
 	}
 	return nil

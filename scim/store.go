@@ -22,6 +22,7 @@ type UniqueClaim struct {
 	Key       string
 	RawValue  interface{}
 	CaseExact bool
+	Global    bool
 }
 
 // UniqueConflictError reports that a unique attribute value is already owned by

@@ -1,0 +1,49 @@
+{{define "inspector.html"}}
+{{template "head" .}}
+<div class="app-shell">
+  {{template "sidebar" .}}
+  <main class="main-area">
+    <div class="page-header">
+      <div>
+        <h1>Live SCIM Traffic Inspector</h1>
+        <p>Real-time stream of incoming SCIM 2.0 API requests and responses (passwords and secrets automatically scrubbed).</p>
+      </div>
+      <div class="header-actions">
+        <button type="button" class="btn"
+          hx-post="/ui/inspector/clear{{.TenantQuery}}"
+          hx-target="#inspector-tbody"
+          hx-swap="outerHTML">Clear Buffer</button>
+      </div>
+    </div>
+
+    <div class="split-inspector">
+      <div class="card">
+        <h2>Recent Exchanges (auto-refreshes every 2s)</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Seq</th>
+                <th>Method</th>
+                <th>Path</th>
+                <th>Tenant</th>
+                <th>Status</th>
+                <th style="text-align:right">Latency</th>
+              </tr>
+            </thead>
+            {{template "inspector_rows" .}}
+          </table>
+        </div>
+      </div>
+
+      <div id="inspector-detail">
+        <div class="card" style="color:var(--text-muted)">
+          Select any SCIM request row on the left to inspect its correlation ID, principal, tenant, and redacted JSON payloads.
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>
+{{end}}

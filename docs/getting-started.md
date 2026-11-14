@@ -1,9 +1,37 @@
 # Getting started
 
-A running server and your first user. Ten minutes, assuming Docker and Go 1.26
-or later.
+Two paths: **10 seconds** with `-demo` (no database, embedded Web Console, seeded users and groups), or **10 minutes** against Couchbase.
 
-## 1. Start Couchbase
+## Quick try in 10 seconds (zero dependencies)
+
+Install the prebuilt binary (or run `go run . -demo` from a checkout):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/arturoeanton/goscim/main/scripts/install.sh | sh
+goscim -demo
+```
+
+`-demo` starts an in-memory store (`SCIM_STORE=memory`) using the embedded default schemas, seeds sample `User` and nested `Group` resources (`jane.doe@example.com`, `ada@example.com`, `grace@example.com`, `Engineering`, `Platform`), enables `SCIM_AUTH=bearer` (`SCIM_BEARER_TOKEN=demo-secret-token`), and serves the HTMX Web Console at <http://localhost:8080/ui>.
+
+Verify RFC + IdP conformance from another terminal:
+
+```bash
+goscim conformance -url http://localhost:8080/scim/v2 -token demo-secret-token
+```
+
+Want persistence in a single file without running a cluster? Switch to SQLite:
+
+```bash
+SCIM_STORE=sqlite SCIM_SQLITE_PATH=./goscim.db \
+SCIM_AUTH=bearer SCIM_BEARER_TOKEN=demo-secret-token SCIM_BEARER_ROLES=admin \
+goscim -ui
+```
+
+---
+
+## Full cluster setup with Couchbase
+
+### 1. Start Couchbase
 
 ```bash
 docker run -d --name goscim-db \
@@ -20,7 +48,7 @@ Community Edition is enough. If you use Enterprise you can additionally set
 `compression_mode` in the bucket settings — see
 [configuration](configuration.md#bucket-settings).
 
-## 2. Run the server
+### 2. Run the server
 
 ```bash
 git clone https://github.com/arturoeanton/goscim.git
@@ -31,21 +59,25 @@ export SCIM_AUTH=basic
 export SCIM_BASIC_USERS='admin:secret:admin,role1'
 
 # How the server authenticates to Couchbase. Different thing.
+export SCIM_STORE=couchbase
 export SCIM_ADMIN_USER=Administrator
 export SCIM_ADMIN_PASSWORD=password
 export SCIM_COUCHBASE_TLS=false   # a local cluster with no certificate
 
-go run .
+go run . -ui
 ```
 
 On the first run the server creates one bucket per resource type — `User`,
-`Group`, `Element` — and a primary index on each, then listens on `:8080`.
+`Group`, `Element` — along with primary and schema-derived secondary N1QL
+indexes on each, then listens on `:8080` (with the HTMX console on `/ui` when
+`-ui` or `SCIM_UI=true` is set).
 
-`SCIM_AUTH` has no default. The server refuses to start until you choose
-`jwt`, `bearer`, `basic`, or `none`. An earlier version served every endpoint
-unauthenticated, and that was not something to leave as an accident.
+`SCIM_AUTH` has no default (except under `-demo`). The server refuses to start
+until you choose `jwt`, `bearer`, `basic`, or `none`. An earlier version served
+every endpoint unauthenticated, and that was not something to leave as an
+accident.
 
-## 3. Ask the server what it supports
+### 3. Ask the server what it supports
 
 Discovery does not require credentials, which is deliberate: a client needs it
 to find out how to authenticate.
@@ -221,6 +253,7 @@ including the `$reader` and `$writer` role lists.
 
 ## Where next
 
-- [Configuration](configuration.md) — every environment variable
-- [API reference](api.md) — status codes, filters, concurrency control
+- [Web Console, Inspector & Webhooks](ui-and-webhooks.md) — embedded `/ui`, CloudEvents webhooks, and `goscim conformance`
+- [Configuration](configuration.md) — every environment variable and CLI flag
+- [API reference](api.md) — status codes, filters, multi-tenancy, concurrency control
 - [Security](security.md) — before exposing this to anything real

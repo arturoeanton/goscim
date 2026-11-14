@@ -70,11 +70,14 @@ operations (`bulk.maxOperations`) and 1 MiB (`bulk.maxPayloadSize`), answering
 
 ## Backups
 
-Everything is in Couchbase; the server holds nothing. Use `cbbackupmgr` or
-whatever your operator provides, per bucket.
+- **Couchbase (`SCIM_STORE=couchbase`)**: use `cbbackupmgr` or your operator's
+  snapshot schedule per bucket.
+- **SQLite (`SCIM_STORE=sqlite`)**: the database runs in WAL mode (`goscim.db`,
+  `goscim.db-wal`, `goscim.db-shm`). Use `sqlite3 goscim.db ".backup backup.db"`
+  or `litestream` for online point-in-time backups without stopping the server.
 
-Configuration lives in the config directory and in environment variables. It is
-worth keeping under version control, since it defines the SCIM model.
+Configuration lives in the config directory and in environment variables. Keep
+it under version control, since it defines the SCIM model.
 
 ## Logging and audit trail
 
@@ -126,22 +129,34 @@ WARNING: SCIM_PASSWORD_MODE=plain - passwords are stored unhashed
 All three mean a safety mechanism was deliberately disabled. None should appear
 in production.
 
-## Monitoring
+## Monitoring and Prometheus metrics
 
-Two unauthenticated probe endpoints live at the server root:
+Operational endpoints at the server root:
 
 - **Liveness** (`GET /healthz`): answers `200 OK` (`{"status":"ok"}`) while the
-  HTTP server is running, without touching Couchbase so a transient database
+  HTTP server is running, without touching the store so a transient database
   outage stops traffic rather than restarting pods in a loop.
-- **Readiness** (`GET /readyz`): pings the Couchbase query service and a
-  configured bucket's key-value service under a 2-second deadline, answering
-  `200 OK` (`{"status":"ready"}`) when reachable or `503 Service Unavailable`
+- **Readiness** (`GET /readyz`): pings the active store (`CouchbaseStore`,
+  `SQLiteStore`, or `MemoryStore`) under a 2-second deadline, answering `200 OK`
+  (`{"status":"ready"}`) when reachable or `503 Service Unavailable`
   (`{"status":"unavailable"}`) otherwise.
 - **Container healthcheck**: `./goscim -healthcheck` probes `/readyz` on
   `SCIM_PORT` and exits `0` or `1`, allowing distroless images without `curl` or
   a shell to run native `HEALTHCHECK` probes.
-
-Prometheus metrics are not yet exposed.
+- **Prometheus metrics** (`GET /metrics`, enabled by default via
+  `SCIM_METRICS=true`, optional bearer guard via `SCIM_METRICS_TOKEN`):
+  - `goscim_build_info{version}` — gauge (`1`) carrying the running build version.
+  - `goscim_store_up` — gauge (`1` when `Store.Ping` succeeds within 2s, `0` otherwise).
+  - `goscim_http_requests_total{action,method,resource_type,status}` — counter of
+    completed SCIM operations (`create`, `read`, `search`, `replace`, `patch`,
+    `delete`, `bulk`).
+  - `goscim_http_request_duration_seconds{action,le}` — latency histogram across
+    buckets `0.005s` through `5s`.
+  - `goscim_auth_failures_total` — `401` authentication rejections.
+  - `goscim_uniqueness_conflicts_total{resource_type}` — `409` uniqueness
+    collisions.
+  - `goscim_webhook_deliveries_total{event_type,outcome}` — outbound CloudEvents
+    webhook outcomes (`success`, `failed`, `dropped`).
 
 ## Troubleshooting
 

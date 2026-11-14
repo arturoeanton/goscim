@@ -24,8 +24,15 @@ node_modules
 
 
 # Build artefacts and downloaded tooling
+/goscim
+dist/
 build/
 *.jar
+
+# Local SQLite database files
+*.db
+*.db-wal
+*.db-shm
 
 # Generator and scanner leftovers
 .antlr/

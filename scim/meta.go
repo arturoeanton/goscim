@@ -7,13 +7,18 @@ import (
 )
 
 func generateMeta(element map[string]interface{}, resourceType ResourceType) Meta {
+	return generateMetaForPrefix(PREFIX, element, resourceType)
+}
+
+func generateMetaForPrefix(prefix string, element map[string]interface{}, resourceType ResourceType) Meta {
 	now := time.Now()
 	meta := Meta{}
 	meta.ResourceType = resourceType.Name
 	meta.Created = now.Format(time.RFC3339)
 	meta.LastModified = meta.Created
 	meta.Version = uuid.New().String()
-	meta.Location = resourceLocation(resourceType, element)
+	id, _ := element["id"].(string)
+	meta.Location = resourcePathWithPrefix(prefix, resourceType, id)
 	return meta
 }
 
@@ -22,12 +27,17 @@ func generateMeta(element map[string]interface{}, resourceType ResourceType) Met
 // missing or malformed on a document written by an older version, so it is read
 // defensively rather than asserted.
 func updateMeta(metaOld map[string]interface{}, element map[string]interface{}, resourceType ResourceType) Meta {
+	return updateMetaForPrefix(PREFIX, metaOld, element, resourceType)
+}
+
+func updateMetaForPrefix(prefix string, metaOld map[string]interface{}, element map[string]interface{}, resourceType ResourceType) Meta {
 	now := time.Now()
 	meta := Meta{}
 	meta.LastModified = now.Format(time.RFC3339)
 	meta.Version = uuid.New().String()
 	meta.ResourceType = resourceType.Name
-	meta.Location = resourceLocation(resourceType, element)
+	id, _ := element["id"].(string)
+	meta.Location = resourcePathWithPrefix(prefix, resourceType, id)
 
 	created, _ := metaOld["created"].(string)
 	if created == "" {

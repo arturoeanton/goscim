@@ -26,20 +26,42 @@ func NewRouter(folderConfig string, r *gin.Engine, authenticator Authenticator) 
 
 	r.GET("/healthz", Healthz)
 	r.GET("/readyz", Readyz)
+	if MetricsEnabledFromEnv() {
+		r.GET("/metrics", MetricsHandler(DefaultMetrics))
+	}
 
-	discovery := r.Group(PREFIX)
-	discovery.GET("/ServiceProviderConfig", DiscoveryServiceProviderConfig(folderConfig))
-	discovery.GET("/ResourceTypes", DiscoveryResourceTypes)
-	discovery.GET("/ResourceTypes/:id", DiscoveryResourceType)
-	discovery.GET("/Schemas", DiscoverySchemas)
-	discovery.GET("/Schemas/:id", DiscoverySchema)
+	mountDiscoveryRoutes := func(group *gin.RouterGroup) {
+		group.GET("/ServiceProviderConfig", DiscoveryServiceProviderConfig(folderConfig))
+		group.GET("/ResourceTypes", DiscoveryResourceTypes)
+		group.GET("/ResourceTypes/:id", DiscoveryResourceType)
+		group.GET("/Schemas", DiscoverySchemas)
+		group.GET("/Schemas/:id", DiscoverySchema)
+	}
 
-	scim := r.Group(PREFIX, AuditMiddleware(), LimitBody(DefaultMaxBodyBytes), Authenticate(authenticator))
-	if err := ReadResourceType(folderConfig, scim); err != nil {
+	mountDiscoveryRoutes(r.Group(PREFIX))
+
+	scimGroup := r.Group(PREFIX, AuditMiddleware(), LimitBody(DefaultMaxBodyBytes), Authenticate(authenticator))
+	if err := ReadResourceType(folderConfig, scimGroup); err != nil {
 		return nil, err
 	}
-	scim.POST("/.search", RootPostSearch)
-	scim.POST("/Bulk", BulkHandler(newBulkEngine()))
+	bulkEngine := newBulkEngine()
+	scimGroup.POST("/.search", RootPostSearch)
+	scimGroup.POST("/Bulk", BulkHandler(bulkEngine))
+
+	// Multi-tenant B2B routes under /tenants/:tenant/scim/v2/...
+	tenantDiscovery := r.Group("/tenants/:tenant"+PREFIX, TenantMiddleware())
+	mountDiscoveryRoutes(tenantDiscovery)
+
+	tenantScim := r.Group("/tenants/:tenant"+PREFIX, TenantMiddleware(), AuditMiddleware(), LimitBody(DefaultMaxBodyBytes), Authenticate(authenticator))
+	mountResourceRoutes(tenantScim)
+	tenantScim.POST("/.search", RootPostSearch)
+	tenantScim.POST("/Bulk", BulkHandler(bulkEngine))
+
+	if UIEnabledFromEnv() {
+		if err := MountUI(r, UIOptions{}); err != nil {
+			return nil, err
+		}
+	}
 
 	return r, nil
 }

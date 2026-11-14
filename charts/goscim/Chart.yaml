@@ -1,0 +1,17 @@
+apiVersion: v2
+name: goscim
+description: Schema-driven SCIM 2.0 server with Couchbase/SQLite/Memory stores, HTMX console, and Prometheus metrics
+type: application
+version: 0.1.0
+appVersion: "1.4.0"
+home: https://github.com/arturoeanton/goscim
+sources:
+  - https://github.com/arturoeanton/goscim
+keywords:
+  - scim
+  - scim2
+  - identity
+  - provisioning
+  - entra
+  - okta
+  - keycloak

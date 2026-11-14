@@ -38,6 +38,36 @@ Discovery, unauthenticated:
 | `GET` | `/scim/v2/Schemas` | Schemas and extensions |
 | `GET` | `/scim/v2/Schemas/{urn}` | One of them |
 
+Operational endpoints at the server root:
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/healthz` | Liveness probe (`200 OK`) |
+| `GET` | `/readyz` | Store readiness probe (`200 OK` or `503 Service Unavailable`) |
+| `GET` | `/metrics` | Prometheus text exposition (`SCIM_METRICS=true`, optional `SCIM_METRICS_TOKEN`) |
+| `GET` | `/ui` | Optional HTMX Web Console & Live SCIM Inspector (`SCIM_UI=true` / `-ui`) |
+
+## Multi-tenant namespaces (`/tenants/:tenant/scim/v2`)
+
+Every discovery and resource endpoint above is also mounted under
+`/tenants/{tenant}/scim/v2/...` where `{tenant}` matches
+`^[A-Za-z0-9._-]{1,64}$`:
+
+- **Storage & uniqueness isolation**: resources, searches, `Group.members` ↔
+  `User.groups` synchronisation, `/Bulk` sub-operations, and
+  `uniqueness: server` claims are strictly isolated per tenant (`User`
+  `jane@example.com` in `acme` does not collide with or appear in `globex`).
+  Attributes marked `uniqueness: global` remain globally unique across the
+  entire store per RFC 7643 §2.1.
+- **Tenant-aware URIs**: `Location` headers, `meta.location`, and group `$ref`
+  links emit `/tenants/{tenant}/scim/v2/...` when accessed via a tenant route.
+- **Credential-bound scoping**: bearer tokens (`subject:token:roles@tenant` in
+  `SCIM_BEARER_TOKENS`, or `SCIM_BEARER_TENANT`) and JWTs
+  (`SCIM_JWT_TENANT_CLAIM`) can bind a credential to one tenant. A tenant-pinned
+  credential calling `/scim/v2/...` is transparently routed into its assigned
+  tenant, while any attempt to address `/tenants/{other}/scim/v2/...` is
+  rejected with HTTP `403`.
+
 ## Create
 
 `POST /scim/v2/Users`

@@ -34,7 +34,7 @@ func Read(resource string) func(c *gin.Context) {
 }
 
 func getElementByID(c *gin.Context, id string, resourceType ResourceType) (map[string]interface{}, error) {
-	element, err := DB.Get(resourceType.Name, id)
+	element, err := DB.Get(storeBucketForContext(c, resourceType.Name), id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			MakeError(c, http.StatusNotFound, "Resource "+id+" not found")

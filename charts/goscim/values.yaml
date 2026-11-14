@@ -1,0 +1,84 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/arturoeanton/goscim
+  pullPolicy: IfNotPresent
+  tag: ""
+
+service:
+  type: ClusterIP
+  port: 8080
+
+store:
+  # Backend: "couchbase", "sqlite", or "memory"
+  backend: sqlite
+  sqlite:
+    path: /data/goscim.db
+    persistence:
+      enabled: true
+      size: 2Gi
+      storageClass: ""
+  couchbase:
+    url: couchbase
+    tls: "true"
+    adminUser: Administrator
+    adminPassword: ""
+    autoIndex: "true"
+
+auth:
+  # Mode: "bearer", "jwt", "basic", or "none"
+  mode: bearer
+  bearerToken: ""
+  bearerTokens: ""
+  bearerRoles: "admin,superadmin,user,role1,role2"
+  jwt:
+    jwksURL: ""
+    issuer: ""
+    audience: ""
+    rolesClaim: ""
+    tenantClaim: ""
+  basicUsers: ""
+  existingSecret: ""
+
+ui:
+  enabled: false
+  token: ""
+
+metrics:
+  enabled: true
+  token: ""
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    labels: {}
+
+webhooks:
+  urls: ""
+  secret: ""
+  events: "*"
+  maxRetries: "3"
+
+publicURL: ""
+passwordMode: argon2id
+auditLog: json
+trustedProxies: none
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+podSecurityContext:
+  fsGroup: 65532
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 65532
+  capabilities:
+    drop:
+      - ALL

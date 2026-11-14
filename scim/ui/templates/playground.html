@@ -1,0 +1,72 @@
+{{define "playground.html"}}
+{{template "head" .}}
+<div class="app-shell">
+  {{template "sidebar" .}}
+  <main class="main-area">
+    <div class="page-header">
+      <div>
+        <h1>SCIM Filter &amp; N1QL Lab</h1>
+        <p>Compile RFC 7644 filter expressions into parameterized Couchbase N1QL and evaluate them live against the store.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <form id="playground-form" hx-post="/ui/playground/eval" hx-target="#playground-output" hx-swap="outerHTML">
+        <input type="hidden" name="tenant" value="{{.Tenant}}">
+        <div class="form-row">
+          <div class="field">
+            <label>Resource Type</label>
+            <select name="resourceType" hx-post="/ui/playground/eval" hx-include="#playground-form" hx-target="#playground-output" hx-swap="outerHTML">
+              <option value="Users" {{if eq .ResourceType "Users"}}selected{{end}}>Users</option>
+              <option value="Groups" {{if eq .ResourceType "Groups"}}selected{{end}}>Groups</option>
+              <option value="Elements" {{if eq .ResourceType "Elements"}}selected{{end}}>Elements</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>attributes (projection)</label>
+            <input type="text" name="attributes" class="mono-input" placeholder="userName,name.givenName,groups"
+              hx-post="/ui/playground/eval" hx-trigger="keyup changed delay:250ms" hx-include="#playground-form" hx-target="#playground-output" hx-swap="outerHTML">
+          </div>
+          <div class="field">
+            <label>sortBy</label>
+            <input type="text" name="sortBy" class="mono-input" placeholder="userName"
+              hx-post="/ui/playground/eval" hx-trigger="keyup changed delay:250ms" hx-include="#playground-form" hx-target="#playground-output" hx-swap="outerHTML">
+          </div>
+          <div class="field">
+            <label>sortOrder</label>
+            <select name="sortOrder" hx-post="/ui/playground/eval" hx-include="#playground-form" hx-target="#playground-output" hx-swap="outerHTML">
+              <option value="ascending">ascending</option>
+              <option value="descending">descending</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field" style="margin-bottom:10px">
+          <label>SCIM Filter Expression</label>
+          <input id="pg-filter-input" type="text" name="filter" value="{{.Filter}}" class="mono-input"
+            placeholder='userName sw "adele" and active eq true'
+            hx-post="/ui/playground/eval"
+            hx-trigger="keyup changed delay:200ms"
+            hx-include="#playground-form"
+            hx-target="#playground-output"
+            hx-swap="outerHTML">
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <div class="preset-chips">
+            <button type="button" class="chip" onclick="document.getElementById('pg-filter-input').value='active eq true';htmx.trigger('#playground-form','submit')">active eq true</button>
+            <button type="button" class="chip" onclick="document.getElementById('pg-filter-input').value='emails[type eq &quot;work&quot; and value co &quot;contoso.com&quot;]';htmx.trigger('#playground-form','submit')">emails[type eq "work" ...]</button>
+            <button type="button" class="chip" onclick="document.getElementById('pg-filter-input').value='urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department pr';htmx.trigger('#playground-form','submit')">Keycloak colon-URN</button>
+            <button type="button" class="chip" onclick="document.getElementById('pg-filter-input').value='not (active eq false) and title pr';htmx.trigger('#playground-form','submit')">not (...) and pr</button>
+          </div>
+          <button type="submit" class="btn btn-primary">Evaluate Filter</button>
+        </div>
+      </form>
+    </div>
+
+    {{template "playground_result" .}}
+  </main>
+</div>
+</body>
+</html>
+{{end}}

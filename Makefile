@@ -3,9 +3,12 @@ ANTLR_JAR     ?= build/antlr-$(ANTLR_VERSION)-complete.jar
 ANTLR_URL     ?= https://www.antlr.org/download/antlr-$(ANTLR_VERSION)-complete.jar
 JAVA_IMAGE    ?= eclipse-temurin:21-jdk
 
-.PHONY: all build vet test race cover check generate clean
+.PHONY: all build vet test race cover check demo generate clean
 
 all: check
+
+demo:
+	go run . -demo
 
 build:
 	go build ./...

@@ -2,8 +2,10 @@ package scim
 
 import (
 	"encoding/json"
+	"io/fs"
 	"log"
 	"os"
+	"path"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -23,7 +25,36 @@ var (
 	Resources map[string]ResourceType
 	// Schemas ...
 	Schemas map[string]Schema
+
+	fallbackConfigFS fs.FS
 )
+
+// SetFallbackConfigFS registers an embedded filesystem used when the default
+// "config" directory is not present in the working directory.
+func SetFallbackConfigFS(fsys fs.FS) {
+	fallbackConfigFS = fsys
+}
+
+func useFallbackConfig(folderConfig string, diskErr error) bool {
+	return fallbackConfigFS != nil && os.IsNotExist(diskErr) &&
+		(folderConfig == "" || folderConfig == "config" || folderConfig == "./config")
+}
+
+func readConfigDirEntries(folderConfig, subDir string) ([]fs.DirEntry, error) {
+	entries, err := os.ReadDir(folderConfig + subDir)
+	if err == nil || !useFallbackConfig(folderConfig, err) {
+		return entries, err
+	}
+	return fs.ReadDir(fallbackConfigFS, strings.Trim(subDir, "/"))
+}
+
+func readConfigBytes(folderConfig, subDir, fileName string) ([]byte, error) {
+	raw, err := os.ReadFile(folderConfig + subDir + fileName)
+	if err == nil || !useFallbackConfig(folderConfig, err) {
+		return raw, err
+	}
+	return fs.ReadFile(fallbackConfigFS, path.Join(strings.Trim(subDir, "/"), fileName))
+}
 
 // GetAttribute resolves a dotted attribute path against a schema's attributes.
 // Names are matched ignoring case, as RFC 7643 2.1 requires.
@@ -51,7 +82,7 @@ func ReadResourceType(folderConfig string, r gin.IRouter) error {
 		return err
 	}
 
-	files, err := os.ReadDir(folderConfig + FolderResourceType)
+	files, err := readConfigDirEntries(folderConfig, FolderResourceType)
 	if err != nil {
 		return err
 	}
@@ -59,7 +90,7 @@ func ReadResourceType(folderConfig string, r gin.IRouter) error {
 		if !strings.HasSuffix(f.Name(), ".json") {
 			continue
 		}
-		file, err := os.ReadFile(folderConfig + FolderResourceType + f.Name())
+		file, err := readConfigBytes(folderConfig, FolderResourceType, f.Name())
 		if err != nil {
 			return err
 		}
@@ -71,7 +102,20 @@ func ReadResourceType(folderConfig string, r gin.IRouter) error {
 		if err := DB.EnsureBucket(resourceType.Name); err != nil {
 			return err
 		}
+		if cb, ok := DB.(*CouchbaseStore); ok {
+			if err := cb.EnsureResourceIndexes(resourceType); err != nil {
+				return err
+			}
+		}
+	}
+	if r != nil {
+		mountResourceRoutes(r)
+	}
+	return nil
+}
 
+func mountResourceRoutes(r gin.IRouter) {
+	for _, resourceType := range Resources {
 		r.POST(resourceType.Endpoint, Create(resourceType.Endpoint))                // Create:  	POST https://example.com/{v}/{resource}
 		r.GET(resourceType.Endpoint+"/:id", Read(resourceType.Endpoint))            // Read: 	GET https://example.com/{v}/{resource}/{id}
 		r.PUT(resourceType.Endpoint+"/:id", Replace(resourceType.Endpoint))         // Replace: 	PUT https://example.com/{v}/{resource}/{id}
@@ -80,7 +124,6 @@ func ReadResourceType(folderConfig string, r gin.IRouter) error {
 		r.GET(resourceType.Endpoint, Search(resourceType.Endpoint))                 // Search: 	GET https://example.com/{v}/{resource}?filter=...
 		r.POST(resourceType.Endpoint+"/.search", PostSearch(resourceType.Endpoint)) // Search:	POST https://example.com/{v}/{resource}/.search
 	}
-	return nil
 }
 
 // ReadSchemas fills the Schemas map from folderConfig/schemas.
@@ -88,7 +131,7 @@ func ReadSchemas(folderConfig string) error {
 	if Schemas == nil {
 		Schemas = make(map[string]Schema)
 	}
-	files, err := os.ReadDir(folderConfig + FolderSchema)
+	files, err := readConfigDirEntries(folderConfig, FolderSchema)
 	if err != nil {
 		return err
 	}
@@ -105,7 +148,7 @@ func ReadSchemas(folderConfig string) error {
 
 // add schema if no exist in schemas
 func addSchema(folderConfig string, schemaName string) error {
-	file, err := os.ReadFile(folderConfig + FolderSchema + schemaName)
+	file, err := readConfigBytes(folderConfig, FolderSchema, schemaName)
 	if err != nil {
 		return err
 	}

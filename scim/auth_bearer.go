@@ -8,11 +8,13 @@ import (
 	"strings"
 )
 
-// BearerTokenEntry binds one static opaque bearer token to a Principal.
+// BearerTokenEntry binds one static opaque bearer token to a Principal and an
+// optional tenant namespace.
 type BearerTokenEntry struct {
 	Subject string
 	Token   string
 	Roles   []string
+	Tenant  string
 }
 
 // BearerAuthenticator validates static opaque Bearer tokens (RFC 6750) for
@@ -34,10 +36,15 @@ func NewBearerAuthenticator(entries []BearerTokenEntry) (*BearerAuthenticator, e
 		if e.Token == "" {
 			return nil, errors.New("bearer token must not be empty")
 		}
+		tenant := strings.TrimSpace(e.Tenant)
+		if tenant != "" && !IsValidTenantID(tenant) {
+			return nil, fmt.Errorf("invalid bearer tenant %q", tenant)
+		}
 		cleaned = append(cleaned, BearerTokenEntry{
 			Subject: sub,
 			Token:   e.Token,
 			Roles:   e.Roles,
+			Tenant:  tenant,
 		})
 	}
 	if len(cleaned) == 0 {
@@ -47,8 +54,9 @@ func NewBearerAuthenticator(entries []BearerTokenEntry) (*BearerAuthenticator, e
 }
 
 // NewBearerAuthenticatorFromEnv reads SCIM_BEARER_TOKENS
-// ("subject:token:role1,role2;other:token2:role3") and/or the single-token
-// shorthand SCIM_BEARER_TOKEN (+ optional SCIM_BEARER_SUBJECT and SCIM_BEARER_ROLES).
+// ("subject:token:role1,role2[@tenant];other:token2:role3") and/or the
+// single-token shorthand SCIM_BEARER_TOKEN (+ optional SCIM_BEARER_SUBJECT,
+// SCIM_BEARER_ROLES, and SCIM_BEARER_TENANT).
 func NewBearerAuthenticatorFromEnv() (*BearerAuthenticator, error) {
 	var entries []BearerTokenEntry
 
@@ -60,14 +68,38 @@ func NewBearerAuthenticatorFromEnv() (*BearerAuthenticator, error) {
 			}
 			fields := strings.SplitN(item, ":", 3)
 			if len(fields) < 2 || strings.TrimSpace(fields[0]) == "" || fields[1] == "" {
-				return nil, fmt.Errorf("SCIM_BEARER_TOKENS entry %q is not \"subject:token[:roles]\"", item)
+				return nil, fmt.Errorf("SCIM_BEARER_TOKENS entry %q is not \"subject:token[:roles[@tenant]]\"", item)
+			}
+			rawSubject := strings.TrimSpace(fields[0])
+			subjectPart, subjTenant, hasSubjTenant := strings.Cut(rawSubject, "@")
+			subjectPart = strings.TrimSpace(subjectPart)
+			if subjectPart == "" {
+				return nil, fmt.Errorf("SCIM_BEARER_TOKENS entry %q has empty subject", item)
 			}
 			entry := BearerTokenEntry{
-				Subject: strings.TrimSpace(fields[0]),
+				Subject: subjectPart,
 				Token:   fields[1],
 			}
+			if hasSubjTenant {
+				tenant := strings.TrimSpace(subjTenant)
+				if !IsValidTenantID(tenant) {
+					return nil, fmt.Errorf("SCIM_BEARER_TOKENS entry %q has invalid tenant %q", item, subjTenant)
+				}
+				entry.Tenant = tenant
+			}
 			if len(fields) == 3 {
-				entry.Roles = splitAndTrim(fields[2])
+				rolesPart, tenantPart, hasTenant := strings.Cut(fields[2], "@")
+				entry.Roles = splitAndTrim(rolesPart)
+				if hasTenant {
+					tenant := strings.TrimSpace(tenantPart)
+					if !IsValidTenantID(tenant) {
+						return nil, fmt.Errorf("SCIM_BEARER_TOKENS entry %q has invalid tenant %q", item, tenantPart)
+					}
+					if entry.Tenant != "" && entry.Tenant != tenant {
+						return nil, fmt.Errorf("SCIM_BEARER_TOKENS entry %q specifies conflicting tenants %q and %q", item, entry.Tenant, tenant)
+					}
+					entry.Tenant = tenant
+				}
 			}
 			entries = append(entries, entry)
 		}
@@ -82,6 +114,7 @@ func NewBearerAuthenticatorFromEnv() (*BearerAuthenticator, error) {
 			Subject: subject,
 			Token:   singleToken,
 			Roles:   splitAndTrim(os.Getenv("SCIM_BEARER_ROLES")),
+			Tenant:  strings.TrimSpace(os.Getenv("SCIM_BEARER_TENANT")),
 		})
 	}
 
@@ -129,5 +162,5 @@ func (a *BearerAuthenticator) Authenticate(r *http.Request) (*Principal, error) 
 		return nil, ErrUnauthenticated
 	}
 	matched := a.entries[matchedIdx]
-	return &Principal{Subject: matched.Subject, Roles: matched.Roles}, nil
+	return &Principal{Subject: matched.Subject, Roles: matched.Roles, Tenant: matched.Tenant}, nil
 }

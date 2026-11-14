@@ -92,7 +92,7 @@ func setVersionHeader(c *gin.Context, meta Meta) {
 // request after rejecting host values carrying path, userinfo or control
 // characters.
 func absoluteLocation(c *gin.Context, resourceType ResourceType, id string) string {
-	path := resourcePath(resourceType, id)
+	path := resourcePathForContext(c, resourceType, id)
 	if base := strings.TrimRight(strings.TrimSpace(os.Getenv("SCIM_PUBLIC_URL")), "/"); base != "" {
 		return base + path
 	}
@@ -119,8 +119,18 @@ func safeHost(host string) string {
 	return host
 }
 
-// resourcePath is the server-relative path of a resource, which is what
-// meta.location carries.
+// resourcePath is the server-relative path of a resource under PREFIX.
 func resourcePath(resourceType ResourceType, id string) string {
-	return PREFIX + resourceType.Endpoint + "/" + id
+	return resourcePathWithPrefix(PREFIX, resourceType, id)
+}
+
+func resourcePathForContext(c *gin.Context, resourceType ResourceType, id string) string {
+	return resourcePathWithPrefix(EffectivePrefix(c), resourceType, id)
+}
+
+func resourcePathWithPrefix(prefix string, resourceType ResourceType, id string) string {
+	if prefix == "" {
+		prefix = PREFIX
+	}
+	return prefix + resourceType.Endpoint + "/" + id
 }

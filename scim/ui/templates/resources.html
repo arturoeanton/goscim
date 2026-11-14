@@ -1,0 +1,113 @@
+{{define "resources.html"}}
+{{template "head" .}}
+<div class="app-shell">
+  {{template "sidebar" .}}
+  <main class="main-area">
+    <div class="page-header">
+      <div>
+        <h1>Directory Resources</h1>
+        <p>Create, filter, inspect, toggle activation, and delete SCIM 2.0 resources through the live engine.</p>
+      </div>
+      <div class="header-actions">
+        <form method="post" action="/ui/actions/seed{{.TenantQuery}}" style="margin:0">
+          <button type="submit" class="btn">Seed Sample Data</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <a class="btn {{if eq .ResourceType "Users"}}btn-primary{{end}}" href="/ui/resources?type=Users{{if .Tenant}}&tenant={{.Tenant}}{{end}}">Users</a>
+      <a class="btn {{if eq .ResourceType "Groups"}}btn-primary{{end}}" href="/ui/resources?type=Groups{{if .Tenant}}&tenant={{.Tenant}}{{end}}">Groups</a>
+      <a class="btn {{if eq .ResourceType "Elements"}}btn-primary{{end}}" href="/ui/resources?type=Elements{{if .Tenant}}&tenant={{.Tenant}}{{end}}">Elements</a>
+    </div>
+
+    {{if eq .ResourceType "Users"}}
+    <div class="card">
+      <h2>Provision User (POST {{.SCIMBasePath}}/Users)</h2>
+      <form hx-post="/ui/resources/users" hx-target="#resources-table-wrap" hx-swap="outerHTML">
+        <input type="hidden" name="tenant" value="{{.Tenant}}">
+        <div class="form-row">
+          <div class="field">
+            <label>userName (required, unique)</label>
+            <input type="text" name="userName" placeholder="alice.smith@contoso.com" required>
+          </div>
+          <div class="field">
+            <label>Display Name</label>
+            <input type="text" name="displayName" placeholder="Alice Smith">
+          </div>
+          <div class="field">
+            <label>Given Name</label>
+            <input type="text" name="givenName" placeholder="Alice">
+          </div>
+          <div class="field">
+            <label>Family Name</label>
+            <input type="text" name="familyName" placeholder="Smith">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Work Email</label>
+            <input type="email" name="email" placeholder="alice.smith@contoso.com">
+          </div>
+          <div class="field">
+            <label>Department (EnterpriseUser)</label>
+            <input type="text" name="department" placeholder="Platform Engineering">
+          </div>
+          <div class="field">
+            <label>externalId</label>
+            <input type="text" name="externalId" placeholder="idp-ext-001">
+          </div>
+          <div class="field">
+            <label>Initial Password (optional)</label>
+            <input type="password" name="password" placeholder="Hashed with Argon2id">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Create User</button>
+      </form>
+    </div>
+    {{else if eq .ResourceType "Groups"}}
+    <div class="card">
+      <h2>Provision Group (POST {{.SCIMBasePath}}/Groups)</h2>
+      <form hx-post="/ui/resources/groups" hx-target="#resources-table-wrap" hx-swap="outerHTML">
+        <input type="hidden" name="tenant" value="{{.Tenant}}">
+        <div class="form-row">
+          <div class="field">
+            <label>displayName (required)</label>
+            <input type="text" name="displayName" placeholder="Platform Admins" required>
+          </div>
+          <div class="field">
+            <label>externalId</label>
+            <input type="text" name="externalId" placeholder="grp-platform-admins">
+          </div>
+          <div class="field">
+            <label>Member IDs (comma-separated User or Group IDs)</label>
+            <input type="text" name="memberIDs" class="mono-input" placeholder="uuid-1, uuid-2">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Create Group</button>
+      </form>
+    </div>
+    {{end}}
+
+    <div class="card">
+      <div class="form-row" style="margin-bottom:14px">
+        <div class="field" style="grid-column: 1 / -1">
+          <label>Live SCIM 2.0 Filter (RFC 7644 &sect;3.4.2.2)</label>
+          <input type="text" name="filter" value="{{.Filter}}" class="mono-input"
+            placeholder='e.g. active eq true or userName co "contoso.com"'
+            hx-get="/ui/partials/resources-table?type={{.ResourceType}}&tenant={{.Tenant}}"
+            hx-trigger="keyup changed delay:250ms, search"
+            hx-target="#resources-table-wrap"
+            hx-swap="outerHTML">
+        </div>
+      </div>
+
+      {{template "resources_table" .}}
+    </div>
+
+    <div id="resource-detail-panel"></div>
+  </main>
+</div>
+</body>
+</html>
+{{end}}

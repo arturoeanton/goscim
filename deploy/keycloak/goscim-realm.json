@@ -1,0 +1,61 @@
+{
+  "realm": "goscim-lab",
+  "enabled": true,
+  "displayName": "GoSCIM Integration Lab",
+  "sslRequired": "none",
+  "roles": {
+    "realm": [
+      { "name": "admin", "description": "SCIM administrative access" },
+      { "name": "superadmin", "description": "SCIM schema role superadmin" },
+      { "name": "user", "description": "Standard directory user" },
+      { "name": "role1", "description": "Custom Element schema reader" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "goscim-provisioner",
+      "name": "GoSCIM Service Account Client",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "goscim-keycloak-client-secret",
+      "publicClient": false,
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "protocol": "openid-connect",
+      "protocolMappers": [
+        {
+          "name": "goscim-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "goscim-server",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-goscim-provisioner",
+      "enabled": true,
+      "serviceAccountClientId": "goscim-provisioner",
+      "realmRoles": ["admin", "superadmin", "user", "role1"]
+    },
+    {
+      "username": "claire.novak@keycloak.local",
+      "email": "claire.novak@keycloak.local",
+      "firstName": "Claire",
+      "lastName": "Novak",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        { "type": "password", "value": "KeycloakLab123!", "temporary": false }
+      ],
+      "realmRoles": ["user"]
+    }
+  ]
+}

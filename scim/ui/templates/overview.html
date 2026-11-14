@@ -1,0 +1,82 @@
+{{define "overview.html"}}
+{{template "head" .}}
+<div class="app-shell">
+  {{template "sidebar" .}}
+  <main class="main-area">
+    <div class="page-header">
+      <div>
+        <h1>Operational Overview</h1>
+        <p>Live SCIM 2.0 server telemetry, directory counts, and ready-to-paste Identity Provider configuration.</p>
+      </div>
+      <div class="header-actions">
+        <form method="post" action="/ui/actions/seed{{.TenantQuery}}" style="margin:0">
+          <button type="submit" class="btn">Seed Sample Data</button>
+        </form>
+        <a class="btn btn-primary" href="/ui/resources{{.TenantQuery}}">Manage Directory</a>
+      </div>
+    </div>
+
+    {{if .SeedNotice}}
+    <div class="alert alert-ok">{{.SeedNotice}}</div>
+    {{end}}
+
+    {{template "stats_strip" .}}
+
+    <div class="grid-2">
+      <div class="card">
+        <h2>Active Runtime Configuration</h2>
+        <div class="kv-list">
+          <div class="kv-key">SCIM Base URL</div>
+          <div class="kv-val">{{.SCIMBaseURL}}</div>
+          <div class="kv-key">Tenant Namespace</div>
+          <div class="kv-val">{{if .Tenant}}{{.Tenant}}{{else}}default (root /scim/v2){{end}}</div>
+          <div class="kv-key">Backing Store</div>
+          <div class="kv-val">{{.StoreBackend}}</div>
+          <div class="kv-key">Authentication</div>
+          <div class="kv-val">{{.AuthMode}}</div>
+          <div class="kv-key">Password Policy</div>
+          <div class="kv-val">{{.PasswordMode}}</div>
+          <div class="kv-key">Prometheus Metrics</div>
+          <div class="kv-val">{{if .MetricsEnabled}}enabled (/metrics){{else}}disabled{{end}}</div>
+          <div class="kv-key">Outbound Webhooks</div>
+          <div class="kv-val">{{if .WebhookCount}}{{.WebhookCount}} destination(s) active{{else}}disabled{{end}}</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Identity Provider Connector Settings</h2>
+        <p style="margin:0 0 10px;color:var(--text-muted);font-size:13px">
+          Point Microsoft Entra ID, Okta, or Keycloak SCIM 2.0 outbound provisioning to this endpoint:
+        </p>
+        <div class="kv-list">
+          <div class="kv-key">Entra ID Tenant URL</div>
+          <div class="kv-val">{{.SCIMBaseURL}}</div>
+          <div class="kv-key">Okta SCIM 2.0 Base URL</div>
+          <div class="kv-val">{{.SCIMBaseURL}}</div>
+          <div class="kv-key">Unique Identifier Field</div>
+          <div class="kv-val">userName</div>
+          <div class="kv-key">Supported Actions</div>
+          <div class="kv-val">Push New Users, Push Profile Updates, Push Groups, Deactivate Users</div>
+          <div class="kv-key">Auth Header Mode</div>
+          <div class="kv-val">HTTP Header: Authorization: Bearer &lt;token&gt;</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Quick Verification Commands</h2>
+      <pre class="code-block"># 1. Query SCIM 2.0 ServiceProviderConfig (unauthenticated discovery)
+curl -s {{.SCIMBaseURL}}/ServiceProviderConfig | jq .
+
+# 2. Search active Users with an RFC 7644 filter
+curl -s -H "Authorization: Bearer {{.SampleTokenHint}}" \
+  "{{.SCIMBaseURL}}/Users?filter=active%20eq%20true" | jq .
+
+# 3. Run the built-in IdP Conformance Suite (RFC 7643/7644 + Entra + Okta + Keycloak)
+goscim conformance -url {{.SCIMBaseURL}} -token "{{.SampleTokenHint}}" -profile all</pre>
+    </div>
+  </main>
+</div>
+</body>
+</html>
+{{end}}

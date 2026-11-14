@@ -23,8 +23,10 @@ func Delete(resource string) func(c *gin.Context) {
 		if !EnforceDeleteAccess(c, resourceType, stored) {
 			return
 		}
+		tenant := TenantOf(c)
+		bucket := ScopedBucket(tenant, resourceType.Name)
 		claims := ExtractUniqueClaims(resourceType, stored)
-		if err := DB.RemoveUnique(resourceType.Name, id, claims); err != nil {
+		if err := DB.RemoveUnique(bucket, id, claims); err != nil {
 			if errors.Is(err, ErrNotFound) {
 				MakeError(c, http.StatusNotFound, "Resource "+id+" not found")
 				return
@@ -32,7 +34,8 @@ func Delete(resource string) func(c *gin.Context) {
 			internalError(c, err)
 			return
 		}
-		syncAfterDelete(resourceType, id, stored)
+		syncAfterDeleteInTenant(tenant, EffectivePrefix(c), resourceType, id, stored)
+		emitResourceWebhookFromContext(c, "delete", resourceType, id, stored, nil)
 		c.Writer.WriteHeader(http.StatusNoContent)
 	}
 }

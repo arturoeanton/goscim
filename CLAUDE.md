@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**goscim** is a SCIM 2.0 (RFC 7643/7644) server in Go, backed by Couchbase. It is a compact Go codebase whose defining trait is that **resource types, endpoints, storage buckets and validation are all driven by JSON config, not code**.
+**goscim** is a SCIM 2.0 (RFC 7643/7644) server in Go supporting three `Store` backends (`couchbase`, pure-Go `sqlite`, and `memory`), an embedded HTMX console (`/ui`), Prometheus metrics (`/metrics`), signed CloudEvents webhooks, and B2B multi-tenancy (`/tenants/:tenant/scim/v2`). Its defining trait is that **resource types, endpoints, storage buckets, secondary GSI indexes, and validation are all driven by JSON config, not code**.
 
 The README and `docs/` were rewritten for 1.0 and now describe what the code actually does; earlier versions advertised authentication, metrics, health checks and a compose file that did not exist. They are trustworthy as of 1.0 — keep them that way.
 
@@ -102,9 +102,13 @@ Two mechanisms, both applied per attribute and both recursing into complex and m
 
 `"*"` in either list means any role. Roles come from the authenticated principal via `currentRoles(c)`; a request with no principal has none, so restricted attributes stay hidden.
 
-### Not implemented
+### Observability, UI, Webhooks, and Multi-Tenancy
 
-Prometheus metrics are not implemented.
+- **Prometheus metrics** (`scim/metrics.go`): `GET /metrics` (enabled unless `SCIM_METRICS=false`, optionally guarded by `SCIM_METRICS_TOKEN`).
+- **HTMX Web Console & Live Inspector** (`scim/ui.go`, `scim/inspector.go`, `scim/ui/`): mounted at `/ui` when `-ui`, `-demo`, or `SCIM_UI=true` is set (optionally guarded by `SCIM_UI_TOKEN`).
+- **Signed CloudEvents Webhooks** (`scim/webhooks.go`): `SCIM_WEBHOOK_URLS`, `SCIM_WEBHOOK_SECRET`, `SCIM_WEBHOOK_EVENTS`, `SCIM_WEBHOOK_MAX_RETRIES`.
+- **Multi-tenancy** (`scim/tenant.go`): `/tenants/:tenant/scim/v2/...` routes + credential scoping (`SCIM_BEARER_TOKENS` `@tenant`, `SCIM_BEARER_TENANT`, `SCIM_JWT_TENANT_CLAIM`), encoded into `Store` bucket keys via `ScopedBucket(tenant, bucket)`.
+- **Conformance CLI** (`scim/conformance.go`): `goscim conformance -url ... -profile all|rfc|entra|okta|keycloak`.
 
 ## Conventions and traps
 

@@ -58,6 +58,7 @@ func collectObjectUniqueClaims(out []UniqueClaim, attributes []Attribute, elemen
 					Key:       key,
 					RawValue:  val,
 					CaseExact: attribute.CaseExact,
+					Global:    strings.EqualFold(attribute.Uniqueness, "global"),
 				})
 			}
 		}
@@ -112,8 +113,9 @@ func writeStoreUniqueError(c *gin.Context, resourceType ResourceType, err error)
 // EnforceUniqueness checks uniqueness against the Store for callers invoking
 // validation outside CreateUnique/ReplaceUnique.
 func EnforceUniqueness(c *gin.Context, resourceType ResourceType, element map[string]interface{}, currentID string) bool {
+	bucket := storeBucketForContext(c, resourceType.Name)
 	for _, claim := range ExtractUniqueClaims(resourceType, element) {
-		existingID, err := DB.FindIDByAttribute(resourceType.Name, claim.Attribute, claim.RawValue)
+		existingID, err := DB.FindIDByAttribute(bucket, claim.Attribute, claim.RawValue)
 		if err != nil {
 			internalError(c, err)
 			return false

@@ -14,7 +14,8 @@ is worse than none: it tells a reader something the server no longer does.
 |---|---|
 | [Getting started](getting-started.md) | A running server and your first user |
 | [Identity provider compatibility](idp-compatibility.md) | Connecting Microsoft Entra ID, Okta, and Keycloak |
-| [Installation](installation.md) | Couchbase, building, and deploying |
+| [UI, webhooks & multi-tenancy](ui-and-webhooks.md) | HTMX console, CloudEvents webhooks, multi-tenancy, conformance CLI |
+| [Installation](installation.md) | Binary installer, Docker, Helm, SQLite, and Couchbase |
 | [Configuration](configuration.md) | Every environment variable and JSON config file |
 | [API reference](api.md) | Endpoints, payloads, status codes, filters |
 | [Schemas and permissions](schemas.md) | Defining resource types and who may read or write each attribute |
@@ -32,10 +33,9 @@ is worse than none: it tells a reader something the server no longer does.
 | [CONTRIBUTING](../CONTRIBUTING.md) | How to propose a change |
 | [SECURITY](../SECURITY.md) | How to report a vulnerability |
 
-## What GoSCIM does not do
+## Historical notes
 
-Worth knowing before you invest time:
-
-- Prometheus metrics endpoint
-
-The [1.0 audit](../RELEASE-1.0.md) records why, and roughly what it would take.
+The [1.0 audit](../RELEASE-1.0.md) records the original security and RFC
+remediation work behind 1.0; every gap listed there (including `/Bulk`,
+`Group.members <-> User.groups`, ETag preconditions, and Prometheus `/metrics`)
+has since been implemented.

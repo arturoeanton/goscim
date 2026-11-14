@@ -3,7 +3,6 @@ package scim
 import (
 	"encoding/json"
 	"net/http"
-	"os"
 	"sort"
 
 	"github.com/gin-gonic/gin"
@@ -91,7 +90,7 @@ func buildServiceProviderConfig(folderConfig string) ServiceProviderConfig {
 	var fromFile struct {
 		DocumentationURI string `json:"documentationUri"`
 	}
-	if raw, err := os.ReadFile(folderConfig + FolderServiceProviderConfig + "sp_config.json"); err == nil {
+	if raw, err := readConfigBytes(folderConfig, FolderServiceProviderConfig, "sp_config.json"); err == nil {
 		if err := json.Unmarshal(raw, &fromFile); err == nil {
 			config.DocumentationURI = fromFile.DocumentationURI
 		}
@@ -106,12 +105,14 @@ func DiscoveryServiceProviderConfig(folderConfig string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		current := config
 		current.ChangePassword = supported{Supported: passwordSupported()}
+		current.Meta.Location = EffectivePrefix(c) + "/ServiceProviderConfig"
 		writeSCIM(c, http.StatusOK, current)
 	}
 }
 
 // DiscoveryResourceTypes is GET /ResourceTypes: the resource types available.
 func DiscoveryResourceTypes(c *gin.Context) {
+	prefix := EffectivePrefix(c)
 	endpoints := make([]string, 0, len(Resources))
 	for endpoint := range Resources {
 		endpoints = append(endpoints, endpoint)
@@ -120,7 +121,9 @@ func DiscoveryResourceTypes(c *gin.Context) {
 
 	items := make([]interface{}, 0, len(endpoints))
 	for _, endpoint := range endpoints {
-		items = append(items, describeResourceType(Resources[endpoint]))
+		rt := describeResourceType(Resources[endpoint])
+		rt.Meta.Location = prefix + "/ResourceTypes/" + rt.Name
+		items = append(items, rt)
 	}
 	writeSCIM(c, http.StatusOK, listOf(items))
 }
@@ -130,7 +133,9 @@ func DiscoveryResourceType(c *gin.Context) {
 	id := c.Param("id")
 	for _, resourceType := range Resources {
 		if resourceType.ID == id || resourceType.Name == id {
-			writeSCIM(c, http.StatusOK, describeResourceType(resourceType))
+			rt := describeResourceType(resourceType)
+			rt.Meta.Location = EffectivePrefix(c) + "/ResourceTypes/" + rt.Name
+			writeSCIM(c, http.StatusOK, rt)
 			return
 		}
 	}
@@ -139,6 +144,7 @@ func DiscoveryResourceType(c *gin.Context) {
 
 // DiscoverySchemas is GET /Schemas: the schemas and attribute extensions.
 func DiscoverySchemas(c *gin.Context) {
+	prefix := EffectivePrefix(c)
 	ids := make([]string, 0, len(Schemas))
 	for id := range Schemas {
 		ids = append(ids, id)
@@ -147,7 +153,9 @@ func DiscoverySchemas(c *gin.Context) {
 
 	items := make([]interface{}, 0, len(ids))
 	for _, id := range ids {
-		items = append(items, describeSchema(Schemas[id]))
+		s := describeSchema(Schemas[id])
+		s.Meta.Location = prefix + "/Schemas/" + s.ID
+		items = append(items, s)
 	}
 	writeSCIM(c, http.StatusOK, listOf(items))
 }
@@ -159,7 +167,9 @@ func DiscoverySchema(c *gin.Context) {
 		MakeError(c, http.StatusNotFound, "no schema "+c.Param("id"))
 		return
 	}
-	writeSCIM(c, http.StatusOK, describeSchema(schema))
+	s := describeSchema(schema)
+	s.Meta.Location = EffectivePrefix(c) + "/Schemas/" + s.ID
+	writeSCIM(c, http.StatusOK, s)
 }
 
 // listOf wraps discovery results in a SCIM ListResponse.

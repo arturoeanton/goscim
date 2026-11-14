@@ -1,0 +1,91 @@
+{{define "conformance.html"}}
+{{template "head" .}}
+<div class="app-shell">
+  {{template "sidebar" .}}
+  <main class="main-area">
+    <div class="page-header">
+      <div>
+        <h1>Webhooks &amp; Live Conformance</h1>
+        <p>Verify RFC 7643/7644, Microsoft Entra ID, Okta, and Keycloak compatibility live, and inspect outbound CloudEvents.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Run Live IdP Conformance Suite</h2>
+      <p style="margin:0 0 12px;color:var(--text-muted);font-size:13px">
+        Executes end-to-end provisioning, ETag preconditions, value-selection PATCH filters, Bulk cross-references, and group membership sync against tenant <code class="mono">{{if .Tenant}}{{.Tenant}}{{else}}default{{end}}</code>, then cleans up all test records.
+      </p>
+      <form hx-post="/ui/conformance/run" hx-target="#conformance-container" hx-swap="innerHTML" hx-indicator="#conf-spinner" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+        <input type="hidden" name="tenant" value="{{.Tenant}}">
+        <div class="field" style="min-width:240px">
+          <label>Verification Profile</label>
+          <select name="profile">
+            <option value="all">all (RFC + Entra ID + Okta + Keycloak)</option>
+            <option value="rfc">rfc (RFC 7643 &amp; RFC 7644 Core)</option>
+            <option value="entra">entra (Microsoft Entra ID Connector)</option>
+            <option value="okta">okta (Okta SCIM 2.0 Provisioning)</option>
+            <option value="keycloak">keycloak (Keycloak Outbound SCIM)</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Run Conformance Suite</button>
+        <span id="conf-spinner" class="htmx-indicator">Running live verification checks...</span>
+      </form>
+      <div id="conformance-container" style="margin-top:16px"></div>
+    </div>
+
+    <div class="card">
+      <h2>Outbound CloudEvents 1.0 Webhooks</h2>
+      {{if .WebhookURLs}}
+      <p style="margin:0 0 12px;font-size:13px;color:var(--text-muted)">
+        Active destinations: {{range .WebhookURLs}}<code class="mono" style="margin-right:8px">{{.}}</code>{{end}}
+      </p>
+      {{else}}
+      <p style="margin:0 0 12px;font-size:13px;color:var(--text-muted)">
+        No outbound webhook URLs configured. Set <code class="mono">SCIM_WEBHOOK_URLS</code> and optional <code class="mono">SCIM_WEBHOOK_SECRET</code> to emit signed CloudEvents on resource mutations.
+      </p>
+      {{end}}
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Time (UTC)</th>
+              <th>Event Type</th>
+              <th>Subject</th>
+              <th>Tenant</th>
+              <th>Destination</th>
+              <th>Outcome</th>
+              <th>Attempts</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{if not .Deliveries}}
+            <tr>
+              <td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px">
+                No webhook deliveries recorded in this process yet.
+              </td>
+            </tr>
+            {{end}}
+            {{range .Deliveries}}
+            <tr>
+              <td class="mono">{{.Timestamp.Format "15:04:05"}}</td>
+              <td class="mono">{{.EventType}}</td>
+              <td class="mono">{{.Subject}}</td>
+              <td>{{if .Tenant}}<span class="badge badge-neutral">{{.Tenant}}</span>{{else}}&mdash;{{end}}</td>
+              <td class="mono">{{.TargetURL}}</td>
+              <td>
+                {{if eq .Outcome "success"}}<span class="badge badge-ok">HTTP {{.StatusCode}}</span>
+                {{else}}<span class="badge badge-err">{{if .Error}}{{.Error}}{{else}}failed{{end}}</span>{{end}}
+              </td>
+              <td class="mono">{{.Attempts}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>
+{{end}}

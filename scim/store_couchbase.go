@@ -195,9 +195,36 @@ func isKeyExists(err error) bool {
 	return errors.Is(err, gocb.ErrDocumentExists)
 }
 
+func cbDocKey(tenant, id string) string {
+	if tenant == "" {
+		return id
+	}
+	return tenant + ":" + id
+}
+
+func cbSentinelKey(tenant string, claim UniqueClaim) string {
+	if tenant == "" || claim.Global {
+		return claim.LockID
+	}
+	return "t:" + tenant + ":" + claim.LockID
+}
+
+func prepareCouchbaseDoc(tenant string, doc map[string]interface{}) map[string]interface{} {
+	if tenant == "" {
+		return doc
+	}
+	out := make(map[string]interface{}, len(doc)+1)
+	for k, v := range doc {
+		out[k] = v
+	}
+	out["_scim_tenant"] = tenant
+	return out
+}
+
 // Get implements Store.
 func (s *CouchbaseStore) Get(bucket, id string) (map[string]interface{}, error) {
-	data, err := s.collection(bucket).Get(id, &gocb.GetOptions{})
+	tenant, phys := SplitScopedBucket(bucket)
+	data, err := s.collection(phys).Get(cbDocKey(tenant, id), &gocb.GetOptions{})
 	if err != nil {
 		if isKeyNotFound(err) {
 			return nil, ErrNotFound
@@ -208,18 +235,21 @@ func (s *CouchbaseStore) Get(bucket, id string) (map[string]interface{}, error) 
 	if err := data.Content(&doc); err != nil {
 		return nil, err
 	}
+	delete(doc, "_scim_tenant")
 	return doc, nil
 }
 
 // Upsert implements Store.
 func (s *CouchbaseStore) Upsert(bucket, id string, doc map[string]interface{}) error {
-	_, err := s.collection(bucket).Upsert(id, doc, &gocb.UpsertOptions{})
+	tenant, phys := SplitScopedBucket(bucket)
+	_, err := s.collection(phys).Upsert(cbDocKey(tenant, id), prepareCouchbaseDoc(tenant, doc), &gocb.UpsertOptions{})
 	return err
 }
 
 // Replace implements Store.
 func (s *CouchbaseStore) Replace(bucket, id string, doc map[string]interface{}) error {
-	_, err := s.collection(bucket).Replace(id, doc, &gocb.ReplaceOptions{})
+	tenant, phys := SplitScopedBucket(bucket)
+	_, err := s.collection(phys).Replace(cbDocKey(tenant, id), prepareCouchbaseDoc(tenant, doc), &gocb.ReplaceOptions{})
 	if err != nil && isKeyNotFound(err) {
 		return ErrNotFound
 	}
@@ -228,7 +258,8 @@ func (s *CouchbaseStore) Replace(bucket, id string, doc map[string]interface{}) 
 
 // Remove implements Store.
 func (s *CouchbaseStore) Remove(bucket, id string) error {
-	_, err := s.collection(bucket).Remove(id, &gocb.RemoveOptions{})
+	tenant, phys := SplitScopedBucket(bucket)
+	_, err := s.collection(phys).Remove(cbDocKey(tenant, id), &gocb.RemoveOptions{})
 	if err != nil && isKeyNotFound(err) {
 		return ErrNotFound
 	}
@@ -238,29 +269,32 @@ func (s *CouchbaseStore) Remove(bucket, id string) error {
 // CreateUnique implements Store using atomic KV Insert operations in the
 // dedicated scim_unique collection before writing the resource document.
 func (s *CouchbaseStore) CreateUnique(bucket, id string, doc map[string]interface{}, claims []UniqueClaim) error {
+	tenant, phys := SplitScopedBucket(bucket)
+	docKey := cbDocKey(tenant, id)
 	acquired := make([]string, 0, len(claims))
 	rollback := func() {
-		for _, lockID := range acquired {
-			s.releaseSentinel(bucket, id, lockID)
+		for _, lockKey := range acquired {
+			s.releaseSentinel(phys, docKey, lockKey)
 		}
 	}
 
 	for _, claim := range claims {
-		isNew, err := s.acquireSentinel(bucket, id, claim)
+		lockKey := cbSentinelKey(tenant, claim)
+		isNew, err := s.acquireSentinel(phys, docKey, lockKey, claim)
 		if err != nil {
 			rollback()
 			return err
 		}
 		if isNew {
-			acquired = append(acquired, claim.LockID)
+			acquired = append(acquired, lockKey)
 		}
-		if err := s.checkLegacyUniqueOwner(bucket, id, claim); err != nil {
+		if err := s.checkLegacyUniqueOwner(phys, tenant, id, claim); err != nil {
 			rollback()
 			return err
 		}
 	}
 
-	if _, err := s.collection(bucket).Insert(id, doc, &gocb.InsertOptions{}); err != nil {
+	if _, err := s.collection(phys).Insert(docKey, prepareCouchbaseDoc(tenant, doc), &gocb.InsertOptions{}); err != nil {
 		rollback()
 		if isKeyExists(err) {
 			return &UniqueConflictError{Attribute: "id"}
@@ -273,13 +307,16 @@ func (s *CouchbaseStore) CreateUnique(bucket, id string, doc map[string]interfac
 // ReplaceUnique implements Store using CAS on the resource document combined
 // with atomic KV sentinels in scim_unique.
 func (s *CouchbaseStore) ReplaceUnique(bucket, id string, doc map[string]interface{}, newClaims []UniqueClaim, extractClaims func(map[string]interface{}) []UniqueClaim) error {
+	tenant, phys := SplitScopedBucket(bucket)
+	docKey := cbDocKey(tenant, id)
+
 	newSet := make(map[string]struct{}, len(newClaims))
 	for _, claim := range newClaims {
-		newSet[claim.LockID] = struct{}{}
+		newSet[cbSentinelKey(tenant, claim)] = struct{}{}
 	}
 
 	for attempt := 0; attempt < maxCASRetries; attempt++ {
-		getRes, err := s.collection(bucket).Get(id, &gocb.GetOptions{})
+		getRes, err := s.collection(phys).Get(docKey, &gocb.GetOptions{})
 		if err != nil {
 			if isKeyNotFound(err) {
 				return ErrNotFound
@@ -290,6 +327,7 @@ func (s *CouchbaseStore) ReplaceUnique(bucket, id string, doc map[string]interfa
 		if err := getRes.Content(&currentDoc); err != nil {
 			return err
 		}
+		delete(currentDoc, "_scim_tenant")
 		var oldClaims []UniqueClaim
 		if extractClaims != nil {
 			oldClaims = extractClaims(currentDoc)
@@ -297,22 +335,23 @@ func (s *CouchbaseStore) ReplaceUnique(bucket, id string, doc map[string]interfa
 
 		newlyAcquired := make([]string, 0, len(newClaims))
 		rollbackNew := func() {
-			for _, lockID := range newlyAcquired {
-				s.releaseSentinel(bucket, id, lockID)
+			for _, lockKey := range newlyAcquired {
+				s.releaseSentinel(phys, docKey, lockKey)
 			}
 		}
 
 		var claimErr error
 		for _, claim := range newClaims {
-			isNew, err := s.acquireSentinel(bucket, id, claim)
+			lockKey := cbSentinelKey(tenant, claim)
+			isNew, err := s.acquireSentinel(phys, docKey, lockKey, claim)
 			if err != nil {
 				claimErr = err
 				break
 			}
 			if isNew {
-				newlyAcquired = append(newlyAcquired, claim.LockID)
+				newlyAcquired = append(newlyAcquired, lockKey)
 			}
-			if err := s.checkLegacyUniqueOwner(bucket, id, claim); err != nil {
+			if err := s.checkLegacyUniqueOwner(phys, tenant, id, claim); err != nil {
 				claimErr = err
 				break
 			}
@@ -322,7 +361,7 @@ func (s *CouchbaseStore) ReplaceUnique(bucket, id string, doc map[string]interfa
 			return claimErr
 		}
 
-		_, err = s.collection(bucket).Replace(id, doc, &gocb.ReplaceOptions{Cas: getRes.Cas()})
+		_, err = s.collection(phys).Replace(docKey, prepareCouchbaseDoc(tenant, doc), &gocb.ReplaceOptions{Cas: getRes.Cas()})
 		if err != nil {
 			rollbackNew()
 			if isKeyNotFound(err) {
@@ -335,8 +374,9 @@ func (s *CouchbaseStore) ReplaceUnique(bucket, id string, doc map[string]interfa
 		}
 
 		for _, old := range oldClaims {
-			if _, stillHeld := newSet[old.LockID]; !stillHeld {
-				s.releaseSentinel(bucket, id, old.LockID)
+			oldKey := cbSentinelKey(tenant, old)
+			if _, stillHeld := newSet[oldKey]; !stillHeld {
+				s.releaseSentinel(phys, docKey, oldKey)
 			}
 		}
 		return nil
@@ -346,26 +386,28 @@ func (s *CouchbaseStore) ReplaceUnique(bucket, id string, doc map[string]interfa
 
 // RemoveUnique implements Store.
 func (s *CouchbaseStore) RemoveUnique(bucket, id string, claims []UniqueClaim) error {
+	tenant, phys := SplitScopedBucket(bucket)
+	docKey := cbDocKey(tenant, id)
 	if err := s.Remove(bucket, id); err != nil {
 		return err
 	}
 	for _, claim := range claims {
-		s.releaseSentinel(bucket, id, claim.LockID)
+		s.releaseSentinel(phys, docKey, cbSentinelKey(tenant, claim))
 	}
 	return nil
 }
 
-func (s *CouchbaseStore) acquireSentinel(bucket, ownerID string, claim UniqueClaim) (bool, error) {
-	col := s.uniqueCollection(bucket)
+func (s *CouchbaseStore) acquireSentinel(physBucket, ownerDocKey, lockKey string, claim UniqueClaim) (bool, error) {
+	col := s.uniqueCollection(physBucket)
 	nowMs := time.Now().UnixMilli()
 	candidate := sentinelDoc{
-		Owner:     ownerID,
+		Owner:     ownerDocKey,
 		Attribute: claim.Attribute,
 		Key:       claim.Key,
 		CreatedAt: nowMs,
 	}
 
-	_, err := col.Insert(claim.LockID, candidate, &gocb.InsertOptions{})
+	_, err := col.Insert(lockKey, candidate, &gocb.InsertOptions{})
 	if err == nil {
 		return true, nil
 	}
@@ -373,10 +415,10 @@ func (s *CouchbaseStore) acquireSentinel(bucket, ownerID string, claim UniqueCla
 		return false, err
 	}
 
-	getRes, getErr := col.Get(claim.LockID, &gocb.GetOptions{})
+	getRes, getErr := col.Get(lockKey, &gocb.GetOptions{})
 	if getErr != nil {
 		if isKeyNotFound(getErr) {
-			if _, retryErr := col.Insert(claim.LockID, candidate, &gocb.InsertOptions{}); retryErr == nil {
+			if _, retryErr := col.Insert(lockKey, candidate, &gocb.InsertOptions{}); retryErr == nil {
 				return true, nil
 			}
 		}
@@ -387,7 +429,7 @@ func (s *CouchbaseStore) acquireSentinel(bucket, ownerID string, claim UniqueCla
 	if err := getRes.Content(&existing); err != nil {
 		return false, &UniqueConflictError{Attribute: claim.Attribute}
 	}
-	if existing.Owner == ownerID {
+	if existing.Owner == ownerDocKey {
 		return false, nil
 	}
 
@@ -396,9 +438,9 @@ func (s *CouchbaseStore) acquireSentinel(bucket, ownerID string, claim UniqueCla
 	// its sentinel milliseconds before inserting its resource cannot have its
 	// claim stolen.
 	if existing.CreatedAt > 0 && time.Since(time.UnixMilli(existing.CreatedAt)) > orphanSentinelGrace {
-		_, ownerErr := s.collection(bucket).Get(existing.Owner, &gocb.GetOptions{})
+		_, ownerErr := s.collection(physBucket).Get(existing.Owner, &gocb.GetOptions{})
 		if isKeyNotFound(ownerErr) {
-			if _, takeoverErr := col.Replace(claim.LockID, candidate, &gocb.ReplaceOptions{Cas: getRes.Cas()}); takeoverErr == nil {
+			if _, takeoverErr := col.Replace(lockKey, candidate, &gocb.ReplaceOptions{Cas: getRes.Cas()}); takeoverErr == nil {
 				return true, nil
 			}
 		}
@@ -407,36 +449,44 @@ func (s *CouchbaseStore) acquireSentinel(bucket, ownerID string, claim UniqueCla
 	return false, &UniqueConflictError{Attribute: claim.Attribute}
 }
 
-func (s *CouchbaseStore) releaseSentinel(bucket, ownerID, lockID string) {
-	col := s.uniqueCollection(bucket)
-	getRes, err := col.Get(lockID, &gocb.GetOptions{})
+func (s *CouchbaseStore) releaseSentinel(physBucket, ownerDocKey, lockKey string) {
+	col := s.uniqueCollection(physBucket)
+	getRes, err := col.Get(lockKey, &gocb.GetOptions{})
 	if err != nil {
 		return
 	}
 	var existing sentinelDoc
-	if err := getRes.Content(&existing); err != nil || existing.Owner != ownerID {
+	if err := getRes.Content(&existing); err != nil || existing.Owner != ownerDocKey {
 		return
 	}
-	_, _ = col.Remove(lockID, &gocb.RemoveOptions{Cas: getRes.Cas()})
+	_, _ = col.Remove(lockKey, &gocb.RemoveOptions{Cas: getRes.Cas()})
 }
 
 // checkLegacyUniqueOwner guards upgrades where resources created prior to the
 // scim_unique collection do not yet have sentinel documents.
-func (s *CouchbaseStore) checkLegacyUniqueOwner(bucket, selfID string, claim UniqueClaim) error {
+func (s *CouchbaseStore) checkLegacyUniqueOwner(physBucket, tenant, selfID string, claim UniqueClaim) error {
 	quotedAttr := parser.AddQuote(claim.Attribute)
-	var query string
+	cmp := quotedAttr + " = $1"
 	if !claim.CaseExact {
 		if _, isStr := claim.RawValue.(string); isStr {
-			query = "SELECT id FROM `" + bucket + "` WHERE LOWER(" + quotedAttr + ") = LOWER($1) AND `id` <> $2 LIMIT 1"
+			cmp = "LOWER(" + quotedAttr + ") = LOWER($1)"
 		}
 	}
-	if query == "" {
-		query = "SELECT id FROM `" + bucket + "` WHERE " + quotedAttr + " = $1 AND `id` <> $2 LIMIT 1"
+	params := []interface{}{claim.RawValue, cbDocKey(tenant, selfID)}
+	tenantClause := ""
+	if !claim.Global {
+		if tenant == "" {
+			tenantClause = " AND `_scim_tenant` IS MISSING"
+		} else {
+			params = append(params, tenant)
+			tenantClause = fmt.Sprintf(" AND `_scim_tenant` = $%d", len(params))
+		}
 	}
+	query := "SELECT id FROM `" + physBucket + "` WHERE " + cmp + " AND META().id <> $2" + tenantClause + " LIMIT 1"
 
 	rows, err := s.cluster.Query(query, &gocb.QueryOptions{
 		ScanConsistency:      queryScanConsistency(),
-		PositionalParameters: []interface{}{claim.RawValue, selfID},
+		PositionalParameters: params,
 	})
 	if err != nil {
 		return err
@@ -458,9 +508,42 @@ func (s *CouchbaseStore) checkLegacyUniqueOwner(bucket, selfID string, claim Uni
 	return rows.Err()
 }
 
+func applyN1QLTenantFilter(q *parser.Query, hasFilter bool, tenant string) {
+	if !hasFilter {
+		if tenant == "" {
+			clause := " WHERE `_scim_tenant` IS MISSING"
+			q.Page += clause
+			q.Count += clause
+		} else {
+			q.Params = append(q.Params, tenant)
+			clause := fmt.Sprintf(" WHERE `_scim_tenant` = $%d", len(q.Params))
+			q.Page += clause
+			q.Count += clause
+		}
+		return
+	}
+
+	tenantPred := "`_scim_tenant` IS MISSING"
+	if tenant != "" {
+		q.Params = append(q.Params, tenant)
+		tenantPred = fmt.Sprintf("`_scim_tenant` = $%d", len(q.Params))
+	}
+	wrapWhere := func(sqlText string) string {
+		const marker = " WHERE "
+		idx := strings.Index(sqlText, marker)
+		if idx < 0 {
+			return sqlText + " WHERE " + tenantPred
+		}
+		return sqlText[:idx] + " WHERE (" + sqlText[idx+len(marker):] + ") AND " + tenantPred
+	}
+	q.Page = wrapWhere(q.Page)
+	q.Count = wrapWhere(q.Count)
+}
+
 // Search implements Store by translating the SCIM filter to N1QL.
 func (s *CouchbaseStore) Search(q SearchQuery) (int, []map[string]interface{}, error) {
-	query, err := parser.FilterToN1QLWithOptions(q.Bucket, q.Filter, parser.FilterOptions{
+	tenant, physBucket := SplitScopedBucket(q.Bucket)
+	query, err := parser.FilterToN1QLWithOptions(physBucket, q.Filter, parser.FilterOptions{
 		Resolve:       q.ResolveName,
 		IsCaseExact:   q.IsCaseExact,
 		IsMultiValued: q.IsMultiValued,
@@ -468,6 +551,7 @@ func (s *CouchbaseStore) Search(q SearchQuery) (int, []map[string]interface{}, e
 	if err != nil {
 		return 0, nil, fmt.Errorf("%w: %s", ErrInvalidFilter, err)
 	}
+	applyN1QLTenantFilter(&query, strings.TrimSpace(q.Filter) != "", tenant)
 
 	sortBy := q.SortBy
 	if sortBy == "" {
@@ -522,10 +606,11 @@ func (s *CouchbaseStore) Search(q SearchQuery) (int, []map[string]interface{}, e
 			return 0, nil, err
 		}
 		// "SELECT * FROM `Bucket`" nests every row under the bucket name.
-		doc, ok := item[q.Bucket].(map[string]interface{})
+		doc, ok := item[physBucket].(map[string]interface{})
 		if !ok {
 			continue
 		}
+		delete(doc, "_scim_tenant")
 		resources = append(resources, doc)
 	}
 	return countResult.Count, resources, rows.Err()
@@ -537,11 +622,18 @@ func (s *CouchbaseStore) Search(q SearchQuery) (int, []map[string]interface{}, e
 // from a client payload, and this is a query built outside the filter
 // translation, so it must not grow its own injection hole.
 func (s *CouchbaseStore) FindIDByAttribute(bucket, attributePath string, value interface{}) (string, error) {
-	query := "SELECT id FROM `" + bucket + "` WHERE " + parser.AddQuote(attributePath) + " = $1 LIMIT 1"
+	tenant, physBucket := SplitScopedBucket(bucket)
+	params := []interface{}{value}
+	tenantClause := " AND `_scim_tenant` IS MISSING"
+	if tenant != "" {
+		params = append(params, tenant)
+		tenantClause = " AND `_scim_tenant` = $2"
+	}
+	query := "SELECT id FROM `" + physBucket + "` WHERE " + parser.AddQuote(attributePath) + " = $1" + tenantClause + " LIMIT 1"
 
 	rows, err := s.cluster.Query(query, &gocb.QueryOptions{
 		ScanConsistency:      queryScanConsistency(),
-		PositionalParameters: []interface{}{value},
+		PositionalParameters: params,
 	})
 	if err != nil {
 		return "", err
@@ -563,6 +655,7 @@ func (s *CouchbaseStore) FindIDByAttribute(bucket, attributePath string, value i
 // EnsureBucket implements Store, creating the bucket, its scim_unique sentinel
 // collection, and its primary N1QL index.
 func (s *CouchbaseStore) EnsureBucket(name string) error {
+	_, name = SplitScopedBucket(name)
 	defaultConfig := gocb.CreateBucketSettings{
 		BucketSettings: gocb.BucketSettings{
 			Name:                 name,

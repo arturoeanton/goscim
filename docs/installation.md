@@ -1,17 +1,52 @@
 # Installation
 
-## Requirements
+## Prebuilt binary (1-line installer)
 
-| | |
-|---|---|
-| Go | 1.26 or later (1.27.4+ recommended), to build |
-| Couchbase | 7.x, Community or Enterprise |
-| Services | Data, Query, Index |
-| Memory | 200 MB of cluster quota per resource type, by default |
+Prebuilt static binaries (`CGO_ENABLED=0`) are published for Linux and macOS (`amd64` and `arm64`) and Windows (`amd64`):
 
-The shipped configuration defines three resource types, so a default install
-asks for 600 MB of bucket quota. Adjust in
-[bucket settings](configuration.md#bucket-settings) if that is too much.
+```bash
+curl -fsSL https://raw.githubusercontent.com/arturoeanton/goscim/main/scripts/install.sh | sh
+```
+
+Pin a release tag or custom destination directory when needed:
+
+```bash
+GOSCIM_VERSION=v1.4.0 GOSCIM_INSTALL_DIR=/usr/local/bin \
+  curl -fsSL https://raw.githubusercontent.com/arturoeanton/goscim/main/scripts/install.sh | sh
+```
+
+Because the binary embeds the default `config/` directory (`User`, `Group`, `Element`, and `EnterpriseUser`), `goscim -demo` and `SCIM_STORE=sqlite` work from any working directory without external files. When a local `./config` directory exists (or `SCIM_CONFIG_DIR` is set explicitly), disk files take precedence.
+
+## Container image (`ghcr.io`)
+
+Multi-arch images (`linux/amd64`, `linux/arm64`) built onto `gcr.io/distroless/static-debian12:nonroot` with a native `-healthcheck` probe:
+
+```bash
+# Instant demo mode with HTMX Web Console on http://localhost:8080/ui
+docker run --rm -p 8080:8080 ghcr.io/arturoeanton/goscim:latest -demo
+
+# Persistent single-node SQLite mode
+docker run -d --name goscim -p 8080:8080 \
+  -v goscim-data:/data \
+  -e SCIM_STORE=sqlite \
+  -e SCIM_SQLITE_PATH=/data/goscim.db \
+  -e SCIM_AUTH=bearer \
+  -e SCIM_BEARER_TOKEN=change-me-32-bytes \
+  -e SCIM_BEARER_ROLES=admin \
+  -e SCIM_UI=true \
+  -e SCIM_UI_TOKEN=change-me-ui-token \
+  ghcr.io/arturoeanton/goscim:latest
+```
+
+## Storage backends and requirements
+
+| Backend | `SCIM_STORE` | External dependencies | Best for |
+|---|---|---|---|
+| Couchbase 7.x | `couchbase` *(default)* | Couchbase Data, Query, Index services (200 MB quota per resource type by default) | Horizontally scaled, multi-replica production clusters |
+| Embedded SQLite | `sqlite` | None (`modernc.org/sqlite`, pure Go, WAL mode) | Single-node appliances, VMs, edge deployments, persistent staging |
+| In-memory | `memory` | None | `-demo`, local sandboxes, ephemeral CI conformance jobs |
+
+Building from source requires Go 1.26 or later (1.27.4+ recommended).
 
 ## Couchbase
 
@@ -32,26 +67,28 @@ Use a real cluster, and prefer a dedicated account over the administrator.
 
 #### A least-privilege Couchbase user
 
-GoSCIM creates its buckets, `_default.scim_unique` collections, and primary
-indexes on first start, which needs cluster-level privilege. Once they exist,
-that privilege is no longer needed.
+GoSCIM creates its buckets, `_default.scim_unique` collections, primary indexes,
+and schema-derived secondary N1QL indexes (`idx_scim_*`) on first start, which
+needs cluster-level privilege. Once they exist, that privilege is no longer
+needed.
 
-1. Start once with an administrator account so the buckets and `_default.scim_unique`
-   collections are created.
+1. Start once with an administrator account so the buckets, `_default.scim_unique`
+   collections, and GSI indexes are created.
 2. Create a user with, per GoSCIM bucket: **Application Access** (or **Data
    Reader** and **Data Writer** across `_default`), **Query Select**, **Query
-   Insert**, **Query Update**, **Query Delete**.
+   Insert**, **Query Update**, **Query Delete**, and **Query Manage Index** (or
+   set `SCIM_COUCHBASE_AUTO_INDEX=false` after initial provisioning).
 3. Switch `SCIM_ADMIN_USER` and `SCIM_ADMIN_PASSWORD` to that user.
 
-`EnsureBucket` still runs on every start, but finds the buckets present and
-only asks for the primary index, which `IGNORE IF EXISTS` makes a no-op.
+`EnsureBucket` still runs on every start, but finds the buckets and indexes
+present (`CREATE INDEX IF NOT EXISTS` is a no-op).
 
-## Building
+## Building from source
 
 ```bash
 git clone https://github.com/arturoeanton/goscim.git
 cd goscim
-go build -o goscim .
+CGO_ENABLED=0 go build -o goscim .
 ```
 
 Or run the checks first:
@@ -60,26 +97,24 @@ Or run the checks first:
 make check   # build, vet, and the unit suite with the race detector
 ```
 
-The binary needs the config directory at runtime. Either run it from a
-directory containing `config/`, or point `SCIM_CONFIG_DIR` at one.
+### Docker Compose stacks
 
-### Container and Docker Compose
-
-A multi-stage `Dockerfile` (building a static binary onto
-`gcr.io/distroless/static-debian12:nonroot` with a built-in `-healthcheck`
-probe against `/readyz`) and a `docker-compose.yml` (starting Couchbase,
-initialising the cluster automatically, and running GoSCIM) ship at the
-repository root:
+Two Compose stacks ship at the repository root:
 
 ```bash
+# Couchbase 7.1.1 + cluster init + GoSCIM
 docker compose up -d --build
+
+# Keycloak 26 OIDC/JWKS realm + SQLite-backed GoSCIM + HTMX Web Console (/ui)
+docker compose -f docker-compose.keycloak.yml up -d --build
 ```
 
-Or build the image standalone:
-
-```bash
-docker build -t goscim:latest .
-```
+In the Keycloak lab, Keycloak listens on <http://localhost:8081> (`admin` /
+`admin`, pre-imported realm `goscim-lab` with OIDC client `goscim-provisioner`),
+and GoSCIM listens on <http://localhost:8080> (`/ui` enabled, `SCIM_AUTH=bearer`
+with `keycloak-lab-scim-token` by default, and `SCIM_JWT_*` pre-wired so
+`SCIM_AUTH=jwt docker compose -f docker-compose.keycloak.yml up` validates OIDC
+tokens against Keycloak's JWKS directly).
 
 ## Running
 
@@ -132,27 +167,48 @@ WantedBy=multi-user.target
 `TimeoutStopSec` should exceed the 20-second shutdown drain, so systemd does
 not kill the process while it is finishing requests.
 
-### Kubernetes
+### Kubernetes and Helm
 
-Nothing special is required: the process is stateless and handles `SIGTERM`.
+A Helm chart ships under `charts/goscim/` with support for `couchbase`,
+`sqlite` (backed by a `PersistentVolumeClaim`), and `memory` stores, Kubernetes
+`Secret` generation or `existingSecret` binding, `/healthz` and `/readyz`
+probes, `terminationGracePeriodSeconds: 30`, and optional Prometheus Operator
+`ServiceMonitor`:
 
-- `terminationGracePeriodSeconds: 30`, again above the 20-second drain.
-- Configure `livenessProbe` against `GET /healthz` and `readinessProbe` against
-  `GET /readyz` (which verifies Couchbase KV and Query connectivity under a 2s
-  timeout).
-- Secrets belong in a `Secret`, not in the manifest.
+```bash
+# Single-replica SQLite deployment with bearer auth
+helm upgrade --install goscim ./charts/goscim \
+  --set store.backend=sqlite \
+  --set auth.mode=bearer \
+  --set auth.bearerToken="$(openssl rand -hex 32)" \
+  --set auth.bearerRoles="admin"
+
+# Multi-replica Couchbase deployment with JWT auth and ServiceMonitor
+helm upgrade --install goscim ./charts/goscim \
+  --set store.backend=couchbase \
+  --set replicaCount=3 \
+  --set store.couchbase.url=couchbase.db.svc.cluster.local \
+  --set store.couchbase.adminPassword="..." \
+  --set auth.mode=jwt \
+  --set auth.jwt.jwksURL=https://idp.example.com/.well-known/jwks.json \
+  --set auth.jwt.issuer=https://idp.example.com \
+  --set auth.jwt.audience=scim-api \
+  --set metrics.serviceMonitor.enabled=true
+```
 
 ## First start
 
-The first run creates one bucket per resource type and a primary index on
-each. Expect log lines like:
+The first run against Couchbase creates one bucket per resource type, its
+primary index, and schema-derived secondary indexes (`idx_scim_*`). Expect log
+lines like:
 
 ```
-GoSCIM 1.3.0 starting
+GoSCIM 1.4.0 starting (store=couchbase)
 urn:ietf:params:scim:schemas:core:2.0:User
 ...
 Create Bucket -> User
 Ready Bucket -> User
+scim indexes on User: 18 active
 listening on :8080
 ```
 
@@ -164,6 +220,9 @@ bucket, which takes a few seconds on a fresh cluster.
 ```bash
 curl -s http://localhost:8080/scim/v2/ServiceProviderConfig | jq .
 curl -s http://localhost:8080/scim/v2/ResourceTypes | jq '.Resources[].endpoint'
+
+# Live end-to-end conformance suite (RFC 7643/7644 + Entra ID + Okta + Keycloak)
+goscim conformance -url http://localhost:8080/scim/v2 -token "$SCIM_BEARER_TOKEN"
 ```
 
 Discovery needs no credentials. If those work, the config loaded and the

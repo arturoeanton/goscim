@@ -42,9 +42,10 @@ var acceptedJWTAlgorithms = []string{
 // JWTAuthenticator validates OAuth 2.0 access tokens as described by RFC 9068,
 // with signing keys fetched from the issuer's JWKS endpoint.
 type JWTAuthenticator struct {
-	keys       *jwksCache
-	rolesClaim string
-	parser     *jwt.Parser
+	keys        *jwksCache
+	rolesClaim  string
+	tenantClaim string
+	parser      *jwt.Parser
 }
 
 // NewJWTAuthenticator builds a validator for tokens from a single issuer.
@@ -95,7 +96,16 @@ func NewJWTAuthenticatorFromEnv() (*JWTAuthenticator, error) {
 	if err != nil {
 		return nil, fmt.Errorf(`SCIM_AUTH="jwt": %w (set SCIM_JWT_JWKS_URL, SCIM_JWT_ISSUER and SCIM_JWT_AUDIENCE)`, err)
 	}
+	authenticator.SetTenantClaim(os.Getenv("SCIM_JWT_TENANT_CLAIM"))
 	return authenticator, nil
+}
+
+// SetTenantClaim configures an optional JWT claim (top-level or dotted path,
+// e.g. "tid" or "org.id") that binds the authenticated Principal to a tenant.
+func (a *JWTAuthenticator) SetTenantClaim(claim string) {
+	if a != nil {
+		a.tenantClaim = strings.TrimSpace(claim)
+	}
 }
 
 // Challenge implements Authenticator.
@@ -126,7 +136,23 @@ func (a *JWTAuthenticator) Authenticate(r *http.Request) (*Principal, error) {
 	}
 
 	subject := subjectFromClaims(claims)
-	return &Principal{Subject: subject, Roles: rolesFromClaims(claims, a.rolesClaim)}, nil
+	var tenant string
+	if a.tenantClaim != "" {
+		if raw := lookupClaim(claims, a.tenantClaim); raw != nil {
+			str, ok := raw.(string)
+			if !ok {
+				return nil, ErrUnauthenticated
+			}
+			str = strings.TrimSpace(str)
+			if str != "" {
+				if !IsValidTenantID(str) {
+					return nil, ErrUnauthenticated
+				}
+				tenant = str
+			}
+		}
+	}
+	return &Principal{Subject: subject, Roles: rolesFromClaims(claims, a.rolesClaim), Tenant: tenant}, nil
 }
 
 // subjectFromClaims extracts the principal identifier across standard OIDC/RFC 9068

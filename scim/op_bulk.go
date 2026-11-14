@@ -27,11 +27,15 @@ type bulkCtxKey int
 const (
 	bulkPrincipalKey bulkCtxKey = iota
 	bulkRequestIDKey
+	bulkTenantKey
+	bulkURLTenantKey
 )
 
-func withBulkMeta(ctx context.Context, p *Principal, reqID string) context.Context {
+func withBulkMeta(ctx context.Context, p *Principal, reqID, tenant, urlTenant string) context.Context {
 	ctx = context.WithValue(ctx, bulkPrincipalKey, p)
 	ctx = context.WithValue(ctx, bulkRequestIDKey, reqID)
+	ctx = context.WithValue(ctx, bulkTenantKey, tenant)
+	ctx = context.WithValue(ctx, bulkURLTenantKey, urlTenant)
 	return ctx
 }
 
@@ -42,6 +46,12 @@ func injectBulkContext() gin.HandlerFunc {
 		}
 		if reqID, ok := c.Request.Context().Value(bulkRequestIDKey).(string); ok && reqID != "" {
 			c.Set(requestIDContextKey, reqID)
+		}
+		if tenant, ok := c.Request.Context().Value(bulkTenantKey).(string); ok && tenant != "" {
+			c.Set(tenantContextKey, tenant)
+		}
+		if urlTenant, ok := c.Request.Context().Value(bulkURLTenantKey).(string); ok && urlTenant != "" {
+			c.Set(urlTenantContextKey, urlTenant)
 		}
 		c.Next()
 	}
@@ -106,6 +116,9 @@ func BulkHandler(subRouter http.Handler) gin.HandlerFunc {
 
 		principal := PrincipalOf(c)
 		reqID := RequestIDOf(c)
+		tenant := TenantOf(c)
+		urlTenant := URLTenantOf(c)
+		effectivePrefix := EffectivePrefix(c)
 		resolvedBulkIDs := make(map[string]string)
 		results := make([]BulkOperationResult, 0, len(req.Operations))
 		errorCount := 0
@@ -134,7 +147,7 @@ func BulkHandler(subRouter http.Handler) gin.HandlerFunc {
 			method := strings.ToUpper(strings.TrimSpace(op.Method))
 			bulkID := strings.TrimSpace(op.BulkID)
 
-			rt, targetID, rawQuery, hasQuery, pathErr := resolveBulkTarget(method, op.Path, resolvedBulkIDs)
+			rt, targetID, rawQuery, hasQuery, pathErr := resolveBulkTargetForPrefix(effectivePrefix, method, op.Path, resolvedBulkIDs)
 			if pathErr != nil {
 				loc := ""
 				if method != http.MethodPost && rt.Endpoint != "" && targetID != "" {
@@ -196,7 +209,7 @@ func BulkHandler(subRouter http.Handler) gin.HandlerFunc {
 				bodyReader = bytes.NewReader(nil)
 			}
 
-			subCtx := withBulkMeta(c.Request.Context(), principal, reqID)
+			subCtx := withBulkMeta(c.Request.Context(), principal, reqID, tenant, urlTenant)
 			subReq, err := http.NewRequestWithContext(subCtx, method, targetPath, bodyReader)
 			if err != nil {
 				recordFailure(method, bulkID, fallbackLoc, http.StatusBadRequest, "invalidPath", err.Error())
@@ -341,12 +354,24 @@ type bulkOpError struct {
 }
 
 func resolveBulkTarget(method, rawOpPath string, resolved map[string]string) (ResourceType, string, string, bool, *bulkOpError) {
+	return resolveBulkTargetForPrefix(PREFIX, method, rawOpPath, resolved)
+}
+
+func resolveBulkTargetForPrefix(effectivePrefix, method, rawOpPath string, resolved map[string]string) (ResourceType, string, string, bool, *bulkOpError) {
 	pathPart, rawQuery, hasQuery := strings.Cut(strings.TrimSpace(rawOpPath), "?")
 	if pathPart == "" {
 		return ResourceType{}, "", "", false, &bulkOpError{scimType: "invalidPath", message: "empty operation path"}
 	}
 	if !strings.HasPrefix(pathPart, "/") {
 		pathPart = "/" + pathPart
+	}
+	if effectivePrefix != "" && effectivePrefix != PREFIX {
+		if strings.EqualFold(pathPart, effectivePrefix) {
+			return ResourceType{}, "", "", false, &bulkOpError{scimType: "invalidPath", message: "operation path must target a resource endpoint"}
+		}
+		if len(pathPart) > len(effectivePrefix) && strings.EqualFold(pathPart[:len(effectivePrefix)], effectivePrefix) && pathPart[len(effectivePrefix)] == '/' {
+			pathPart = pathPart[len(effectivePrefix):]
+		}
 	}
 	if strings.EqualFold(pathPart, PREFIX) {
 		return ResourceType{}, "", "", false, &bulkOpError{scimType: "invalidPath", message: "operation path must target a resource endpoint"}

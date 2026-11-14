@@ -1,5 +1,59 @@
 # Changelog
 
+## 1.4.0
+
+Turnkey experience, pluggable persistence, HTMX console, observability, webhooks, and B2B multi-tenancy release.
+
+### Added
+
+- **Zero-dependency `-demo` mode & `SCIM_STORE=memory`**: `goscim -demo` starts
+  in milliseconds from any working directory using embedded default schemas,
+  seeds sample SCIM 2.0 `Users` and nested `Groups` (demonstrating `direct` and
+  `indirect` `User.groups` memberships), enables `/ui`, and prints ready-to-run
+  `curl` and `goscim conformance` commands.
+- **Embedded SQLite store (`SCIM_STORE=sqlite`, `SCIM_SQLITE_PATH`)**: pure-Go
+  (`modernc.org/sqlite`, `CGO_ENABLED=0`) ACID single-file persistence in `WAL`
+  mode supporting atomic `uniqueness: server` and cross-tenant
+  `uniqueness: global` claims without external database infrastructure.
+- **Embedded HTMX Web Console & Live Traffic Inspector (`/ui`, `-ui` /
+  `SCIM_UI=true`)**: air-gapped single-binary UI (with vendored HTMX 2.0.4 and
+  optional `SCIM_UI_TOKEN` guard) featuring live telemetry cards, `Users` /
+  `Groups` / `Elements` directory CRUD, an interactive SCIM-to-N1QL filter
+  playground, a 200-entry `ngrok`-style live request/response inspector (with
+  automatic secret redaction), and a one-click conformance runner.
+- **Prometheus metrics endpoint (`GET /metrics`)**: zero-dependency Prometheus
+  0.0.4 text exposition (`goscim_build_info`, `goscim_store_up`,
+  `goscim_http_requests_total`, `goscim_http_request_duration_seconds`,
+  `goscim_auth_failures_total`, `goscim_uniqueness_conflicts_total`,
+  `goscim_webhook_deliveries_total`), enabled by default (`SCIM_METRICS`) with
+  optional constant-time Bearer protection (`SCIM_METRICS_TOKEN`).
+- **Automatic Couchbase secondary N1QL (`GSI`) indexes**: `EnsureResourceIndexes`
+  (`SCIM_COUCHBASE_AUTO_INDEX`, enabled by default) inspects loaded JSON schemas
+  at startup and creates `IF NOT EXISTS` secondary indexes for `_scim_tenant`,
+  `externalId`, `uniqueness: server|global` attributes (`LOWER(...)` when
+  `caseExact: false`), and `DISTINCT ARRAY` indexes for multi-valued complex
+  `.value` sub-attributes.
+- **Signed outbound CloudEvents 1.0 webhooks**: `SCIM_WEBHOOK_URLS`,
+  `SCIM_WEBHOOK_SECRET` (`X-SCIM-Signature-256: sha256=<hmac>`),
+  `SCIM_WEBHOOK_EVENTS`, and `SCIM_WEBHOOK_MAX_RETRIES`, with per-resource shard
+  ordering, `io.goscim.user.deactivated` transition detection, exponential
+  retries on `429`/`5xx`, and schema-aware stripping of `returned: "never"`
+  fields.
+- **Live conformance verifier (`goscim conformance`)**: CLI subcommand (`-url`,
+  `-token`, `-basic`, `-profile all|rfc|entra|okta|keycloak`, `-json`) and
+  programmatic `scim.RunConformance` runner verifying live SCIM 2.0 servers end
+  to end and cleaning up all temporary records.
+- **Native B2B SaaS multi-tenancy**: `/tenants/:tenant/scim/v2/...` URL routes
+  plus credential-bound tenant isolation via `@<tenant>` in `SCIM_BEARER_TOKENS`,
+  `SCIM_BEARER_TENANT`, and `SCIM_JWT_TENANT_CLAIM`, isolating resources,
+  searches, `/Bulk`, `Group.members <-> User.groups`, and `uniqueness: server`
+  per tenant across `couchbase`, `sqlite`, and `memory` stores.
+- **Release, installer, Keycloak lab, and Helm chart**: `.goreleaser.yaml`,
+  `.github/workflows/release.yml` (multi-OS/arch binaries + multi-arch
+  `ghcr.io/arturoeanton/goscim` image), `scripts/install.sh`,
+  `docker-compose.keycloak.yml` + `deploy/keycloak/goscim-realm.json`, and
+  `charts/goscim/`.
+
 ## 1.3.0
 
 Microsoft Entra ID, Okta, and Keycloak compatibility release.

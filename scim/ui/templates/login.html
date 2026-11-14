@@ -1,0 +1,23 @@
+{{define "login.html"}}
+{{template "head" .}}
+<div class="login-wrap">
+  <div class="login-card">
+    <h1 style="margin:0 0 6px;font-size:20px">GoSCIM Console</h1>
+    <p style="margin:0 0 18px;color:var(--text-muted);font-size:13px">
+      Enter the console access token (<code class="mono">SCIM_UI_TOKEN</code>) to continue.
+    </p>
+    {{if .Error}}
+    <div class="alert alert-err">{{.Error}}</div>
+    {{end}}
+    <form method="post" action="/ui/login">
+      <div class="field" style="margin-bottom:14px">
+        <label for="token">Access Token</label>
+        <input id="token" type="password" name="token" required autofocus>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%">Sign In</button>
+    </form>
+  </div>
+</div>
+</body>
+</html>
+{{end}}

@@ -70,11 +70,14 @@ func replaceWithMode(c *gin.Context, resourceType ResourceType, id string, eleme
 		return
 	}
 	element["id"] = id
-	meta := updateMeta(previousMeta, element, resourceType)
+	prefix := EffectivePrefix(c)
+	meta := updateMetaForPrefix(prefix, previousMeta, element, resourceType)
 	element["meta"] = meta
 
+	tenant := TenantOf(c)
+	bucket := ScopedBucket(tenant, resourceType.Name)
 	newClaims := ExtractUniqueClaims(resourceType, element)
-	err = DB.ReplaceUnique(resourceType.Name, id, element, newClaims, func(current map[string]interface{}) []UniqueClaim {
+	err = DB.ReplaceUnique(bucket, id, element, newClaims, func(current map[string]interface{}) []UniqueClaim {
 		return ExtractUniqueClaims(resourceType, current)
 	})
 	if err != nil {
@@ -85,7 +88,12 @@ func replaceWithMode(c *gin.Context, resourceType ResourceType, id string, eleme
 		writeStoreUniqueError(c, resourceType, err)
 		return
 	}
-	syncAfterReplace(resourceType, id, stored, element)
+	syncAfterReplaceInTenant(tenant, prefix, resourceType, id, stored, element)
+	action := "replace"
+	if isPatch {
+		action = "patch"
+	}
+	emitResourceWebhookFromContext(c, action, resourceType, id, stored, element)
 	c.Header("Location", absoluteLocation(c, resourceType, id))
 	setVersionHeader(c, meta)
 	writeSCIM(c, http.StatusOK, FormatResource(currentRoles(c), resourceType, element, proj))

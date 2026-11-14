@@ -192,10 +192,20 @@ func AuditMiddleware() gin.HandlerFunc {
 		start := time.Now()
 		ensureAuditInfo(c)
 
+		capture := DefaultInspector.Enabled()
+		var reqPreview string
+		var respWriter *bodyCaptureWriter
+		if capture {
+			reqPreview = captureRequestPreview(c)
+			respWriter = &bodyCaptureWriter{ResponseWriter: c.Writer}
+			c.Writer = respWriter
+		}
+
 		c.Next()
 
+		elapsed := time.Since(start)
 		status := c.Writer.Status()
-		durationMs := float64(time.Since(start).Microseconds()) / 1000.0
+		durationMs := float64(elapsed.Microseconds()) / 1000.0
 		info := ensureAuditInfo(c)
 
 		action := info.action
@@ -205,12 +215,47 @@ func AuditMiddleware() gin.HandlerFunc {
 			action, resourceType, resourceID = inferAuditTarget(c.Request.Method, c.Request.URL.Path)
 		}
 
-		attrs := make([]slog.Attr, 0, 14)
+		DefaultMetrics.RecordRequest(c.Request.Method, action, resourceType, info.scimType, status, elapsed)
+
+		tenant := TenantOf(c)
+		principal := PrincipalOf(c)
+		if capture {
+			var subject string
+			if principal != nil {
+				subject = principal.Subject
+			}
+			respPreview := ""
+			if respWriter != nil && respWriter.buf.Len() > 0 {
+				respPreview = redactJSONPreview(respWriter.buf.Bytes())
+			}
+			DefaultInspector.Record(InspectedExchange{
+				Timestamp:       start.UTC(),
+				RequestID:       RequestIDOf(c),
+				Tenant:          tenant,
+				Method:          c.Request.Method,
+				Path:            c.Request.URL.Path,
+				Query:           c.Request.URL.RawQuery,
+				Action:          action,
+				ResourceType:    resourceType,
+				ResourceID:      resourceID,
+				Subject:         subject,
+				Status:          status,
+				ScimType:        info.scimType,
+				DurationMs:      durationMs,
+				RequestPreview:  reqPreview,
+				ResponsePreview: respPreview,
+			})
+		}
+
+		attrs := make([]slog.Attr, 0, 16)
 		if reqID := RequestIDOf(c); reqID != "" {
 			attrs = append(attrs, slog.String("request_id", reqID))
 		}
+		if tenant != "" {
+			attrs = append(attrs, slog.String("tenant", tenant))
+		}
 		attrs = append(attrs, slog.String("action", action))
-		if principal := PrincipalOf(c); principal != nil {
+		if principal != nil {
 			attrs = append(attrs, slog.String("subject", principal.Subject))
 			if len(principal.Roles) > 0 {
 				attrs = append(attrs, slog.Any("roles", principal.Roles))
@@ -262,6 +307,12 @@ func classifyOutcome(status int) string {
 // inferAuditTarget fills in action/resource metadata when middleware such as
 // Authenticate or LimitBody aborts the request before a route handler runs.
 func inferAuditTarget(method, urlPath string) (action, resourceType, resourceID string) {
+	if strings.HasPrefix(urlPath, "/tenants/") {
+		rest := strings.TrimPrefix(urlPath, "/tenants/")
+		if slash := strings.IndexByte(rest, '/'); slash >= 0 {
+			urlPath = rest[slash:]
+		}
+	}
 	trimmed := strings.TrimPrefix(urlPath, PREFIX)
 	if trimmed == "/.search" && method == http.MethodPost {
 		return "search", "*", ""

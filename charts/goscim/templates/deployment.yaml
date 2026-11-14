@@ -1,0 +1,114 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "goscim.fullname" . }}
+  labels:
+    {{- include "goscim.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  {{- if eq .Values.store.backend "sqlite" }}
+  strategy:
+    type: Recreate
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "goscim.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "goscim.selectorLabels" . | nindent 8 }}
+    spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: goscim
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: GIN_MODE
+              value: release
+            - name: SCIM_PORT
+              value: ":8080"
+            - name: SCIM_STORE
+              value: {{ .Values.store.backend | quote }}
+            - name: SCIM_SQLITE_PATH
+              value: {{ .Values.store.sqlite.path | quote }}
+            - name: SCIM_COUCHBASE_URL
+              value: {{ .Values.store.couchbase.url | quote }}
+            - name: SCIM_COUCHBASE_TLS
+              value: {{ .Values.store.couchbase.tls | quote }}
+            - name: SCIM_COUCHBASE_AUTO_INDEX
+              value: {{ .Values.store.couchbase.autoIndex | quote }}
+            - name: SCIM_ADMIN_USER
+              value: {{ .Values.store.couchbase.adminUser | quote }}
+            - name: SCIM_AUTH
+              value: {{ .Values.auth.mode | quote }}
+            - name: SCIM_BEARER_ROLES
+              value: {{ .Values.auth.bearerRoles | quote }}
+            - name: SCIM_JWT_JWKS_URL
+              value: {{ .Values.auth.jwt.jwksURL | quote }}
+            - name: SCIM_JWT_ISSUER
+              value: {{ .Values.auth.jwt.issuer | quote }}
+            - name: SCIM_JWT_AUDIENCE
+              value: {{ .Values.auth.jwt.audience | quote }}
+            - name: SCIM_JWT_ROLES_CLAIM
+              value: {{ .Values.auth.jwt.rolesClaim | quote }}
+            - name: SCIM_JWT_TENANT_CLAIM
+              value: {{ .Values.auth.jwt.tenantClaim | quote }}
+            - name: SCIM_UI
+              value: {{ ternary "true" "false" .Values.ui.enabled | quote }}
+            - name: SCIM_METRICS
+              value: {{ ternary "true" "false" .Values.metrics.enabled | quote }}
+            - name: SCIM_WEBHOOK_URLS
+              value: {{ .Values.webhooks.urls | quote }}
+            - name: SCIM_WEBHOOK_EVENTS
+              value: {{ .Values.webhooks.events | quote }}
+            - name: SCIM_WEBHOOK_MAX_RETRIES
+              value: {{ .Values.webhooks.maxRetries | quote }}
+            - name: SCIM_PUBLIC_URL
+              value: {{ .Values.publicURL | quote }}
+            - name: SCIM_PASSWORD_MODE
+              value: {{ .Values.passwordMode | quote }}
+            - name: SCIM_AUDIT_LOG
+              value: {{ .Values.auditLog | quote }}
+            - name: SCIM_TRUSTED_PROXIES
+              value: {{ .Values.trustedProxies | quote }}
+          envFrom:
+            - secretRef:
+                name: {{ include "goscim.secretName" . }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- if eq .Values.store.backend "sqlite" }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          {{- end }}
+      {{- if eq .Values.store.backend "sqlite" }}
+      volumes:
+        - name: data
+          {{- if .Values.store.sqlite.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "goscim.fullname" . }}-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- end }}

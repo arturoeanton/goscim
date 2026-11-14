@@ -54,6 +54,10 @@ func isUserResourceType(rt ResourceType) bool {
 // syncAfterCreate propagates Group.members to User.groups when a Group with
 // initial members is created.
 func syncAfterCreate(rt ResourceType, id string, created map[string]interface{}) {
+	syncAfterCreateInTenant("", PREFIX, rt, id, created)
+}
+
+func syncAfterCreateInTenant(tenant, prefix string, rt ResourceType, id string, created map[string]interface{}) {
 	if !isGroupResourceType(rt) {
 		return
 	}
@@ -65,7 +69,10 @@ func syncAfterCreate(rt ResourceType, id string, created map[string]interface{})
 	if !ok {
 		return
 	}
-	allGroups, err := loadAllGroups(groupRT.Name)
+	groupBucket := ScopedBucket(tenant, groupRT.Name)
+	userBucket := ScopedBucket(tenant, userRT.Name)
+
+	allGroups, err := loadAllGroups(groupBucket)
 	if err != nil {
 		log.Printf("scim group sync (create %s): %v", id, err)
 		return
@@ -79,9 +86,9 @@ func syncAfterCreate(rt ResourceType, id string, created map[string]interface{})
 	}
 
 	if err := applyUserGroupDiffs(
-		userRT.Name,
-		computeUserGroupsMap(groupsBefore, groupRT),
-		computeUserGroupsMap(groupsAfter, groupRT),
+		userBucket,
+		computeUserGroupsMapWithPrefix(prefix, groupsBefore, groupRT),
+		computeUserGroupsMapWithPrefix(prefix, groupsAfter, groupRT),
 	); err != nil {
 		log.Printf("scim group sync (create %s): %v", id, err)
 	}
@@ -90,6 +97,10 @@ func syncAfterCreate(rt ResourceType, id string, created map[string]interface{})
 // syncAfterReplace propagates changes in Group.members or Group.displayName to
 // affected User.groups entries on PUT and PATCH.
 func syncAfterReplace(rt ResourceType, id string, previous, updated map[string]interface{}) {
+	syncAfterReplaceInTenant("", PREFIX, rt, id, previous, updated)
+}
+
+func syncAfterReplaceInTenant(tenant, prefix string, rt ResourceType, id string, previous, updated map[string]interface{}) {
 	if !isGroupResourceType(rt) {
 		return
 	}
@@ -100,7 +111,10 @@ func syncAfterReplace(rt ResourceType, id string, previous, updated map[string]i
 	if !ok {
 		return
 	}
-	allGroups, err := loadAllGroups(groupRT.Name)
+	groupBucket := ScopedBucket(tenant, groupRT.Name)
+	userBucket := ScopedBucket(tenant, userRT.Name)
+
+	allGroups, err := loadAllGroups(groupBucket)
 	if err != nil {
 		log.Printf("scim group sync (replace %s): %v", id, err)
 		return
@@ -117,9 +131,9 @@ func syncAfterReplace(rt ResourceType, id string, previous, updated map[string]i
 	}
 
 	if err := applyUserGroupDiffs(
-		userRT.Name,
-		computeUserGroupsMap(groupsBefore, groupRT),
-		computeUserGroupsMap(groupsAfter, groupRT),
+		userBucket,
+		computeUserGroupsMapWithPrefix(prefix, groupsBefore, groupRT),
+		computeUserGroupsMapWithPrefix(prefix, groupsAfter, groupRT),
 	); err != nil {
 		log.Printf("scim group sync (replace %s): %v", id, err)
 	}
@@ -128,27 +142,34 @@ func syncAfterReplace(rt ResourceType, id string, previous, updated map[string]i
 // syncAfterDelete cleans up dangling Group.members references when a User or
 // Group is deleted and updates affected User.groups entries.
 func syncAfterDelete(rt ResourceType, deletedID string, deletedDoc map[string]interface{}) {
+	syncAfterDeleteInTenant("", PREFIX, rt, deletedID, deletedDoc)
+}
+
+func syncAfterDeleteInTenant(tenant, prefix string, rt ResourceType, deletedID string, deletedDoc map[string]interface{}) {
 	userRT, groupRT, ok := findUserAndGroupResourceTypes()
 	if !ok {
 		return
 	}
+	groupBucket := ScopedBucket(tenant, groupRT.Name)
+	userBucket := ScopedBucket(tenant, userRT.Name)
+
 	switch {
 	case isUserResourceType(rt):
-		allGroups, err := loadAllGroups(groupRT.Name)
+		allGroups, err := loadAllGroups(groupBucket)
 		if err != nil {
 			log.Printf("scim group sync (delete user %s): %v", deletedID, err)
 			return
 		}
 		for gID, gDoc := range allGroups {
-			if removeMemberFromGroupDoc(gDoc, deletedID, groupRT) {
-				if err := DB.Replace(groupRT.Name, gID, gDoc); err != nil && !errors.Is(err, ErrNotFound) {
+			if removeMemberFromGroupDoc(prefix, gDoc, deletedID, groupRT) {
+				if err := DB.Replace(groupBucket, gID, gDoc); err != nil && !errors.Is(err, ErrNotFound) {
 					log.Printf("scim group sync (update group %s): %v", gID, err)
 				}
 			}
 		}
 
 	case isGroupResourceType(rt):
-		remainingGroups, err := loadAllGroups(groupRT.Name)
+		remainingGroups, err := loadAllGroups(groupBucket)
 		if err != nil {
 			log.Printf("scim group sync (delete group %s): %v", deletedID, err)
 			return
@@ -162,24 +183,24 @@ func syncAfterDelete(rt ResourceType, deletedID string, deletedDoc map[string]in
 
 		groupsAfter := copyGroupMap(remainingGroups)
 		for gID, gDoc := range groupsAfter {
-			if removeMemberFromGroupDoc(gDoc, deletedID, groupRT) {
-				if err := DB.Replace(groupRT.Name, gID, gDoc); err != nil && !errors.Is(err, ErrNotFound) {
+			if removeMemberFromGroupDoc(prefix, gDoc, deletedID, groupRT) {
+				if err := DB.Replace(groupBucket, gID, gDoc); err != nil && !errors.Is(err, ErrNotFound) {
 					log.Printf("scim group sync (unlink parent group %s): %v", gID, err)
 				}
 			}
 		}
 
 		if err := applyUserGroupDiffs(
-			userRT.Name,
-			computeUserGroupsMap(groupsBefore, groupRT),
-			computeUserGroupsMap(groupsAfter, groupRT),
+			userBucket,
+			computeUserGroupsMapWithPrefix(prefix, groupsBefore, groupRT),
+			computeUserGroupsMapWithPrefix(prefix, groupsAfter, groupRT),
 		); err != nil {
 			log.Printf("scim group sync (delete group %s): %v", deletedID, err)
 		}
 	}
 }
 
-func removeMemberFromGroupDoc(groupDoc map[string]interface{}, targetID string, groupRT ResourceType) bool {
+func removeMemberFromGroupDoc(prefix string, groupDoc map[string]interface{}, targetID string, groupRT ResourceType) bool {
 	rawMembers, ok := groupDoc["members"].([]interface{})
 	if !ok || len(rawMembers) == 0 {
 		return false
@@ -208,7 +229,7 @@ func removeMemberFromGroupDoc(groupDoc map[string]interface{}, targetID string, 
 		groupDoc["members"] = kept
 	}
 	prevMeta, _ := groupDoc["meta"].(map[string]interface{})
-	meta := updateMeta(prevMeta, groupDoc, groupRT)
+	meta := updateMetaForPrefix(prefix, prevMeta, groupDoc, groupRT)
 	if metaMap, err := structToMap(meta); err == nil {
 		groupDoc["meta"] = metaMap
 	}
@@ -243,6 +264,10 @@ func loadAllGroups(groupBucket string) (map[string]map[string]interface{}, error
 // computeUserGroupsMap derives the RFC 7643 4.1.2 readOnly User.groups array
 // for every user referenced directly or transitively across groupsByID.
 func computeUserGroupsMap(groupsByID map[string]map[string]interface{}, groupRT ResourceType) map[string][]interface{} {
+	return computeUserGroupsMapWithPrefix(PREFIX, groupsByID, groupRT)
+}
+
+func computeUserGroupsMapWithPrefix(prefix string, groupsByID map[string]map[string]interface{}, groupRT ResourceType) map[string][]interface{} {
 	directUsers := make(map[string][]string, len(groupsByID))
 	parentGroups := make(map[string][]string)
 
@@ -317,7 +342,7 @@ func computeUserGroupsMap(groupsByID map[string]map[string]interface{}, groupRT 
 			}
 			entry := map[string]interface{}{
 				"value": gID,
-				"$ref":  resourcePath(groupRT, gID),
+				"$ref":  resourcePathWithPrefix(prefix, groupRT, gID),
 				"type":  groupMap[gID],
 			}
 			if dn, ok := gDoc["displayName"].(string); ok && dn != "" {

@@ -1,0 +1,302 @@
+{{define "head"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}} - GoSCIM Console</title>
+  <link rel="stylesheet" href="/ui/assets/style.css">
+  <script src="/ui/assets/htmx.min.js"></script>
+</head>
+<body>
+{{end}}
+
+{{define "sidebar"}}
+<aside class="sidebar">
+  <div class="brand">
+    <div class="brand-title">GoSCIM</div>
+    <div class="brand-sub">SCIM 2.0 Server {{.Version}}</div>
+  </div>
+
+  <div class="tenant-box">
+    <label for="tenant-input">Tenant Namespace</label>
+    <form class="tenant-form" method="get" action="{{.CurrentPath}}">
+      <input id="tenant-input" type="text" name="tenant" value="{{.Tenant}}" placeholder="default (root)">
+      <button type="submit" class="btn btn-sm btn-primary">Switch</button>
+    </form>
+  </div>
+
+  <ul class="nav-links">
+    <li><a href="/ui{{.TenantQuery}}" class="{{if eq .ActiveNav "overview"}}active{{end}}">Overview</a></li>
+    <li><a href="/ui/resources{{.TenantQuery}}" class="{{if eq .ActiveNav "resources"}}active{{end}}">Directory Resources</a></li>
+    <li><a href="/ui/playground{{.TenantQuery}}" class="{{if eq .ActiveNav "playground"}}active{{end}}">Filter &amp; N1QL Lab</a></li>
+    <li><a href="/ui/inspector{{.TenantQuery}}" class="{{if eq .ActiveNav "inspector"}}active{{end}}">Live Inspector</a></li>
+    <li><a href="/ui/conformance{{.TenantQuery}}" class="{{if eq .ActiveNav "conformance"}}active{{end}}">Webhooks &amp; Conformance</a></li>
+  </ul>
+
+  <div class="sidebar-footer">
+    <div>Store: <strong style="color:#e2e8f0">{{.StoreBackend}}</strong></div>
+    <div style="margin-top:4px">Auth: <strong style="color:#e2e8f0">{{.AuthMode}}</strong></div>
+    <div style="margin-top:8px">
+      <a href="{{.SCIMBasePath}}/ServiceProviderConfig" target="_blank" rel="noopener">ServiceProviderConfig</a>
+      {{if .MetricsEnabled}} &middot; <a href="/metrics" target="_blank" rel="noopener">/metrics</a>{{end}}
+    </div>
+    {{if .HasUIToken}}
+    <form method="post" action="/ui/logout" style="margin-top:10px">
+      <button type="submit" class="btn btn-sm" style="width:100%">Sign Out</button>
+    </form>
+    {{end}}
+  </div>
+</aside>
+{{end}}
+
+{{define "stats_strip"}}
+<div class="stats-grid" id="stats-strip" hx-get="/ui/partials/stats{{.TenantQuery}}" hx-trigger="every 3s" hx-swap="outerHTML">
+  <div class="stat-card">
+    <div class="stat-label">Users ({{if .Tenant}}{{.Tenant}}{{else}}default{{end}})</div>
+    <div class="stat-value">{{.UserCount}}</div>
+    <div class="stat-sub">Core + EnterpriseUser</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Groups ({{if .Tenant}}{{.Tenant}}{{else}}default{{end}})</div>
+    <div class="stat-value">{{.GroupCount}}</div>
+    <div class="stat-sub">Direct &amp; nested sync</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">SCIM Requests</div>
+    <div class="stat-value">{{.Summary.TotalRequests}}</div>
+    <div class="stat-sub">{{.Summary.TotalErrors}} 4xx/5xx responses</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Uniqueness Locks</div>
+    <div class="stat-value">{{.Summary.UniquenessConflicts}}</div>
+    <div class="stat-sub">HTTP 409 conflicts blocked</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Webhooks Sent</div>
+    <div class="stat-value">{{.Summary.WebhookSuccess}}</div>
+    <div class="stat-sub">{{.Summary.WebhookFailed}} failed deliveries</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Backing Store</div>
+    <div class="stat-value">
+      {{if .StoreHealthy}}<span class="badge badge-ok">HEALTHY</span>{{else}}<span class="badge badge-err">DOWN</span>{{end}}
+    </div>
+    <div class="stat-sub">{{.StoreBackend}}</div>
+  </div>
+</div>
+{{end}}
+
+{{define "resources_table"}}
+<div id="resources-table-wrap">
+  {{if .FlashMessage}}
+  <div class="alert {{if .FlashError}}alert-err{{else}}alert-ok{{end}}">{{.FlashMessage}}</div>
+  {{end}}
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <span style="color:var(--text-muted);font-size:13px">Showing <strong>{{len .Rows}}</strong> of <strong>{{.Total}}</strong> {{.ResourceLabel}} in namespace <code class="mono">{{if .Tenant}}{{.Tenant}}{{else}}default{{end}}</code></span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Primary Identifier</th>
+          <th>Display / Details</th>
+          <th>External ID</th>
+          <th>Status / Groups</th>
+          <th>Modified</th>
+          <th style="text-align:right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{if not .Rows}}
+        <tr>
+          <td colspan="6" style="text-align:center;color:var(--text-muted);padding:24px">
+            No {{.ResourceLabel}} matched in this tenant. Use the form above or "Seed Sample Data" to populate records.
+          </td>
+        </tr>
+        {{end}}
+        {{range .Rows}}
+        <tr>
+          <td>
+            <div class="mono" style="font-weight:600">{{.Primary}}</div>
+            <div class="mono" style="font-size:11px;color:var(--text-muted)">{{.ID}}</div>
+          </td>
+          <td>
+            <div>{{.Secondary}}</div>
+            {{if .Tertiary}}<div style="font-size:12px;color:var(--text-muted)">{{.Tertiary}}</div>{{end}}
+          </td>
+          <td class="mono">{{if .ExternalID}}{{.ExternalID}}{{else}}&mdash;{{end}}</td>
+          <td>
+            {{if .HasActive}}
+              {{if .Active}}<span class="badge badge-ok">active</span>{{else}}<span class="badge badge-warn">inactive</span>{{end}}
+            {{end}}
+            {{if .BadgeText}}<span class="badge badge-neutral">{{.BadgeText}}</span>{{end}}
+          </td>
+          <td class="mono" style="font-size:11.5px;color:var(--text-muted)">{{.LastModified}}</td>
+          <td style="text-align:right;white-space:nowrap">
+            <button type="button" class="btn btn-sm"
+              hx-get="/ui/resources/detail?type={{$.ResourceType}}&id={{.ID}}&tenant={{$.Tenant}}"
+              hx-target="#resource-detail-panel"
+              hx-swap="innerHTML">JSON</button>
+            {{if .HasActive}}
+            <button type="button" class="btn btn-sm"
+              hx-post="/ui/resources/toggle-active"
+              hx-vals='{"type":"{{$.ResourceType}}","id":"{{.ID}}","tenant":"{{$.Tenant}}","active":"{{if .Active}}false{{else}}true{{end}}"}'
+              hx-target="#resources-table-wrap"
+              hx-swap="outerHTML">{{if .Active}}Deactivate{{else}}Activate{{end}}</button>
+            {{end}}
+            <button type="button" class="btn btn-sm btn-danger"
+              hx-delete="/ui/resources/item?type={{$.ResourceType}}&id={{.ID}}&tenant={{$.Tenant}}"
+              hx-confirm="Delete {{.Primary}} ({{.ID}})?"
+              hx-target="#resources-table-wrap"
+              hx-swap="outerHTML">Delete</button>
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{end}}
+
+{{define "resource_detail"}}
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <h3>Resource Payload &mdash; <span class="mono">{{.ID}}</span></h3>
+    <a class="btn btn-sm" href="{{.ResourceURL}}" target="_blank" rel="noopener">Open Raw Endpoint</a>
+  </div>
+  {{if .Groups}}
+  <div style="margin:8px 0">
+    <span style="font-size:12px;color:var(--text-muted);margin-right:6px">Computed Memberships:</span>
+    {{range .Groups}}
+      <span class="badge {{if eq .Type "direct"}}badge-ok{{else}}badge-neutral{{end}}">{{.Display}} ({{.Type}})</span>
+    {{end}}
+  </div>
+  {{end}}
+  <pre class="code-block">{{.PrettyJSON}}</pre>
+</div>
+{{end}}
+
+{{define "playground_result"}}
+<div id="playground-output">
+  {{if .Error}}
+  <div class="alert alert-err"><strong>Filter Error:</strong> {{.Error}}</div>
+  {{else}}
+  <div class="grid-2">
+    <div class="card">
+      <h2>Parameterized Couchbase N1QL Translation</h2>
+      <p style="margin:0 0 8px;font-size:12.5px;color:var(--text-muted)">
+        Generated via <code class="mono">parser.CompileN1QLWithOptions</code> (all literals bound as positional parameters).
+      </p>
+      <pre class="code-block">{{.N1QLStatement}}</pre>
+      {{if .N1QLParamsJSON}}
+      <h3 style="margin-top:12px">Positional Parameters (<code class="mono">$1..$n</code>)</h3>
+      <pre class="code-block">{{.N1QLParamsJSON}}</pre>
+      {{end}}
+    </div>
+    <div class="card">
+      <h2>Live Store Evaluation ({{.TotalResults}} matched)</h2>
+      <p style="margin:0 0 8px;font-size:12.5px;color:var(--text-muted)">
+        Executed against active store (<code class="mono">{{.StoreBackend}}</code>) in tenant <code class="mono">{{if .Tenant}}{{.Tenant}}{{else}}default{{end}}</code>.
+      </p>
+      <pre class="code-block">{{.ResponseJSON}}</pre>
+    </div>
+  </div>
+  {{end}}
+</div>
+{{end}}
+
+{{define "inspector_rows"}}
+<tbody id="inspector-tbody" hx-get="/ui/partials/inspector-rows{{.TenantQuery}}" hx-trigger="every 2s" hx-swap="outerHTML">
+  {{if not .Exchanges}}
+  <tr>
+    <td colspan="6" style="text-align:center;color:var(--text-muted);padding:24px">
+      No SCIM exchanges captured yet. Issue a SCIM request or run the Conformance Suite to inspect live traffic.
+    </td>
+  </tr>
+  {{end}}
+  {{range .Exchanges}}
+  <tr style="cursor:pointer"
+      hx-get="/ui/inspector/detail?seq={{.Seq}}"
+      hx-target="#inspector-detail"
+      hx-swap="innerHTML">
+    <td class="mono">#{{.Seq}}</td>
+    <td><span class="badge badge-neutral">{{.Method}}</span></td>
+    <td class="mono">{{.Path}}{{if .Query}}?{{.Query}}{{end}}</td>
+    <td>{{if .Tenant}}<span class="badge badge-neutral">{{.Tenant}}</span>{{else}}&mdash;{{end}}</td>
+    <td>
+      {{if lt .Status 300}}<span class="badge badge-ok">{{.Status}}</span>
+      {{else if lt .Status 400}}<span class="badge badge-neutral">{{.Status}}</span>
+      {{else if lt .Status 500}}<span class="badge badge-warn">{{.Status}}</span>
+      {{else}}<span class="badge badge-err">{{.Status}}</span>{{end}}
+    </td>
+    <td class="mono" style="text-align:right">{{printf "%.2f ms" .DurationMs}}</td>
+  </tr>
+  {{end}}
+</tbody>
+{{end}}
+
+{{define "inspector_detail"}}
+<div class="card">
+  <h2>Exchange #{{.Seq}} &mdash; {{.Method}} {{.Path}}</h2>
+  <div class="kv-list" style="margin-bottom:14px">
+    <div class="kv-key">Timestamp (UTC)</div>
+    <div class="kv-val">{{.Timestamp}}</div>
+    <div class="kv-key">X-Request-Id</div>
+    <div class="kv-val">{{.RequestID}}</div>
+    <div class="kv-key">Tenant</div>
+    <div class="kv-val">{{if .Tenant}}{{.Tenant}}{{else}}default{{end}}</div>
+    <div class="kv-key">Principal</div>
+    <div class="kv-val">{{if .Subject}}{{.Subject}}{{else}}anonymous{{end}}</div>
+    <div class="kv-key">Action / Resource</div>
+    <div class="kv-val">{{.Action}} {{if .ResourceType}}({{.ResourceType}}{{if .ResourceID}}/{{.ResourceID}}{{end}}){{end}}</div>
+    <div class="kv-key">Status / Latency</div>
+    <div class="kv-val">HTTP {{.Status}} {{if .ScimType}}[scimType={{.ScimType}}]{{end}} &middot; {{printf "%.2f ms" .DurationMs}}</div>
+  </div>
+
+  {{if .RequestPreview}}
+  <h3>Request Payload (secrets redacted)</h3>
+  <pre class="code-block">{{.RequestPreview}}</pre>
+  {{end}}
+
+  {{if .ResponsePreview}}
+  <h3 style="margin-top:14px">Response Payload</h3>
+  <pre class="code-block">{{.ResponsePreview}}</pre>
+  {{end}}
+</div>
+{{end}}
+
+{{define "conformance_report"}}
+<div id="conformance-results">
+  <div class="alert {{if eq .Report.Failed 0}}alert-ok{{else}}alert-err{{end}}">
+    <strong>Conformance Run Complete:</strong> {{.Report.Passed}}/{{.Report.Total}} checks passed ({{.Report.Failed}} failed) against <code class="mono">{{.Report.TargetURL}}</code> in {{printf "%.1f ms" .Report.DurationMs}}.
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Status</th>
+          <th>Profile</th>
+          <th>Verification Step</th>
+          <th style="text-align:right">Duration</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Report.Steps}}
+        <tr>
+          <td>
+            {{if .Passed}}<span class="badge badge-ok">PASS</span>{{else}}<span class="badge badge-err">FAIL</span>{{end}}
+          </td>
+          <td><span class="badge badge-neutral">{{.Profile}}</span></td>
+          <td>
+            <div>{{.Name}}</div>
+            {{if .Detail}}<div class="mono" style="color:var(--err-fg);font-size:12px;margin-top:3px">{{.Detail}}</div>{{end}}
+          </td>
+          <td class="mono" style="text-align:right">{{printf "%.1f ms" .DurationMs}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{end}}

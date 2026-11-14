@@ -3,21 +3,35 @@
 ## Layout
 
 ```
-main.go                       startup, -healthcheck flag, timeouts, signals
+main.go                       startup, subcommands (conformance, version), -demo, -ui, -store, -healthcheck
 ScimFilter.g4                 the filter grammar
-Makefile                      build, check, integration, generate
-Dockerfile docker-compose.yml container image and local Couchbase stack
-config/                       schemas, resource types, bucket settings
+Makefile                      build, demo, check, integration, generate
+Dockerfile                    distroless container image
+docker-compose.yml            local Couchbase + GoSCIM stack
+docker-compose.keycloak.yml   Keycloak 26 OIDC/JWKS + GoSCIM lab
+.goreleaser.yaml              multi-OS / multi-arch release packaging
+scripts/install.sh            1-line binary installer
+charts/goscim/                Kubernetes Helm chart
+config/                       schemas, resource types, bucket settings, embed.go
 scim/
-  router.go                   route registration, middleware order
-  audit.go                    X-Request-Id and structured log/slog audit middleware
+  router.go                   route registration (/scim/v2, /tenants/:tenant/scim/v2, /metrics, /ui)
+  tenant.go                   multi-tenant path, credential scoping, and bucket partitioning
+  audit.go                    X-Request-Id, structured log/slog audit, metrics & inspector hooks
+  metrics.go                  Prometheus text exposition registry (/metrics)
+  inspector.go                redacted in-memory request/response ring buffer
+  webhooks.go                 CloudEvents 1.0 sharded webhook dispatcher + HMAC-SHA256 signing
+  conformance.go              programmatic & CLI RFC + IdP conformance runner
+  demo.go                     -demo seed dataset (Users + nested Groups)
+  ui.go ui/                   embedded HTMX 2.0.4 Web Console, filter playground, inspector
   health.go                   /healthz and /readyz handlers
-  config.go                   loading config, registering endpoints
+  config.go                   loading config (disk + embedded fallback), registering endpoints
   types.go                    SCIM data structures
-  store.go                    the Store interface
-  store_couchbase.go          production storage + _default.scim_unique sentinels
+  store.go store_init.go      the Store interface and backend selector
+  store_couchbase.go          Couchbase storage + _default.scim_unique sentinels
+  store_couchbase_indexes.go  schema-derived secondary N1QL GSI index builder
   store_couchbase_tls.go      connection string and TLS settings
-  store_memory.go             the test fake
+  store_sqlite.go             pure-Go embedded SQLite WAL store (modernc.org/sqlite)
+  store_memory.go             in-memory store (-demo and unit tests)
   auth.go auth_jwt.go auth_bearer.go auth_basic.go auth_claims.go
   op_create.go op_read.go op_search.go op_replace.go op_update.go op_delete.go op_bulk.go
   groups_sync.go              Group.members ↔ User.groups synchronisation
@@ -30,10 +44,10 @@ scim/
   sortby.go                   sortBy whitelist, attribute path canonicalisation
   caseinsensitive.go          case-insensitive resolution
   discovery.go                ServiceProviderConfig, ResourceTypes, Schemas
-  response.go                 media type, ETag, preconditions
+  response.go                 media type, ETag, preconditions, tenant-aware Location
   limits.go error.go meta.go contains.go
   parser/                     ANTLR output, plus three hand-written files
-test/integration/             the suite against a real Couchbase
+test/integration/             the suite against a real Couchbase (incl. GSI indexes & multi-tenancy)
 ```
 
 ## Commands

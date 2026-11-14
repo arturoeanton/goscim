@@ -45,16 +45,20 @@ func Create(resource string) func(c *gin.Context) {
 
 		id := uuid.New().String()
 		element["id"] = id
-		meta := generateMeta(element, resourceType)
+		prefix := EffectivePrefix(c)
+		meta := generateMetaForPrefix(prefix, element, resourceType)
 		element["meta"] = meta
 
+		tenant := TenantOf(c)
+		bucket := ScopedBucket(tenant, resourceType.Name)
 		claims := ExtractUniqueClaims(resourceType, element)
-		if err := DB.CreateUnique(resourceType.Name, id, element, claims); err != nil {
+		if err := DB.CreateUnique(bucket, id, element, claims); err != nil {
 			writeStoreUniqueError(c, resourceType, err)
 			return
 		}
-		syncAfterCreate(resourceType, id, element)
+		syncAfterCreateInTenant(tenant, prefix, resourceType, id, element)
 		setAuditTarget(c, "create", resourceType.Name, id)
+		emitResourceWebhookFromContext(c, "create", resourceType, id, nil, element)
 
 		// RFC 7644 3.3: a successful create answers 201 with the URI of the
 		// new resource in Location.

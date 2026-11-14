@@ -233,12 +233,46 @@ successful reads/writes) emits a structured `log/slog` event (`msg:
   `"action": "bulk"` record, all correlated under the same `request_id` and
   authenticated `Principal`.
 
+## Multi-tenant isolation
+
+When multi-tenant endpoints (`/tenants/:tenant/scim/v2/...`) are used:
+
+- Tenant identifiers are validated against `^[A-Za-z0-9._-]{1,64}$` before
+  reaching storage keys or N1QL parameters.
+- Credentials bound to a tenant (`subject:token:roles@tenant` in
+  `SCIM_BEARER_TOKENS`, `SCIM_BEARER_TENANT`, or `SCIM_JWT_TENANT_CLAIM`) are
+  locked to that tenant: calling `/tenants/<other>/scim/v2/...` returns HTTP
+  `403`, and calling `/scim/v2/...` resolves inside the credential's tenant
+  partition rather than the root namespace.
+- Resource reads, searches, `/Bulk` sub-operations, `Group.members` ↔
+  `User.groups` graph synchronisation, and `uniqueness: server` locks are
+  isolated per tenant.
+
+## Web Console, Metrics, Inspector, and Webhooks
+
+- **`/ui` (`SCIM_UI=true`)**: disabled by default (`SCIM_UI=false`, except under
+  `-demo`). When enabled outside localhost, set `SCIM_UI_TOKEN` to a
+  high-entropy secret. Token verification uses constant-time `subtle.ConstantTimeCompare`
+  and stores an `HttpOnly`, `SameSite=Strict` session cookie (`Secure` when
+  served behind HTTPS).
+- **Live Inspector redaction**: the 200-entry in-memory traffic inspector
+  automatically redacts `Authorization` and `Cookie` headers plus `"password"`
+  fields in captured JSON payloads before storing or rendering them.
+- **`GET /metrics` (`SCIM_METRICS=true`)**: set `SCIM_METRICS_TOKEN` (or block
+  `/metrics` at your reverse proxy) if Prometheus scrape endpoints should not be
+  world-readable on your network.
+- **Outbound Webhooks (`SCIM_WEBHOOK_URLS`)**: set `SCIM_WEBHOOK_SECRET` and
+  verify `X-SCIM-Signature-256` (`sha256=<hex>`) with `hmac.Equal` in every
+  downstream receiver. Attributes declared `returned: never` or
+  `mutability: writeOnly` (such as `password`) are stripped before webhook
+  serialization.
+
 ## Atomic uniqueness
 
 Attributes with `uniqueness: server` or `uniqueness: global` are claimed
-atomically in a dedicated Couchbase collection (`_default.scim_unique`) using
-KV `Insert` before writing the resource document (and CAS on `PUT` / `PATCH`),
-closing the read-then-write TOCTOU race across concurrent server instances.
+atomically — in Couchbase's `_default.scim_unique` collection via KV `Insert`
+and CAS, or inside serialised SQLite / in-memory transactions — closing the
+read-then-write TOCTOU race across concurrent requests.
 
 ## Not handled
 
@@ -267,3 +301,6 @@ Before exposing this to anything real:
 - [ ] The `Element` resource type removed, unless you want the example endpoint
 - [ ] `SCIM_PASSWORD_MODE` left at `argon2id` (or set to `bcrypt` / `reject`, never `plain`)
 - [ ] `SCIM_AUDIT_LOG` left at `json` and shipped to central log storage
+- [ ] `SCIM_UI=false` in production (or protected behind VPN + `SCIM_UI_TOKEN`)
+- [ ] `SCIM_METRICS_TOKEN` set (or `/metrics` restricted to internal Prometheus scrapers at the proxy)
+- [ ] `SCIM_WEBHOOK_SECRET` configured whenever `SCIM_WEBHOOK_URLS` is enabled

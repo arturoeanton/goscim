@@ -102,7 +102,7 @@ func RootPostSearch(c *gin.Context) {
 			}
 		}
 		total, docs, err := DB.Search(SearchQuery{
-			Bucket: rt.Name,
+			Bucket: storeBucketForContext(c, rt.Name),
 			Filter: params.Filter,
 			ResolveName: func(path string) string {
 				return CanonicalAttributePath(rt, path)
@@ -186,7 +186,7 @@ func executeResourceSearch(c *gin.Context, resourceType ResourceType, params sea
 	}
 
 	total, resources, err := DB.Search(SearchQuery{
-		Bucket: resourceType.Name,
+		Bucket: storeBucketForContext(c, resourceType.Name),
 		Filter: params.Filter,
 		ResolveName: func(path string) string {
 			return CanonicalAttributePath(resourceType, path)
